@@ -618,8 +618,15 @@ Name lookup rules:
 - Broadband values from fewer than 10 Ookla tests, or zero, are not ranked;
   `sample_size` reports the test count. Cuisine variety of 0 (untagged
   restaurants) is treated as not measured.
-- If a bare name is also a region whose largest city is bigger than the
-  matched town (`Bali`), the tool asks and lists cities in that region.
+- Region and country names ask instead of guessing a city: `Bali` (region
+  elsewhere with a bigger city), `Goa` / `Missouri` / `Henan` (reached only
+  through an alternate name), `Egypt` / `usa` (country names). Exceptions: a
+  city whose official name is the typed name in its own country (`Washington`,
+  `Singapore`), or one that dominates its region (`New York`).
+- Known limitation: a two-letter qualifier that is both a country and a US
+  state (`Salem, IN`) is read either way; if only one exists in the data it is
+  used without asking, because `Berlin, DE` and `Salem, IN` cannot be told
+  apart without a smaller-city gazetteer.
 - Percentiles and bands place ties mid-range; `reading_*` counts only places
   with a strictly worse value ("higher than 62% of the other 3,999 cities").
   Country rankings use each country's latest available year, so years can

@@ -408,6 +408,17 @@ class LiveDatabaseTests(unittest.TestCase):
                        if m["key"] == "internet_latency_ms")
         self.assertGreaterEqual(latency["sample_size"], pp.MIN_BROADBAND_TESTS)
 
+    def test_country_and_region_names_ask(self):
+        with self.conn.cursor() as cur:
+            for query in ("usa", "Egypt", "Grenada", "Laos", "Missouri", "Henan",
+                          "Goa", "Goa, India"):
+                self.assertTrue(pp.resolve_place(cur, query)["needs_choice"], query)
+            for query in ("Singapore", "Luxembourg", "Djibouti", "New York",
+                          "Washington", "Mexico City"):
+                self.assertFalse(pp.resolve_place(cur, query)["needs_choice"], query)
+            profile = pp.build_profile(cur, pp.resolve_place(cur, "Bangkok")["destination_id"])
+        self.assertIn("indicators_missing", profile["country"])
+
     def test_airport_codes_do_not_beat_city_names(self):
         with self.conn.cursor() as cur:
             self.assertEqual(pp.resolve_place(cur, "San")["resolved"]["country_iso2"], "ML")

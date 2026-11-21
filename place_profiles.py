@@ -497,7 +497,10 @@ def fetch_country_context(cur: Any, country_codes: list[str]) -> dict[str, dict[
             """,
             (country_codes,),
         )
-        for row in cur.fetchall():
+        indicator_rows = cur.fetchall()
+        cur.execute("SELECT DISTINCT indicator, label FROM country_indicators ORDER BY indicator")
+        all_indicators = {r["indicator"]: r["label"] for r in cur.fetchall()}
+        for row in indicator_rows:
             code = str(row["country_iso2"])
             if code not in out or "indicators" not in out[code]:
                 continue
@@ -519,6 +522,12 @@ def fetch_country_context(cur: Any, country_codes: list[str]) -> dict[str, dict[
                 "source": row["source"],
                 "source_indicator": row["source_indicator"],
             })
+        for ctx in out.values():
+            if "indicators" in ctx:
+                present = {ind["key"] for ind in ctx["indicators"]}
+                ctx["indicators_missing"] = [
+                    label for key, label in all_indicators.items() if key not in present
+                ]
     return out
 
 
@@ -568,6 +577,7 @@ REGION_ABBREVIATIONS = {
     "WA": "western australia", "SA": "south australia", "TAS": "tasmania",
     "ACT": "australian capital territory", "NT": "northern territory",
 }
+REGION_DOMINANCE_RATIO = 3  # a city 3x larger than the rest of its region stands for it
 SIMILAR_SIZE_RATIO = 0.5  # rival exact match at >= half the weighted size -> ask
 
 
@@ -876,6 +886,36 @@ def choice_reason(chosen: dict[str, Any], others: list[dict[str, Any]],
     return None
 
 
+def _country_name_cities(
+    cur: Any, place: str, chosen: dict[str, Any]
+) -> tuple[dict[str, Any], list[dict[str, Any]]] | None:
+    """If the bare name is a country ("Egypt", "Grenada", "usa"), return it and
+    its largest loaded cities -- unless the match is a city whose official name
+    is exactly that country's name (Singapore, Luxembourg)."""
+    text, qualifiers = split_qualifiers(place)
+    if qualifiers:
+        return None
+    available = _existing_tables(cur, ["country_facts"])
+    norm = normalize_name(text)
+    code = COUNTRY_SYNONYMS.get(norm) or _country_lookup(cur, available)[1].get(norm)
+    if not code:
+        return None
+    if chosen.get("match") == "exact" and chosen.get("country_iso2") == code:
+        return None
+    cur.execute(
+        "SELECT destination_id, name, country_iso2, population, timezone, lat, lon "
+        "FROM destinations WHERE country_iso2 = %s ORDER BY population DESC LIMIT 3",
+        (code,),
+    )
+    cities = [
+        dict(r) | {"region": None, "lat": round(float(r["lat"]), 4),
+                   "lon": round(float(r["lon"]), 4), "matched_alias": None,
+                   "match": "in_country", "similarity": None}
+        for r in cur.fetchall()
+    ]
+    return {"name": text, "country_iso2": code}, cities
+
+
 def _same_name_region_cities(
     cur: Any, place: str, chosen: dict[str, Any]
 ) -> tuple[dict[str, Any], list[dict[str, Any]]] | None:
@@ -884,8 +924,8 @@ def _same_name_region_cities(
     and its largest loaded cities. A big city that merely shares its name with
     a smaller region (Taipei vs. the "Taipei" region of New Taipei) is kept."""
     chosen_id = chosen["destination_id"]
-    text, qualifiers = split_qualifiers(place)
-    if qualifiers or "destination_admin1" not in _existing_tables(cur, ["destination_admin1"]):
+    text, _qualifiers = split_qualifiers(place)
+    if "destination_admin1" not in _existing_tables(cur, ["destination_admin1"]):
         return None
     cur.execute(
         """
@@ -898,13 +938,29 @@ def _same_name_region_cities(
         (normalize_name(text),),
     )
     rows = [dict(r) for r in cur.fetchall()]
-    # A same-name region in the chosen city's own country is fine (Goa,
-    # Washington); one elsewhere with a bigger city is not (Bali, Montana).
-    rows = [r for r in rows if r["country_iso2"] != chosen.get("country_iso2")]
-    if not rows or any(r["destination_id"] == chosen_id for r in rows):
+    if not rows:
         return None
-    if int(rows[0]["population"] or 0) < int(chosen.get("population") or 0):
-        return None
+    if chosen.get("match") == "exact":
+        if _qualifiers:
+            return None  # "Victoria, BC": the user already said which one
+        # The typed name is this city's official name. A same-name region in
+        # its own country is fine (Washington, Taipei); one elsewhere with a
+        # bigger city is not (Bali, Montana).
+        rows = [r for r in rows if r["country_iso2"] != chosen.get("country_iso2")]
+        if not rows or any(r["destination_id"] == chosen_id for r in rows):
+            return None
+        if int(rows[0]["population"] or 0) < int(chosen.get("population") or 0):
+            return None
+    else:
+        # The name reached this city only through an alternate name or a
+        # partial match while it is the name of a region (Goa, Missouri,
+        # Henan): the user most likely means the region -- unless the city
+        # dominates that region ("New York" -> New York City).
+        in_region = [r for r in rows if r["destination_id"] == chosen_id]
+        rivals = [r for r in rows if r["destination_id"] != chosen_id]
+        if in_region and (not rivals or int(chosen.get("population") or 0)
+                          >= REGION_DOMINANCE_RATIO * int(rivals[0]["population"] or 0)):
+            return None
     cities = [
         r | {"lat": round(float(r["lat"]), 4), "lon": round(float(r["lon"]), 4),
              "matched_alias": None, "match": "in_region", "similarity": None}
@@ -932,6 +988,13 @@ def resolve_place(cur: Any, place: str, country_iso2: str | None = None) -> dict
         or any(o["match"] in exact_kinds for o in others)
     )
     reason = choice_reason(chosen, others, qualifier)
+    country_cities = _country_name_cities(cur, place, chosen)
+    if country_cities and reason is None:
+        country, cities = country_cities
+        reason = (f"{country['name']!r} is a country, not a city; ask which city "
+                  "in it (largest loaded cities listed).")
+        known = {m["destination_id"] for m in matches}
+        others = others + [c for c in cities if c["destination_id"] not in known]
     region_cities = _same_name_region_cities(cur, place, chosen)
     if region_cities and reason is None:
         region, cities = region_cities
