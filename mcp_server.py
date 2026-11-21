@@ -1,10 +1,14 @@
 """Phase 4 travel-ranking MCP server.
 
-Exposes three tools over Streamable HTTP:
+Exposes these tools over Streamable HTTP:
 
+* ``search_places`` -- resolve a city name (any language, typos, "City, CC").
+* ``place_profile`` -- one city's facts in plain terms: values, units, global and
+  in-country percentiles, climate summary, country context and data gaps.
+* ``compare_places`` -- two to five cities side by side.
 * ``rank_destinations`` -- the Phase 3 static scorer, optionally re-ranked with
   live flight and hotel quotes.
-* ``inspect_destination`` -- the full evidence trail for one city.
+* ``inspect_destination`` -- the raw evidence rows for one city.
 * ``refresh_live_quotes`` -- force-refresh the split quote caches.
 
 Run with ``python mcp_server.py``. Requires ``SUPABASE_DB_URL``; ``SERPAPI_API_KEY``
@@ -31,6 +35,8 @@ from psycopg.rows import dict_row
 from psycopg_pool import ConnectionPool, PoolTimeout
 from starlette.requests import Request
 from starlette.responses import JSONResponse
+
+import place_profiles
 
 
 def _env_float(name: str, default: float) -> float:
@@ -71,6 +77,8 @@ DATA_SOURCES_DOC = "docs/DATA_SOURCES.md"
 UNAVAILABLE_DIMENSIONS = [
     "safety_crime",
     "global_city_level_long_term_rent",
+    "visa_and_residence_rules",
+    "rainy_and_hot_days",
 ]
 
 FLIGHT_CACHE_DDL = """
@@ -197,6 +205,9 @@ REGIME_WEIGHTS: dict[str, tuple[float, ...]] = {
 mcp = FastMCP(
     name="travel-ranking",
     instructions=(
+        "Answer questions about ~13k cities (population >= 40k) for trips, long "
+        "stays and moves. Start with search_places or place_profile for one city, "
+        "compare_places for 2-5 cities, and rank_destinations to discover places. "
         "Rank global cities for a trip, inspect a city's climate, POI, mobility, "
         "broadband, housing and crowding evidence, and refresh live flight/hotel "
         "quotes cached in Postgres. All non-derived observations are third-party; "
@@ -266,6 +277,17 @@ def _expand_months(start_month: int, duration_days: int) -> list[int]:
     return [((start - 1 + offset) % 12) + 1 for offset in range(count)]
 
 
+def _months_between(start: date, end: date) -> list[int]:
+    """Calendar months touched by the nights of a stay [start, end)."""
+    last_night = end - timedelta(days=1) if end > start else start
+    months: list[int] = []
+    year, month = start.year, start.month
+    while (year, month) <= (last_night.year, last_night.month) and len(months) < 12:
+        months.append(month)
+        year, month = (year + 1, 1) if month == 12 else (year, month + 1)
+    return months
+
+
 def _normalize_weights(weights: Iterable[float]) -> list[float]:
     """Clamp negatives, normalize to sum 1, or fall back to equal weights."""
     values = [max(0.0, float(weight)) for weight in weights]
@@ -276,6 +298,14 @@ def _normalize_weights(weights: Iterable[float]) -> list[float]:
         equal = round(1.0 / len(values), 6)
         return [equal for _ in values]
     return [round(value / total, 6) for value in values]
+
+
+def _connection_kwargs(db_url: str) -> dict[str, Any]:
+    """Connection settings; Supabase poolers cannot use prepared statements."""
+    kwargs: dict[str, Any] = {"row_factory": dict_row}
+    if "pooler.supabase.com" in db_url or ":6543" in db_url:
+        kwargs["prepare_threshold"] = None
+    return kwargs
 
 
 def _get_pool() -> ConnectionPool:
@@ -292,7 +322,7 @@ def _get_pool() -> ConnectionPool:
                     conninfo=DB_URL,
                     min_size=1,
                     max_size=8,
-                    kwargs={"row_factory": dict_row},
+                    kwargs=_connection_kwargs(DB_URL),
                     open=True,
                 )
     return pool
@@ -651,22 +681,27 @@ def _apply_stage2_rescore(
         total = quote.get("estimated_total_trip_usd") if quote else None
         duration = quote.get("flight_duration_min") if quote else None
 
-        if (
-            max_total_trip_usd is not None
-            and total is not None
-            and float(total) > float(max_total_trip_usd)
-        ):
-            continue
-        if (
-            max_flight_duration_min is not None
-            and duration is not None
-            and int(duration) > int(max_flight_duration_min)
-        ):
-            continue
+        checks: dict[str, str] = {}
+        if max_total_trip_usd is not None:
+            if total is None:
+                checks["max_total_trip_usd"] = "unverified_no_quote"
+            elif float(total) > float(max_total_trip_usd):
+                continue
+            else:
+                checks["max_total_trip_usd"] = "pass"
+        if max_flight_duration_min is not None:
+            if duration is None:
+                checks["max_flight_duration_min"] = "unverified_no_quote"
+            elif int(duration) > int(max_flight_duration_min):
+                continue
+            else:
+                checks["max_flight_duration_min"] = "pass"
 
         live_row = dict(row)
         live_row["stage1_score"] = row.get("final_score")
         live_row["live_quotes"] = quote
+        if checks:
+            live_row["constraint_checks"] = checks
 
         provenance = row.get("provenance")
         provenance = dict(provenance) if isinstance(provenance, dict) else {}
@@ -728,12 +763,12 @@ def _apply_stage2_rescore(
 
         live_weight = 0.0
         live_sum = 0.0
-        if destination_id in cost_scores:
-            live_sum += cost_scores[destination_id] * w_cost
-            live_weight += w_cost
-        if destination_id in duration_scores:
-            live_sum += duration_scores[destination_id] * w_time
-            live_weight += w_time
+        # A missing quote is neutral (0.5), like other missing dimensions, so a
+        # city cannot outrank quoted cities just because its quote failed.
+        live_sum += cost_scores.get(destination_id, 0.5) * w_cost
+        live_weight += w_cost
+        live_sum += duration_scores.get(destination_id, 0.5) * w_time
+        live_weight += w_time
 
         if live_weight > 0:
             live_component = live_sum / live_weight
@@ -811,13 +846,20 @@ def rank_destinations(
         if eff_duration <= 0:
             raise ValueError("duration_days must be positive.")
 
-    months = _expand_months(eff_start_month, eff_duration)
+    if quote_start is not None and quote_end is not None:
+        months = _months_between(quote_start, quote_end)
+    else:
+        months = _expand_months(eff_start_month, eff_duration)
     stay_profile = "extended_stay" if eff_duration >= 30 else "short_stay"
     exclude_schengen = eff_duration > 90 and not passport_eu_eea
+    # The default heat cap never sits below the caller's own ideal range.
     eff_max_temp = (
         float(max_peak_temp_c)
         if max_peak_temp_c is not None
-        else (29.0 if stay_profile == "extended_stay" else 32.0)
+        else max(
+            29.0 if stay_profile == "extended_stay" else 32.0,
+            float(ideal_temp_max_c) + 3.0,
+        )
     )
 
     regime = REGIME_WEIGHTS[stay_profile]
@@ -949,9 +991,18 @@ def rank_destinations(
     else:
         live_pricing_status = "disabled"
 
+    ignored_constraints: list[str] = []
+    if not run_stage2:
+        if max_total_trip_usd is not None:
+            ignored_constraints.append("max_total_trip_usd")
+        if max_flight_duration_min is not None:
+            ignored_constraints.append("max_flight_duration_min")
+
     payload = {
         "query_context": {
             "stay_profile": stay_profile,
+            "ignored_constraints": ignored_constraints,
+            "effective_max_peak_temp_c": eff_max_temp,
             "evaluated_months": months,
             "duration_days": eff_duration,
             "exclude_schengen": exclude_schengen,
@@ -985,30 +1036,21 @@ def inspect_destination(
     if not destination_id and not city_name:
         raise ValueError("Provide destination_id or city_name.")
 
+    resolution: dict[str, Any] | None = None
     with _get_pool().connection() as conn:
         with conn.cursor() as cur:
-            if destination_id:
-                cur.execute(
-                    DESTINATION_SELECT + " WHERE destination_id = %s",
-                    (destination_id,),
-                )
-            else:
-                country = (country_iso2 or "").strip().upper()
-                if country:
-                    cur.execute(
-                        DESTINATION_SELECT
-                        + " WHERE (name ILIKE %s OR ascii_name ILIKE %s)"
-                        + " AND country_iso2 = %s"
-                        + " ORDER BY population DESC LIMIT 1",
-                        (city_name, city_name, country),
+            if not destination_id:
+                try:
+                    resolution = place_profiles.resolve_place(
+                        cur, str(city_name), country_iso2
                     )
-                else:
-                    cur.execute(
-                        DESTINATION_SELECT
-                        + " WHERE (name ILIKE %s OR ascii_name ILIKE %s)"
-                        + " ORDER BY population DESC LIMIT 1",
-                        (city_name, city_name),
-                    )
+                except ValueError:
+                    resolution = None
+                destination_id = resolution["destination_id"] if resolution else None
+            cur.execute(
+                DESTINATION_SELECT + " WHERE destination_id = %s",
+                (destination_id,),
+            )
             destination = cur.fetchone()
 
             if destination is None:
@@ -1094,14 +1136,105 @@ def inspect_destination(
 
     payload = {
         "destination": destination,
+        "name_resolution": resolution,
         "climate": climate,
-        "climate_monthly": climate,
-        "climate_12m": climate,
         "poi_metrics": poi_metrics,
         "mobility_metrics": mobility_metrics,
         "broadband_metrics": broadband_metrics,
         "housing_monthly": housing_monthly,
         "tourism_pressure": tourism_pressure,
+        "data_sources_documentation": DATA_SOURCES_DOC,
+    }
+    return _jsonable(payload)
+
+
+def _resolve_many(cur: Any, places: list[str], country_iso2: str | None) -> tuple[list[str], list[dict[str, Any]], list[str]]:
+    ids: list[str] = []
+    resolutions: list[dict[str, Any]] = []
+    unresolved: list[str] = []
+    for place in places:
+        try:
+            resolution = place_profiles.resolve_place(cur, place, country_iso2)
+        except ValueError:
+            unresolved.append(place)
+            continue
+        if resolution["destination_id"] not in ids:
+            ids.append(resolution["destination_id"])
+            resolutions.append({"query": place, **resolution})
+    return ids, resolutions, unresolved
+
+
+@mcp.tool
+def search_places(
+    query: str,
+    country_iso2: str | None = None,
+    limit: int = 5,
+) -> dict[str, Any]:
+    """Find cities by name in any language or spelling ("Cologne", "Köln", "Porto, PT").
+
+    Returns candidates with destination_id, country and population, best first.
+    Use the destination_id with place_profile or compare_places. Only cities with
+    population >= 40,000 are loaded.
+    """
+    with _get_pool().connection() as conn:
+        with conn.cursor() as cur:
+            result = place_profiles.search_places(cur, query, country_iso2, limit)
+    return _jsonable(result)
+
+
+@mcp.tool
+def place_profile(
+    place: str,
+    country_iso2: str | None = None,
+) -> dict[str, Any]:
+    """Everything the database knows about one city, in plain terms.
+
+    ``place`` is a name ("Lisbon", "Porto, PT") or a destination_id ("gn-2267057").
+    Each metric has a label, unit, value, global and in-country percentile (100 =
+    best among cities with data), source and period, or status "not_measured".
+    Also returns a 12-month climate table with a summary, country context
+    (currency, languages, price level, homicide rate, PM2.5, life expectancy,
+    political stability -- national values), and a list of what is not measured.
+    If the name is ambiguous, ``match.other_matches`` lists the alternatives.
+    """
+    with _get_pool().connection() as conn:
+        with conn.cursor() as cur:
+            resolution = place_profiles.resolve_place(cur, place, country_iso2)
+            profile = place_profiles.build_profile(cur, resolution["destination_id"])
+    profile = {"match": resolution, **profile, "data_sources_documentation": DATA_SOURCES_DOC}
+    return _jsonable(profile)
+
+
+@mcp.tool
+def compare_places(
+    places: list[str],
+    country_iso2: str | None = None,
+) -> dict[str, Any]:
+    """Compare two to five cities side by side.
+
+    ``places`` are names or destination_ids. For each metric the result lists
+    every city's value and percentile and names the ``best`` city (null on ties,
+    missing data or local-currency values). Also returns monthly climate for each
+    city and national context for each country.
+    """
+    requested = [str(p).strip() for p in (places or []) if str(p).strip()]
+    if not 2 <= len(requested) <= place_profiles.MAX_COMPARE:
+        raise ValueError(
+            f"places must contain between 2 and {place_profiles.MAX_COMPARE} names or ids."
+        )
+    with _get_pool().connection() as conn:
+        with conn.cursor() as cur:
+            ids, resolutions, unresolved = _resolve_many(cur, requested, country_iso2)
+            if len(ids) < 2:
+                raise ValueError(
+                    "Need at least two distinct matching cities; unresolved: "
+                    + ", ".join(unresolved or requested)
+                )
+            comparison = place_profiles.build_comparison(cur, ids)
+    payload = {
+        "matches": resolutions,
+        "unresolved": unresolved,
+        **comparison,
         "data_sources_documentation": DATA_SOURCES_DOC,
     }
     return _jsonable(payload)

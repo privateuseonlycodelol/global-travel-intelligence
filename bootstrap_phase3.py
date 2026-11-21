@@ -577,11 +577,12 @@ def _execute_with_retries(
 
 
 def _duckdb_temp_dir() -> Path:
-    """Pick a writable spill directory; the default is '.tmp' in the CWD."""
-    for candidate in (
-        CACHE_DIR / "duckdb_tmp",
-        Path(tempfile.gettempdir()) / "travel_duckdb_tmp",
-    ):
+    """Pick a writable spill directory (DUCKDB_TEMP_DIR overrides the cache default)."""
+    candidates = [CACHE_DIR / "duckdb_tmp", Path(tempfile.gettempdir()) / "travel_duckdb_tmp"]
+    override = os.environ.get("DUCKDB_TEMP_DIR")
+    if override:
+        candidates.insert(0, Path(override))
+    for candidate in candidates:
         try:
             candidate.mkdir(parents=True, exist_ok=True)
             return candidate
@@ -1217,6 +1218,7 @@ def ingest_overture_transport(
               AND pedestrian_ratio_2km IS NULL
               AND rail_segments_5km IS NULL
               AND gtfs_active_feeds IS NULL
+              AND transit_stops_5km IS NULL
             """,
             (scope_ids,),
         )
@@ -1360,6 +1362,7 @@ def ingest_gtfs(conn: psycopg.Connection, cities_df: pd.DataFrame) -> None:
               AND pedestrian_ratio_2km IS NULL
               AND rail_segments_5km IS NULL
               AND gtfs_active_feeds IS NULL
+              AND transit_stops_5km IS NULL
             """,
             (scope_ids,),
         )
@@ -1373,7 +1376,7 @@ def ingest_gtfs(conn: psycopg.Connection, cities_df: pd.DataFrame) -> None:
             ["destination_id"],
             """
             gtfs_active_feeds = EXCLUDED.gtfs_active_feeds,
-            source = CASE WHEN mobility_metrics.source LIKE '%Overture%'
+            source = CASE WHEN mobility_metrics.source LIKE '%Overture Maps Transportation%'
                           THEN 'Overture Maps Transportation + Mobility Database GTFS'
                           ELSE EXCLUDED.source END,
             observed_period = CASE
@@ -1383,7 +1386,8 @@ def ingest_gtfs(conn: psycopg.Connection, cities_df: pd.DataFrame) -> None:
                     'mobility-[0-9]{4}-[0-9]{2}',
                     EXCLUDED.observed_period
                 )
-                WHEN mobility_metrics.observed_period ~ 'overture-'
+                WHEN mobility_metrics.source LIKE '%Overture Maps Transportation%'
+                     AND mobility_metrics.observed_period ~ 'overture-'
                 THEN mobility_metrics.observed_period || '; ' || EXCLUDED.observed_period
                 ELSE EXCLUDED.observed_period
             END,

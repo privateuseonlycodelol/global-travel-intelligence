@@ -127,6 +127,39 @@ sources:
     granularity: route/date flight; city/date hotel median
     used_by: mcp_server.py
     status: implemented_optional
+  - id: geonames_alternatenames
+    party: third-party
+    publisher: GeoNames
+    dataset: "cities15000.zip alternatenames column"
+    url: https://download.geonames.org/export/dump/cities15000.zip
+    terms_url: https://www.geonames.org/export/
+    license: "CC BY 4.0 (GeoNames terms; attribution required)"
+    coverage: global
+    granularity: city name aliases
+    used_by: bootstrap_places.py -> destination_aliases
+    status: implemented
+  - id: geonames_countryinfo
+    party: third-party
+    publisher: GeoNames
+    dataset: countryInfo.txt
+    url: https://download.geonames.org/export/dump/countryInfo.txt
+    terms_url: https://www.geonames.org/export/
+    license: "CC BY 4.0 (GeoNames terms; attribution required)"
+    coverage: global (252 countries/territories)
+    granularity: country
+    used_by: bootstrap_places.py -> country_facts
+    status: implemented
+  - id: world_bank_wdi_wgi
+    party: third-party
+    publisher: World Bank (WDI; WGI; homicide series sourced from UNODC)
+    dataset: "VC.IHR.PSRC.P5, EN.ATM.PM25.MC.M3, SP.DYN.LE00.IN, NY.GDP.PCAP.PP.CD, GOV_WGI_PV.EST, PA.NUS.PPP / PA.NUS.FCRF"
+    url: https://api.worldbank.org/v2/
+    terms_url: https://datacatalog.worldbank.org/public-licenses
+    license: "CC BY 4.0 (World Bank open data terms)"
+    coverage: global (177-216 countries per indicator)
+    granularity: country (national values; never copied onto cities)
+    used_by: bootstrap_places.py -> country_indicators
+    status: implemented
 candidates:
   - id: fbi_crime_data_explorer
     publisher: FBI / U.S. Department of Justice

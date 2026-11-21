@@ -19,6 +19,7 @@ import argparse
 import math
 import os
 import sys
+import tempfile
 import time
 import zipfile
 from collections import defaultdict
@@ -32,6 +33,21 @@ import rasterio
 import requests
 
 CACHE_DIR = Path("./data_cache")
+
+
+def _duckdb_temp_dir() -> Path:
+    """Return a writable DuckDB spill directory (DUCKDB_TEMP_DIR overrides)."""
+    candidates = [CACHE_DIR / "duckdb_tmp", Path(tempfile.gettempdir()) / "travel_duckdb_tmp"]
+    override = os.environ.get("DUCKDB_TEMP_DIR")
+    if override:
+        candidates.insert(0, Path(override))
+    for candidate in candidates:
+        try:
+            candidate.mkdir(parents=True, exist_ok=True)
+            return candidate.resolve()
+        except OSError:
+            continue
+    return Path(tempfile.gettempdir())
 
 GEONAMES_URL = "https://download.geonames.org/export/dump/cities15000.zip"
 OURAIRPORTS_URL = "https://davidmegginson.github.io/ourairports-data/airports.csv"
@@ -788,11 +804,11 @@ def ingest_worldclim_climate(conn: psycopg.Connection, cities_df: pd.DataFrame) 
             )
             SELECT * FROM tmp_clim
             ON CONFLICT (destination_id, month) DO UPDATE SET
-                median_temp_max_c = COALESCE(
-                    climate_monthly.median_temp_max_c, EXCLUDED.median_temp_max_c),
-                median_temp_min_c = COALESCE(
-                    climate_monthly.median_temp_min_c, EXCLUDED.median_temp_min_c),
+                median_temp_max_c = EXCLUDED.median_temp_max_c,
+                median_temp_min_c = EXCLUDED.median_temp_min_c,
                 precip_mm  = EXCLUDED.precip_mm,
+                source     = EXCLUDED.source,
+                observed_period = EXCLUDED.observed_period,
                 updated_at = NOW();
         """)
         log(f"  upserted {cur.rowcount:,} city-month climate rows.")
@@ -898,7 +914,7 @@ def ingest_overture_pois_batch(
         # on 2026-11-21. Spill to disk instead of growing past this.
         duck.execute(
             f"SET memory_limit='{os.environ.get('DUCKDB_MEMORY_LIMIT', '6GB')}'; "
-            "SET temp_directory='/workspace/travel/.duckdb_tmp'; "
+            f"SET temp_directory='{_duckdb_temp_dir().as_posix()}'; "
             "SET preserve_insertion_order=false;"
         )
         try:

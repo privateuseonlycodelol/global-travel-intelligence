@@ -24,6 +24,9 @@ final production numbers.
 | `tourism_pressure` | 1,405 | Eurostat NUTS 2 2024; EU/EFTA only |
 | `housing_monthly` | 0 | Optional Inside Airbnb load not run globally |
 | `flight_quote_cache` / `hotel_quote_cache` | 0 | Populated only by MCP stage 2 with SerpApi key |
+| `destination_aliases` | 188,403 | GeoNames names/alternatenames for all 13,101 cities (`bootstrap_places.py`) |
+| `country_facts` | 252 | GeoNames countryInfo; every destination has a country row |
+| `country_indicators` | 1,201 | World Bank: homicide 177, PM2.5 200, life expectancy 216, GDP PPP 201, political stability 207, price level 200 countries |
 
 ## 2. What is missing and why
 

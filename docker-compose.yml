@@ -8,6 +8,7 @@ services:
       MCP_PATH: "/mcp"
       DUCKDB_MEMORY_LIMIT: "${DUCKDB_MEMORY_LIMIT:-12GiB}"
       DUCKDB_TEMP_LIMIT: "${DUCKDB_TEMP_LIMIT:-8GiB}"
+      DUCKDB_TEMP_DIR: "/tmp/duckdb_spill"
     ports:
       - "8000:8000"
     volumes:

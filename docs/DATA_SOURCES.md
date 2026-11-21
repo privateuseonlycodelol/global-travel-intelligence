@@ -258,6 +258,34 @@ Islington (449), Osaka (428), Paris (408), Geneva (392) and New York City
 | Status | **Implemented; stage 2 gracefully skips without `SERPAPI_API_KEY`** |
 | Notes | Cached for `QUOTE_TTL_HOURS` (default 12). Do not present cached quotes as live after expiry. |
 
+### 3.12 GeoNames aliases and country facts
+
+| Field | Value |
+| --- | --- |
+| Party | Third-party |
+| Publisher | GeoNames |
+| Dataset | `cities15000.zip` `alternatenames` column; `countryInfo.txt` |
+| Licence | CC BY 4.0 (attribution required) |
+| Coverage | Every loaded destination; 252 countries/territories |
+| Granularity | City name aliases; country facts (capital, currency, languages, phone prefix, neighbours) |
+| Used by | `bootstrap_places.py` → `destination_aliases`, `country_facts` |
+| Status | **Implemented** |
+| Notes | Aliases are normalized (case, accents, punctuation) and trigram-indexed for `search_places`. They include exonyms, native scripts and some airport codes. Official-name matches rank above alternate-name matches. |
+
+### 3.13 World Bank country indicators
+
+| Field | Value |
+| --- | --- |
+| Party | Third-party |
+| Publisher | World Bank WDI and WGI (homicide series sourced from UNODC) |
+| Dataset | `VC.IHR.PSRC.P5` homicides per 100k, `EN.ATM.PM25.MC.M3` PM2.5 exposure, `SP.DYN.LE00.IN` life expectancy, `NY.GDP.PCAP.PP.CD` GDP per capita PPP, `GOV_WGI_PV.EST` political stability, and a derived price level `PA.NUS.PPP / PA.NUS.FCRF` (same year; 1.0 = US prices) |
+| Licence | CC BY 4.0 |
+| Coverage | 177-216 countries per indicator; latest non-null year from 2012-2026 is kept and its year stored |
+| Granularity | **Country** |
+| Used by | `bootstrap_places.py` → `country_indicators`; `place_profile` / `compare_places` |
+| Status | **Implemented** |
+| Notes | National values are returned under `country` with `granularity: country` and are never copied onto city rows or used in `rank_destinations_v3`. Some homicide values are a decade old; the year is returned with each value. |
+
 ## 4. Missing dimensions and verified candidate sources
 
 These sources were checked but are **not** loaded. They are listed so a
@@ -287,8 +315,10 @@ leaves the rest NULL.
 | National police open data | Country-specific | Varies | Candidate per country. |
 | UNODC | Country; global | UNODC terms; verify | Country-level only. |
 
-**Decision:** `safety_crime` remains unavailable globally. A country-level
-crime rate is not silently copied onto cities. If a US/UK-only mode is added,
+**Decision:** `safety_crime` remains unavailable at city level. The national
+UNODC homicide rate (via World Bank, section 3.13) is stored per country in
+`country_indicators` and shown only as country context; it is not copied onto
+cities. If a US/UK-only mode is added,
 it must be labelled as such.
 
 ### 4.3 Housing / rent
@@ -375,7 +405,11 @@ means without labelling the approximation.
 | `tourism_pressure` | Eurostat NUTS 2 tourism + population | Yes (NUTS 2 assignment/division) | `Eurostat tour_occ_nin2m + demo_r_pjangrp3 (NUTS 2)` |
 | `flight_quote_cache` | SerpApi Google Flights | No (cached response) | `SerpApi Google Flights` |
 | `hotel_quote_cache` | SerpApi Google Hotels | No (cached response) | `SerpApi Google Hotels` |
+| `destination_aliases` | GeoNames alternatenames | Yes (normalized) | n/a |
+| `country_facts` | GeoNames countryInfo | No | `GeoNames countryInfo.txt` |
+| `country_indicators` | World Bank WDI/WGI | No, except derived price level | `World Bank WDI`, `World Bank WGI`, `World Bank WDI (derived)` |
 | `rank_destinations_v3` output | All of the above | **Yes, first-party derived** | n/a |
+| `place_profile` percentiles | All city tables | **Yes, first-party derived** (percent rank over all cities with data) | n/a |
 
 ## 7. Verification log (2026-11-21)
 

@@ -27,6 +27,8 @@ calls:
 | `bootstrap_phase3.py` | Phase 3 pipeline (broadband, walkability/transit, optional housing) and `rank_destinations_v3` |
 | `bootstrap_transit_stops.py` | Overture Places public-transport facility counts within 5 km |
 | `bootstrap_supplemental.py` | optional official-data loaders (currently Eurostat NUTS 2 tourism pressure) |
+| `bootstrap_places.py` | city name aliases (fuzzy search) and country facts/indicators (GeoNames, World Bank) |
+| `place_profiles.py` | place search, plain-language profiles and comparison used by the MCP server |
 | `mcp_server.py` | Phase 4 FastMCP server (Streamable HTTP, optional SerpApi live pricing) |
 | `Dockerfile` | container image for the pipeline and MCP server |
 | `docker-compose.yml` | MCP service + optional local PostGIS profile |
@@ -564,13 +566,31 @@ country-scoped. A 2 GiB limit OOMs on Spain+Sweden; 8 GiB completed it.
 
 ## 10. Phase 4: MCP server and live pricing
 
-`mcp_server.py` exposes three tools over Streamable HTTP:
+`mcp_server.py` exposes these tools over Streamable HTTP:
 
 | Tool | Purpose |
 | --- | --- |
+| `search_places` | find a city by any spelling or language ("Cologne", "Köln", "Porto, PT"); lists candidates when a name is ambiguous |
+| `place_profile` | everything known about one city: labelled values with units, global and in-country percentiles (100 = best among cities with data), climate summary, country context and an explicit list of what is not measured |
+| `compare_places` | two to five cities side by side, with the best city per metric |
 | `rank_destinations` | stage 1 SQL ranking, optional stage 2 live flight/hotel pricing |
-| `inspect_destination` | one city's climate curve, POIs, mobility, broadband, housing, tourism pressure and provenance |
+| `inspect_destination` | one city's raw evidence rows and provenance |
 | `refresh_live_quotes` | force-refresh SerpApi quotes for 1–5 finalists |
+
+`search_places`, `place_profile` and `compare_places` work best after loading
+aliases and country context (about 15 seconds, global):
+
+```bash
+python bootstrap_places.py
+```
+
+Without it, name search falls back to prefix matching on the official name
+and the country section reports `status: not_loaded`.
+
+Example questions an MCP client can now answer directly: "What is Lisbon like
+in March?", "Compare Porto, Valencia and Cologne for a three-month stay", or
+"How safe and expensive is Portugal compared with other countries?". Country
+indicators are national values and are labelled `granularity: country`.
 
 ```bash
 export SUPABASE_DB_URL="postgresql://..."
