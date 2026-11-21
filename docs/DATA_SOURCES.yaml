@@ -152,7 +152,7 @@ sources:
   - id: world_bank_wdi_wgi
     party: third-party
     publisher: World Bank (WDI; WGI; homicide series sourced from UNODC)
-    dataset: "VC.IHR.PSRC.P5, EN.ATM.PM25.MC.M3, SP.DYN.LE00.IN, NY.GDP.PCAP.PP.CD, GOV_WGI_PV.EST, PA.NUS.PPP / PA.NUS.FCRF"
+    dataset: "VC.IHR.PSRC.P5, EN.ATM.PM25.MC.M3, SP.DYN.LE00.IN, NY.GDP.PCAP.PP.CD, GOV_WGI_PV.EST, PA.NUS.GDP.PLI (price level index, stored /100)"
     url: https://api.worldbank.org/v2/
     terms_url: https://datacatalog.worldbank.org/public-licenses
     license: "CC BY 4.0 (World Bank open data terms)"

@@ -4,6 +4,8 @@ Place lookup and country context loaders.
 
 Two small, global, bulk loads that make the database easier to query:
 
+* ``destination_admin1`` -- each city's first-level region (US state,
+  Canadian province, ...) so "Austin, TX" or "London, Ontario" resolve.
 * ``destination_aliases`` -- every name GeoNames knows for each loaded city
   (official name, ASCII name and the ``alternatenames`` column of
   ``cities15000.zip``: exonyms such as "Lisbon"/"Lisboa"/"Lissabon", airport
@@ -48,47 +50,50 @@ from place_profiles import normalize_name
 
 CACHE_DIR = Path("./data_cache")
 COUNTRY_INFO_URL = "https://download.geonames.org/export/dump/countryInfo.txt"
+ADMIN1_URL = "https://download.geonames.org/export/dump/admin1CodesASCII.txt"
 WORLD_BANK_API = "https://api.worldbank.org/v2"
 ALIAS_SOURCE = "GeoNames cities15000 (name, asciiname, alternatenames)"
 COUNTRY_SOURCE = "GeoNames countryInfo.txt"
 MAX_ALIAS_LENGTH = 120
 
-# key -> (World Bank indicator id, World Bank source id or None, label, unit, better)
+# key -> (World Bank indicator id, World Bank source id or None, label, unit, better, scale)
 # ``better`` is "higher", "lower" or None and only drives how a percentile is read.
-WORLD_BANK_INDICATORS: dict[str, tuple[str, int | None, str, str, str | None]] = {
+# ``scale`` multiplies the published value (e.g. an index with US = 100 -> ratio).
+WORLD_BANK_INDICATORS: dict[str, tuple[str, int | None, str, str, str | None, float]] = {
     "homicide_per_100k": (
         "VC.IHR.PSRC.P5", None,
         "Intentional homicides per 100,000 people (UNODC via World Bank)",
-        "per 100k people", "lower",
+        "per 100k people", "lower", 1.0,
     ),
     "pm25_mean_annual_ugm3": (
         "EN.ATM.PM25.MC.M3", None,
         "PM2.5 air pollution, mean annual exposure",
-        "µg/m³", "lower",
+        "µg/m³", "lower", 1.0,
     ),
     "life_expectancy_years": (
         "SP.DYN.LE00.IN", None,
         "Life expectancy at birth",
-        "years", "higher",
+        "years", "higher", 1.0,
     ),
     "gdp_per_capita_ppp": (
         "NY.GDP.PCAP.PP.CD", None,
         "GDP per capita, PPP",
-        "current international $", "higher",
+        "current international $", "higher", 1.0,
     ),
     "political_stability_wgi": (
         "GOV_WGI_PV.EST", 3,
         "Political stability and absence of violence (WGI estimate, -2.5..+2.5)",
-        "index", "higher",
+        "index", "higher", 1.0,
+    ),
+    # Published World Bank GDP price level index (US = 100), stored as a ratio.
+    # Deriving PPP / exchange rate instead breaks on currency redenominations
+    # (Bulgaria, Liberia) and official pegs (Iran).
+    "price_level_vs_usd": (
+        "PA.NUS.GDP.PLI", None,
+        "Price level vs USA (World Bank GDP price level index; 1.0 = US prices)",
+        "ratio to US", "lower", 0.01,
     ),
 }
-# Derived: price level = PPP conversion factor (LCU per international $) /
-# official exchange rate (LCU per USD), same year. 1.0 = US price level.
-PRICE_LEVEL_KEY = "price_level_vs_usd"
-PRICE_LEVEL_LABEL = (
-    "Price level vs USA (PPP conversion factor / exchange rate; 1.0 = US prices)"
-)
-PRICE_LEVEL_PARTS = ("PA.NUS.PPP", "PA.NUS.FCRF")
 INDICATOR_YEARS = "2012:2026"
 
 SCHEMA_SQL = """
@@ -105,6 +110,15 @@ CREATE INDEX IF NOT EXISTS idx_destination_aliases_trgm
     ON destination_aliases USING GIN (alias_norm gin_trgm_ops);
 CREATE INDEX IF NOT EXISTS idx_destination_aliases_norm
     ON destination_aliases (alias_norm text_pattern_ops);
+
+CREATE TABLE IF NOT EXISTS destination_admin1 (
+    destination_id  TEXT PRIMARY KEY REFERENCES destinations(destination_id) ON DELETE CASCADE,
+    admin1_code     TEXT NOT NULL,
+    admin1_name     TEXT,
+    admin1_norm     TEXT
+);
+CREATE INDEX IF NOT EXISTS idx_destination_admin1_norm ON destination_admin1 (admin1_norm);
+CREATE INDEX IF NOT EXISTS idx_destination_admin1_code ON destination_admin1 (admin1_code);
 
 CREATE TABLE IF NOT EXISTS country_facts (
     country_iso2    CHAR(2) PRIMARY KEY,
@@ -173,6 +187,40 @@ def build_alias_rows(
     return rows
 
 
+def build_admin1_rows(
+    destinations: dict[int, str],
+    geonames_lines: Iterable[str],
+    admin1_names: dict[str, str],
+) -> list[tuple[str, str, str | None, str | None]]:
+    """(destination_id, admin1_code, admin1_name, admin1_norm) per loaded city.
+
+    ``admin1_code`` is the GeoNames code without the country prefix: the postal
+    abbreviation in the US ("TX"), a numeric code in many other countries.
+    """
+    rows: list[tuple[str, str, str | None, str | None]] = []
+    for line in geonames_lines:
+        fields = line.rstrip("\n").split("\t")
+        if len(fields) < 11 or not fields[0].isdigit():
+            continue
+        destination_id = destinations.get(int(fields[0]))
+        country, code = fields[8].strip().upper(), fields[10].strip()
+        if destination_id is None or not code:
+            continue
+        name = admin1_names.get(f"{country}.{code}")
+        rows.append((destination_id, code.upper(), name, normalize_name(name) or None))
+    return rows
+
+
+def parse_admin1(text: str) -> dict[str, str]:
+    """GeoNames admin1CodesASCII.txt -> {"US.TX": "Texas"} (ASCII name)."""
+    names: dict[str, str] = {}
+    for line in text.splitlines():
+        fields = line.split("\t")
+        if len(fields) >= 3 and "." in fields[0]:
+            names[fields[0]] = fields[2] or fields[1]
+    return names
+
+
 def parse_country_info(text: str) -> list[dict[str, Any]]:
     """Parse GeoNames countryInfo.txt (tab-separated, '#' comment lines)."""
     countries: list[dict[str, Any]] = []
@@ -225,36 +273,6 @@ def latest_values(records: Iterable[dict[str, Any]]) -> dict[str, tuple[float, i
     return latest
 
 
-def price_level_values(
-    ppp_records: Iterable[dict[str, Any]],
-    fx_records: Iterable[dict[str, Any]],
-) -> dict[str, tuple[float, int]]:
-    """Latest same-year PPP / exchange-rate ratio per country."""
-    def by_year(records: Iterable[dict[str, Any]]) -> dict[tuple[str, int], float]:
-        out: dict[tuple[str, int], float] = {}
-        for record in records:
-            value = record.get("value")
-            iso2 = ((record.get("country") or {}).get("id") or "").upper()
-            try:
-                year = int(record.get("date"))
-            except (TypeError, ValueError):
-                continue
-            if value is not None and len(iso2) == 2:
-                out[(iso2, year)] = float(value)
-        return out
-
-    ppp = by_year(ppp_records)
-    fx = by_year(fx_records)
-    result: dict[str, tuple[float, int]] = {}
-    for (iso2, year), ppp_value in ppp.items():
-        fx_value = fx.get((iso2, year))
-        if not fx_value or fx_value <= 0 or ppp_value <= 0:
-            continue
-        if iso2 not in result or year > result[iso2][1]:
-            result[iso2] = (ppp_value / fx_value, year)
-    return result
-
-
 def fetch_world_bank(indicator: str, source: int | None, retries: int = 4) -> list[dict[str, Any]]:
     """Fetch every country/year record for one indicator, cached on disk for a day."""
     cache_path = CACHE_DIR / "worldbank" / f"{indicator}.json"
@@ -296,9 +314,19 @@ def load_aliases(conn: psycopg.Connection) -> int:
         cur.execute("SELECT geoname_id, destination_id FROM destinations")
         destinations = {int(geoname_id): destination_id for geoname_id, destination_id in cur.fetchall()}
     with zipfile.ZipFile(zip_path) as zf, zf.open("cities15000.txt") as raw:
-        lines = io.TextIOWrapper(raw, encoding="utf-8")
-        rows = build_alias_rows(destinations, lines)
+        lines = list(io.TextIOWrapper(raw, encoding="utf-8"))
+    rows = build_alias_rows(destinations, lines)
+    admin1_path = phase1.download_cached(ADMIN1_URL, CACHE_DIR / "admin1CodesASCII.txt")
+    admin1_rows = build_admin1_rows(
+        destinations, lines, parse_admin1(admin1_path.read_text(encoding="utf-8"))
+    )
     with conn.cursor() as cur:
+        cur.execute("TRUNCATE destination_admin1")
+        with cur.copy(
+            "COPY destination_admin1 (destination_id, admin1_code, admin1_name, admin1_norm) FROM STDIN"
+        ) as copy:
+            for row in admin1_rows:
+                copy.write_row(row)
         # Aliases are derived entirely from the current destinations table.
         cur.execute("TRUNCATE destination_aliases")
         with cur.copy(
@@ -307,7 +335,8 @@ def load_aliases(conn: psycopg.Connection) -> int:
             for row in rows:
                 copy.write_row(row)
     conn.commit()
-    log(f"  loaded {len(rows):,} aliases for {len(destinations):,} destinations.")
+    log(f"  loaded {len(rows):,} aliases and {len(admin1_rows):,} region codes "
+        f"for {len(destinations):,} destinations.")
     return len(rows)
 
 
@@ -356,29 +385,17 @@ def load_country_indicators(conn: psycopg.Connection) -> int:
         raise RuntimeError("country_facts is empty; load it before indicators.")
 
     loaded: list[tuple[Any, ...]] = []
-    for key, (indicator, source_id, label, unit, better) in WORLD_BANK_INDICATORS.items():
+    for key, (indicator, source_id, label, unit, better, scale) in WORLD_BANK_INDICATORS.items():
         values = latest_values(fetch_world_bank(indicator, source_id))
         source = "World Bank WGI" if source_id == 3 else "World Bank WDI"
         for iso2, (value, year) in values.items():
             if iso2 in known:
-                loaded.append((iso2, key, value, year, label, unit, better, source, indicator))
+                loaded.append((iso2, key, value * scale, year, label, unit, better, source, indicator))
         log(f"  {key}: {sum(1 for r in loaded if r[1] == key):,} countries")
 
-    ppp = fetch_world_bank(PRICE_LEVEL_PARTS[0], None)
-    fx = fetch_world_bank(PRICE_LEVEL_PARTS[1], None)
-    for iso2, (value, year) in price_level_values(ppp, fx).items():
-        if iso2 in known:
-            loaded.append((
-                iso2, PRICE_LEVEL_KEY, value, year, PRICE_LEVEL_LABEL,
-                "ratio to US", "lower", "World Bank WDI (derived)",
-                "/".join(PRICE_LEVEL_PARTS),
-            ))
-    log(f"  {PRICE_LEVEL_KEY}: {sum(1 for r in loaded if r[1] == PRICE_LEVEL_KEY):,} countries")
-
-    keys = list(WORLD_BANK_INDICATORS) + [PRICE_LEVEL_KEY]
     with conn.cursor() as cur:
-        # Each run is authoritative for the indicators it loads.
-        cur.execute("DELETE FROM country_indicators WHERE indicator = ANY(%s)", (keys,))
+        # Each run replaces every indicator, including ones no longer configured.
+        cur.execute("DELETE FROM country_indicators")
         cur.executemany(
             """
             INSERT INTO country_indicators (

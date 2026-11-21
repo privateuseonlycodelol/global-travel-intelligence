@@ -587,6 +587,25 @@ python bootstrap_places.py
 Without it, name search falls back to prefix matching on the official name
 and the country section reports `status: not_loaded`.
 
+Name lookup rules:
+
+- A trailing `, <qualifier>` is read as a country code, country name or common
+  synonym (`UK`, `USA`), or as a state/province (`Austin, TX`,
+  `London, Ontario`). It overrides the `country_iso2` argument. If nothing
+  matches with the qualifier, the name is searched alone and
+  `qualifier.applied` is `false`.
+- An exact official name beats an exact alternate name unless the
+  alternate-name city is more than 5x larger (`Porto` → Portugal,
+  `St Petersburg` → Russia).
+- When the best match is only fuzzy, `place_profile`, `compare_places` and
+  `inspect_destination` return `needs_choice: true` with candidates instead of
+  describing a possibly wrong city.
+- POI counts of zero are reported as `status: none_listed` and are not ranked:
+  in Overture Maps, zero usually means missing coverage.
+
+`inspect_destination` now returns the 12-month climate once, under `climate`;
+the duplicate `climate_monthly` and `climate_12m` keys were removed.
+
 Example questions an MCP client can now answer directly: "What is Lisbon like
 in March?", "Compare Porto, Valencia and Cologne for a three-month stay", or
 "How safe and expensive is Portugal compared with other countries?". Country

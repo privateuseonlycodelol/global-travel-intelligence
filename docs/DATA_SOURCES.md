@@ -264,11 +264,11 @@ Islington (449), Osaka (428), Paris (408), Geneva (392) and New York City
 | --- | --- |
 | Party | Third-party |
 | Publisher | GeoNames |
-| Dataset | `cities15000.zip` `alternatenames` column; `countryInfo.txt` |
+| Dataset | `cities15000.zip` `alternatenames` and admin1 columns; `admin1CodesASCII.txt`; `countryInfo.txt` |
 | Licence | CC BY 4.0 (attribution required) |
 | Coverage | Every loaded destination; 252 countries/territories |
 | Granularity | City name aliases; country facts (capital, currency, languages, phone prefix, neighbours) |
-| Used by | `bootstrap_places.py` → `destination_aliases`, `country_facts` |
+| Used by | `bootstrap_places.py` → `destination_aliases`, `destination_admin1`, `country_facts` |
 | Status | **Implemented** |
 | Notes | Aliases are normalized (case, accents, punctuation) and trigram-indexed for `search_places`. They include exonyms, native scripts and some airport codes. Official-name matches rank above alternate-name matches. |
 
@@ -278,7 +278,7 @@ Islington (449), Osaka (428), Paris (408), Geneva (392) and New York City
 | --- | --- |
 | Party | Third-party |
 | Publisher | World Bank WDI and WGI (homicide series sourced from UNODC) |
-| Dataset | `VC.IHR.PSRC.P5` homicides per 100k, `EN.ATM.PM25.MC.M3` PM2.5 exposure, `SP.DYN.LE00.IN` life expectancy, `NY.GDP.PCAP.PP.CD` GDP per capita PPP, `GOV_WGI_PV.EST` political stability, and a derived price level `PA.NUS.PPP / PA.NUS.FCRF` (same year; 1.0 = US prices) |
+| Dataset | `VC.IHR.PSRC.P5` homicides per 100k, `EN.ATM.PM25.MC.M3` PM2.5 exposure, `SP.DYN.LE00.IN` life expectancy, `NY.GDP.PCAP.PP.CD` GDP per capita PPP, `GOV_WGI_PV.EST` political stability, and the published GDP price level index `PA.NUS.GDP.PLI` stored as a ratio (index / 100; 1.0 = US prices). Deriving PPP / exchange rate was rejected: it breaks on currency redenominations (Bulgaria, Liberia) and official pegs (Iran). |
 | Licence | CC BY 4.0 |
 | Coverage | 177-216 countries per indicator; latest non-null year from 2012-2026 is kept and its year stored |
 | Granularity | **Country** |
@@ -407,7 +407,8 @@ means without labelling the approximation.
 | `hotel_quote_cache` | SerpApi Google Hotels | No (cached response) | `SerpApi Google Hotels` |
 | `destination_aliases` | GeoNames alternatenames | Yes (normalized) | n/a |
 | `country_facts` | GeoNames countryInfo | No | `GeoNames countryInfo.txt` |
-| `country_indicators` | World Bank WDI/WGI | No, except derived price level | `World Bank WDI`, `World Bank WGI`, `World Bank WDI (derived)` |
+| `country_indicators` | World Bank WDI/WGI | No (price level index rescaled to a ratio) | `World Bank WDI`, `World Bank WGI` |
+| `destination_admin1` | GeoNames cities15000 + admin1CodesASCII | No | n/a |
 | `rank_destinations_v3` output | All of the above | **Yes, first-party derived** | n/a |
 | `place_profile` percentiles | All city tables | **Yes, first-party derived** (percent rank over all cities with data) | n/a |
 

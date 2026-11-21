@@ -35,6 +35,7 @@ class NormalizeTests(unittest.TestCase):
     def test_country_suffix(self):
         self.assertEqual(pp.split_country_suffix("Porto, pt"), ("Porto", "PT"))
         self.assertEqual(pp.split_country_suffix("Washington, D.C."), ("Washington, D.C.", None))
+        self.assertEqual(pp.split_country_suffix("Porto, Portugal"), ("Porto, Portugal", None))
         self.assertEqual(pp.split_country_suffix("Lisbon"), ("Lisbon", None))
 
 
@@ -83,13 +84,30 @@ class WorldBankParsingTests(unittest.TestCase):
         # Aggregates such as "1W" are dropped later against country_facts.
         self.assertEqual(bp.latest_values(records), {"PT": (2.0, 2022), "JP": (3.0, 2020)})
 
-    def test_price_level_uses_same_year_ratio(self):
-        ppp = [_wb("JP", 2025, 97.0), _wb("JP", 2024, 100.0), _wb("CH", 2025, 0.93)]
-        fx = [_wb("JP", 2024, 150.0), _wb("CH", 2025, 0.83)]
-        out = bp.price_level_values(ppp, fx)
-        self.assertAlmostEqual(out["JP"][0], 100.0 / 150.0)
-        self.assertEqual(out["JP"][1], 2024)
-        self.assertAlmostEqual(out["CH"][0], 0.93 / 0.83)
+    def test_price_level_uses_published_index_scaled_to_ratio(self):
+        indicator, _, _, unit, better, scale = bp.WORLD_BANK_INDICATORS["price_level_vs_usd"]
+        self.assertEqual(indicator, "PA.NUS.GDP.PLI")
+        self.assertEqual((unit, better, scale), ("ratio to US", "lower", 0.01))
+        self.assertFalse(hasattr(bp, "price_level_values"))
+
+
+class Admin1Tests(unittest.TestCase):
+    def test_parse_and_build(self):
+        names = bp.parse_admin1("US.TX\tTexas\tTexas\t4736286\nCA.08\tOntario\tOntario\t6093943\n")
+        self.assertEqual(names, {"US.TX": "Texas", "CA.08": "Ontario"})
+        line = "\t".join(["4671654", "Austin", "Austin", "", "30.2", "-97.7", "P", "PPLA",
+                           "US", "", "TX", "453", "", "", "961855"]) + "\n"
+        rows = bp.build_admin1_rows({4671654: "gn-4671654"}, [line], names)
+        self.assertEqual(rows, [("gn-4671654", "TX", "Texas", "texas")])
+
+
+class QualifierTests(unittest.TestCase):
+    def test_split_qualifier(self):
+        self.assertEqual(pp.split_qualifier("Porto, Portugal"), ("Porto", "Portugal"))
+        self.assertEqual(pp.split_qualifier("Austin, TX"), ("Austin", "TX"))
+        self.assertEqual(pp.split_qualifier("Washington, D.C."), ("Washington", "D.C."))
+        self.assertEqual(pp.split_qualifier("Lisbon"), ("Lisbon", None))
+        self.assertEqual(pp.split_qualifier(", PT"), (", PT", None))
 
 
 class MetricSqlTests(unittest.TestCase):
@@ -111,6 +129,11 @@ class MetricSqlTests(unittest.TestCase):
         self.assertIn("ORDER BY internet_latency_ms DESC", sql)
         self.assertIn("ORDER BY restaurant_count ASC", sql)
 
+    def test_poi_zero_is_excluded_from_ranking(self):
+        sql = pp.build_metric_sql(set(pp.TABLES.values()))
+        self.assertIn("NULLIF((p.restaurant_count)::double precision, 0) AS restaurant_count", sql)
+        self.assertIn("CASE WHEN p.restaurant_count > 0 THEN p.cuisine_entropy END", sql)
+
     def test_local_currency_has_no_global_percentile(self):
         sql = pp.build_metric_sql(set(pp.TABLES.values()))
         self.assertIn("NULL::double precision AS short_let_monthly_local__pct_global", sql)
@@ -128,7 +151,7 @@ class MetricEntryTests(unittest.TestCase):
         })
         self.assertEqual(entry["status"], "measured")
         self.assertEqual(entry["percentile_global"], 99.3)
-        self.assertEqual(entry["band_global"], "top 10%")
+        self.assertEqual(entry["band_global"], "best 10%")
         self.assertEqual(entry["percentile_in_country"], 100.0)
 
     def test_not_measured_is_not_zero(self):
@@ -144,13 +167,31 @@ class MetricEntryTests(unittest.TestCase):
         })
         self.assertIsNone(entry["percentile_in_country"])
 
-    def test_bands(self):
-        self.assertEqual(pp.percentile_band(95), "top 10%")
-        self.assertEqual(pp.percentile_band(80), "top 25%")
-        self.assertEqual(pp.percentile_band(50), "above median")
-        self.assertEqual(pp.percentile_band(30), "below median")
-        self.assertEqual(pp.percentile_band(10), "bottom 25%")
-        self.assertIsNone(pp.percentile_band(None))
+    def test_bands_carry_direction(self):
+        self.assertEqual(pp.percentile_band(95, "higher"), "best 10%")
+        self.assertEqual(pp.percentile_band(80, "lower"), "best 25%")
+        self.assertEqual(pp.percentile_band(50, "higher"), "better than most")
+        self.assertEqual(pp.percentile_band(30, "lower"), "worse than most")
+        self.assertEqual(pp.percentile_band(10, "higher"), "worst 25%")
+        self.assertEqual(pp.percentile_band(95, None), "largest 10%")
+        self.assertEqual(pp.percentile_band(10, None), "smallest 25%")
+        self.assertIsNone(pp.percentile_band(None, "higher"))
+
+    def test_reading_spells_out_direction(self):
+        self.assertEqual(pp.percentile_reading(29.6, "lower", 202, "countries"),
+                         "lower than 30% of the 202 countries with data")
+        self.assertEqual(pp.percentile_reading(91.7, None, 13101, "cities"),
+                         "larger than 92% of the 13,101 cities with data")
+        self.assertIsNone(pp.percentile_reading(50, "higher", 1, "cities"))
+
+    def test_zero_poi_count_is_none_listed_not_ranked(self):
+        entry = pp.metric_entry(self.metric, {
+            "restaurant_count": None, "restaurant_count__raw": 0.0,
+            "restaurant_count__source": "Overture",
+        })
+        self.assertEqual(entry["status"], "none_listed")
+        self.assertEqual(entry["value"], 0)
+        self.assertNotIn("percentile_global", entry)
 
 
 class ClimateSummaryTests(unittest.TestCase):
@@ -204,6 +245,15 @@ class Stage2MissingQuoteTests(unittest.TestCase):
         self.assertGreater(out["a"]["final_score"], out["c"]["final_score"])
         self.assertGreater(out["c"]["final_score"], out["b"]["final_score"])
 
+    def test_verified_matches_rank_ahead_of_unverified(self):
+        rows = [{"destination_id": "a", "final_score": 0.5},
+                {"destination_id": "b", "final_score": 0.5},
+                {"destination_id": "c", "final_score": 0.5}]
+        quotes = {"a": self._quote(400, 120), "b": self._quote(700, 120)}
+        out = m._apply_stage2_rescore(rows, quotes, 0.25, 0.15, 800, None)
+        self.assertEqual([r["destination_id"] for r in out], ["a", "b", "c"])
+        self.assertFalse(out[-1]["constraints_verified"])
+
     def test_caps_mark_unknowns_unverified(self):
         rows = [{"destination_id": "a", "final_score": 0.5},
                 {"destination_id": "b", "final_score": 0.5},
@@ -247,9 +297,38 @@ class LiveDatabaseTests(unittest.TestCase):
     def test_alternate_and_translated_names_resolve(self):
         with self.conn.cursor() as cur:
             for query, expected in (("Cologne", "DE"), ("Lisboa", "PT"), ("Porto", "PT"),
-                                    ("Kiev", "UA"), ("Sao Paulo", "BR")):
+                                    ("Kiev", "UA"), ("Sao Paulo", "BR"),
+                                    ("St Petersburg", "RU")):
                 result = pp.resolve_place(cur, query)
                 self.assertEqual(result["resolved"]["country_iso2"], expected, query)
+
+    def test_qualifiers_resolve_country_and_region(self):
+        with self.conn.cursor() as cur:
+            for query, expected_name, expected_country in (
+                ("Austin, TX", "Austin", "US"), ("San Diego, CA", "San Diego", "US"),
+                ("Porto, Portugal", "Porto", "PT"), ("Valencia, Spain", "Valencia", "ES"),
+                ("London, Ontario", "London", "CA"), ("London, UK", "London", "GB"),
+                ("Portland, ME", "Portland", "US"), ("Washington, DC", "Washington", "US"),
+            ):
+                resolved = pp.resolve_place(cur, query)["resolved"]
+                self.assertEqual((resolved["name"], resolved["country_iso2"]),
+                                 (expected_name, expected_country), query)
+            item_wins = pp.resolve_place(cur, "Madrid, ES", country_iso2="PT")
+            self.assertEqual(item_wins["resolved"]["country_iso2"], "ES")
+
+    def test_fuzzy_guess_needs_choice(self):
+        with self.conn.cursor() as cur:
+            self.assertTrue(pp.resolve_place(cur, "Lisbn")["needs_choice"])
+            self.assertFalse(pp.resolve_place(cur, "Lisbon")["needs_choice"])
+
+    def test_price_levels_are_plausible(self):
+        with self.conn.cursor() as cur:
+            cur.execute("SELECT country_iso2, value FROM country_indicators "
+                        "WHERE indicator = 'price_level_vs_usd'")
+            values = {r["country_iso2"]: r["value"] for r in cur.fetchall()}
+        self.assertAlmostEqual(values["US"], 1.0, places=3)
+        for code in ("IR", "LR", "BG"):
+            self.assertTrue(0.1 < values[code] < 0.8, (code, values[code]))
 
     def test_ambiguous_name_reports_alternatives(self):
         with self.conn.cursor() as cur:
@@ -267,6 +346,9 @@ class LiveDatabaseTests(unittest.TestCase):
         self.assertEqual(len(profile["climate"]["months"]), 12)
         self.assertEqual(len(comparison["places"]), 2)
         for metric in comparison["metrics"]:
+            statuses = [v["status"] for v in metric["values"].values()]
+            if metric["best"] is not None:
+                self.assertTrue(all(s == "measured" for s in statuses), metric["key"])
             for value in metric["values"].values():
                 pct = value["percentile_global"]
                 self.assertTrue(pct is None or 0 <= pct <= 100)

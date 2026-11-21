@@ -777,9 +777,13 @@ def _apply_stage2_rescore(
             final_score = stage1_score
 
         row["final_score"] = round(final_score, 4)
+        checks = row.get("constraint_checks") or {}
+        row["constraints_verified"] = all(v == "pass" for v in checks.values())
 
+    # Under a budget/duration cap, confirmed matches rank ahead of unverified ones.
     candidates.sort(
         key=lambda row: (
+            bool(row.get("constraints_verified")),
             row.get("final_score")
             if row.get("final_score") is not None
             else float("-inf"),
@@ -1046,6 +1050,8 @@ def inspect_destination(
                     )
                 except ValueError:
                     resolution = None
+                if resolution and resolution["needs_choice"]:
+                    return _jsonable(_choice_payload(str(city_name), resolution))
                 destination_id = resolution["destination_id"] if resolution else None
             cur.execute(
                 DESTINATION_SELECT + " WHERE destination_id = %s",
@@ -1148,20 +1154,40 @@ def inspect_destination(
     return _jsonable(payload)
 
 
-def _resolve_many(cur: Any, places: list[str], country_iso2: str | None) -> tuple[list[str], list[dict[str, Any]], list[str]]:
+def _choice_payload(place: str, resolution: dict[str, Any]) -> dict[str, Any]:
+    """Response for a name that only fuzzily matches several cities."""
+    return {
+        "needs_choice": True,
+        "query": place,
+        "message": (
+            f"{place!r} does not exactly match a loaded city. Ask the user which "
+            "of these they mean, then call again with its destination_id."
+        ),
+        "candidates": [resolution["resolved"], *resolution["other_matches"]],
+    }
+
+
+def _resolve_many(
+    cur: Any, places: list[str], country_iso2: str | None
+) -> tuple[list[str], list[dict[str, Any]], list[str], list[dict[str, Any]]]:
     ids: list[str] = []
     resolutions: list[dict[str, Any]] = []
     unresolved: list[str] = []
+    choices: list[dict[str, Any]] = []
     for place in places:
         try:
             resolution = place_profiles.resolve_place(cur, place, country_iso2)
         except ValueError:
             unresolved.append(place)
             continue
+        if resolution["needs_choice"]:
+            unresolved.append(place)
+            choices.append(_choice_payload(place, resolution))
+            continue
         if resolution["destination_id"] not in ids:
             ids.append(resolution["destination_id"])
             resolutions.append({"query": place, **resolution})
-    return ids, resolutions, unresolved
+    return ids, resolutions, unresolved, choices
 
 
 @mcp.tool
@@ -1189,17 +1215,22 @@ def place_profile(
 ) -> dict[str, Any]:
     """Everything the database knows about one city, in plain terms.
 
-    ``place`` is a name ("Lisbon", "Porto, PT") or a destination_id ("gn-2267057").
-    Each metric has a label, unit, value, global and in-country percentile (100 =
-    best among cities with data), source and period, or status "not_measured".
+    ``place`` is a name ("Lisbon", "Porto, Portugal", "Austin, TX") or a
+    destination_id ("gn-2267057"). Each metric has a label, unit, value, global and
+    in-country percentile (100 = best among cities with data) with a plain-words
+    ``reading_global``, source and period, or status "not_measured"/"none_listed".
     Also returns a 12-month climate table with a summary, country context
     (currency, languages, price level, homicide rate, PM2.5, life expectancy,
     political stability -- national values), and a list of what is not measured.
-    If the name is ambiguous, ``match.other_matches`` lists the alternatives.
+    If the name is ambiguous, ``match.other_matches`` lists the alternatives; if it
+    is only a fuzzy guess, the result has ``needs_choice: true`` and candidates
+    instead of a profile.
     """
     with _get_pool().connection() as conn:
         with conn.cursor() as cur:
             resolution = place_profiles.resolve_place(cur, place, country_iso2)
+            if resolution["needs_choice"]:
+                return _jsonable(_choice_payload(place, resolution))
             profile = place_profiles.build_profile(cur, resolution["destination_id"])
     profile = {"match": resolution, **profile, "data_sources_documentation": DATA_SOURCES_DOC}
     return _jsonable(profile)
@@ -1224,16 +1255,29 @@ def compare_places(
         )
     with _get_pool().connection() as conn:
         with conn.cursor() as cur:
-            ids, resolutions, unresolved = _resolve_many(cur, requested, country_iso2)
+            ids, resolutions, unresolved, choices = _resolve_many(cur, requested, country_iso2)
             if len(ids) < 2:
+                if choices:
+                    return _jsonable({
+                        "needs_choice": True,
+                        "matches": resolutions,
+                        "choices": choices,
+                        "unresolved": unresolved,
+                    })
+                if unresolved:
+                    raise ValueError(
+                        "Need at least two distinct matching cities; unresolved: "
+                        + ", ".join(unresolved)
+                    )
                 raise ValueError(
-                    "Need at least two distinct matching cities; unresolved: "
-                    + ", ".join(unresolved or requested)
+                    "Need at least two distinct matching cities; inputs resolved to the same city: "
+                    + ", ".join(requested)
                 )
             comparison = place_profiles.build_comparison(cur, ids)
     payload = {
         "matches": resolutions,
         "unresolved": unresolved,
+        "choices": choices,
         **comparison,
         "data_sources_documentation": DATA_SOURCES_DOC,
     }

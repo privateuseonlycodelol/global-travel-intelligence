@@ -1199,11 +1199,15 @@ def ingest_overture_transport(
                 rail_segments_5km = NULL,
                 source = CASE WHEN gtfs_active_feeds IS NOT NULL
                               THEN 'Mobility Database GTFS'
+                              WHEN transit_stops_5km IS NOT NULL
+                              THEN COALESCE(transit_stops_source, source)
                               ELSE source END,
                 observed_period = CASE WHEN gtfs_active_feeds IS NOT NULL
                     THEN COALESCE(NULLIF(trim(both '; ' from regexp_replace(
                         observed_period, 'overture-[^;]+;?[[:space:]]*', '', 'g'
                     )), ''), 'mobility coverage retained')
+                    WHEN transit_stops_5km IS NOT NULL
+                    THEN COALESCE(transit_stops_period, observed_period)
                     ELSE observed_period END
             WHERE destination_id = ANY(%s)
             """,
@@ -1338,6 +1342,8 @@ def ingest_gtfs(conn: psycopg.Connection, cities_df: pd.DataFrame) -> None:
                       OR total_road_segments_2km IS NOT NULL
                       OR rail_segments_5km IS NOT NULL
                     THEN 'Overture Maps Transportation'
+                    WHEN transit_stops_5km IS NOT NULL
+                    THEN COALESCE(transit_stops_source, source)
                     ELSE source
                 END,
                 observed_period = CASE
@@ -1347,6 +1353,8 @@ def ingest_gtfs(conn: psycopg.Connection, cities_df: pd.DataFrame) -> None:
                     THEN COALESCE(NULLIF(trim(both '; ' from regexp_replace(
                         observed_period, 'mobility-[0-9]{4}-[0-9]{2};?[[:space:]]*', '', 'g'
                     )), ''), 'overture coverage retained')
+                    WHEN transit_stops_5km IS NOT NULL
+                    THEN COALESCE(transit_stops_period, observed_period)
                     ELSE observed_period
                 END
             WHERE destination_id = ANY(%s)

@@ -45,14 +45,6 @@ def normalize_name(value: str | None) -> str:
     return " ".join(cleaned.split())
 
 
-def split_country_suffix(query: str) -> tuple[str, str | None]:
-    """'Porto, PT' -> ('Porto', 'PT'). Only a trailing two-letter code is split."""
-    match = re.match(r"^\s*(.+?)\s*,\s*([A-Za-z]{2})\s*$", query or "")
-    if match:
-        return match.group(1), match.group(2).upper()
-    return (query or "").strip(), None
-
-
 @dataclass(frozen=True)
 class Metric:
     key: str
@@ -66,7 +58,14 @@ class Metric:
     period_expr: str
     country_only: bool = False  # percentile only within the country (e.g. local currency)
     note: str | None = None
+    value_sql: str | None = None  # overrides table.column
+    zero_is_gap: bool = False     # 0 usually means "no map coverage": not ranked
 
+
+POI_NOTE = (
+    "Counts what Overture Maps lists; coverage is thinner outside North America "
+    "and Europe, so a low or zero count can mean missing map data."
+)
 
 TABLES = {
     "p": "poi_metrics",
@@ -80,14 +79,17 @@ METRICS: tuple[Metric, ...] = (
     Metric("population", "d", "population", "City population (city proper, not metro)",
            "people", None, "basics", "'GeoNames cities15000'", "NULL"),
     Metric("museum_culture_count", "p", "museum_culture_count",
-           "Museums, galleries and cultural venues within 5 km", "places", "higher",
-           "things_to_do", "p.source", "p.observed_period",
-           note="Overture Places count; coverage is thinner outside North America/Europe."),
-    Metric("restaurant_count", "p", "restaurant_count", "Restaurants within 5 km",
-           "places", "higher", "food", "p.source", "p.observed_period"),
+           "Museums, galleries and cultural venues listed in Overture Maps within 5 km",
+           "places", "higher", "things_to_do", "p.source", "p.observed_period",
+           note=POI_NOTE, zero_is_gap=True),
+    Metric("restaurant_count", "p", "restaurant_count",
+           "Restaurants listed in Overture Maps within 5 km",
+           "places", "higher", "food", "p.source", "p.observed_period",
+           note=POI_NOTE, zero_is_gap=True),
     Metric("cuisine_variety", "p", "cuisine_entropy",
-           "Cuisine variety (Shannon diversity of cuisine types)", "index", "higher",
-           "food", "p.source", "p.observed_period"),
+           "Cuisine variety among listed restaurants (Shannon diversity)", "index", "higher",
+           "food", "p.source", "p.observed_period",
+           value_sql="CASE WHEN p.restaurant_count > 0 THEN p.cuisine_entropy END"),
     Metric("pedestrian_street_share", "m", "pedestrian_ratio_2km",
            "Share of street segments within 2 km that are pedestrian/cycle paths",
            "ratio 0-1", "higher", "getting_around", "m.source", "m.observed_period",
@@ -145,10 +147,13 @@ NOT_IN_DATABASE = [
 HOW_TO_READ = (
     "percentile_global: 0-100 among all loaded cities that have this value; 100 is "
     "best (most for 'higher' metrics, least for 'lower' metrics; for population, "
-    "largest). percentile_in_country is the same within the country. "
-    "status 'not_measured' means the source has no value for this city — it is not "
-    "zero. Country indicators are national averages, not city measurements."
+    "largest). band_* and reading_* say the same in words, with direction. "
+    "percentile_in_country is the same within the country. status 'not_measured' "
+    "means the source has no value for this city; 'none_listed' means the map "
+    "source lists none, which usually reflects missing coverage rather than zero. "
+    "Country indicators are national values, not city measurements; quote their year."
 )
+CLIMATE_NOTE = "WorldClim 2.1 1970-2000 averages; recent years are typically warmer."
 
 
 def _existing_tables(cur: Any, names: Iterable[str]) -> set[str]:
@@ -175,12 +180,15 @@ def build_metric_sql(available_tables: set[str]) -> str:
     ranked_cols: list[str] = []
     for metric in METRICS:
         usable = metric.table == "d" or metric.table in present
-        value = f"{metric.table}.{metric.column}::double precision" if usable else "NULL::double precision"
+        raw = metric.value_sql or f"{metric.table}.{metric.column}"
+        raw = f"({raw})::double precision" if usable else "NULL::double precision"
+        value = f"NULLIF({raw}, 0)" if metric.zero_is_gap else raw
         source = metric.source_expr if usable else "NULL"
         period = metric.period_expr if usable else "NULL"
         k = metric.key
         base_cols += [
             f"{value} AS {k}",
+            f"{raw} AS {k}__raw",
             f"({source})::text AS {k}__source",
             f"({period})::text AS {k}__period",
         ]
@@ -191,7 +199,7 @@ def build_metric_sql(available_tables: set[str]) -> str:
             f"(PARTITION BY ({k} IS NULL) ORDER BY {k} {order}) END"
         )
         ranked_cols += [
-            k, f"{k}__source", f"{k}__period",
+            k, f"{k}__raw", f"{k}__source", f"{k}__period",
             f"{global_pct} AS {k}__pct_global",
             f"CASE WHEN {k} IS NULL THEN NULL ELSE percent_rank() OVER "
             f"(PARTITION BY country_iso2, ({k} IS NULL) ORDER BY {k} {order}) END AS {k}__pct_country",
@@ -208,18 +216,28 @@ def build_metric_sql(available_tables: set[str]) -> str:
     )
 
 
-def percentile_band(pct: float | None) -> str | None:
+def percentile_band(pct: float | None, better: str | None = "higher") -> str | None:
+    """Plain label for a 0-100 percentile where 100 is best (or largest)."""
     if pct is None:
         return None
-    if pct >= 90:
-        return "top 10%"
-    if pct >= 75:
-        return "top 25%"
-    if pct >= 50:
-        return "above median"
-    if pct >= 25:
-        return "below median"
-    return "bottom 25%"
+    if better is None:
+        labels = ("largest 10%", "largest 25%", "larger than most",
+                  "smaller than most", "smallest 25%")
+    else:
+        labels = ("best 10%", "best 25%", "better than most",
+                  "worse than most", "worst 25%")
+    for threshold, label in zip((90, 75, 50, 25), labels):
+        if pct >= threshold:
+            return label
+    return labels[-1]
+
+
+def percentile_reading(pct: float | None, better: str | None, n: int, of: str) -> str | None:
+    """'lower than 70% of 200 countries with data' -- direction spelled out."""
+    if pct is None or n < 2:
+        return None
+    word = {"higher": "higher", "lower": "lower"}.get(better or "", "larger")
+    return f"{word} than {pct:.0f}% of the {n:,} {of} with data"
 
 
 def _pct(value: Any) -> float | None:
@@ -237,6 +255,13 @@ def metric_entry(metric: Metric, row: dict[str, Any]) -> dict[str, Any]:
         "value": None if value is None else round(float(value), 3),
         "status": "not_measured" if value is None else "measured",
     }
+    if value is None and metric.zero_is_gap and row.get(f"{k}__raw") == 0:
+        entry.update({
+            "value": 0,
+            "status": "none_listed",
+            "source": row.get(f"{k}__source"),
+            "observed_period": row.get(f"{k}__period"),
+        })
     if value is not None:
         pct_global = _pct(row.get(f"{k}__pct_global"))
         pct_country = _pct(row.get(f"{k}__pct_country"))
@@ -244,7 +269,8 @@ def metric_entry(metric: Metric, row: dict[str, Any]) -> dict[str, Any]:
         n_country = int(row.get(f"{k}__n_country") or 0)
         entry.update({
             "percentile_global": pct_global,
-            "band_global": percentile_band(pct_global),
+            "band_global": percentile_band(pct_global, metric.better),
+            "reading_global": percentile_reading(pct_global, metric.better, n_global, "cities"),
             "cities_with_data_global": n_global,
             "percentile_in_country": pct_country if n_country > 1 else None,
             "cities_with_data_in_country": n_country,
@@ -286,7 +312,7 @@ def climate_summary(months: list[dict[str, Any]]) -> dict[str, Any]:
         "driest_month": pick("precip_mm", False),
         "months_with_daily_high_18_to_28c": mild,
         "annual_precip_mm": round(sum(precip), 1) if len(precip) == 12 else None,
-        "note": "WorldClim 2.1 1970-2000 averages; recent years are typically warmer.",
+        "note": CLIMATE_NOTE,
     }
 
 
@@ -376,7 +402,9 @@ def fetch_country_context(cur: Any, country_codes: list[str]) -> dict[str, dict[
                 "value": round(float(row["value"]), 3),
                 "year": int(row["year"]),
                 "percentile_among_countries": pct,
-                "band_among_countries": percentile_band(pct),
+                "band_among_countries": percentile_band(pct, row["better"]),
+                "reading_among_countries": percentile_reading(
+                    pct, row["better"], int(row["n"]), "countries"),
                 "countries_with_data": int(row["n"]),
                 "source": row["source"],
                 "source_indicator": row["source_indicator"],
@@ -384,34 +412,67 @@ def fetch_country_context(cur: Any, country_codes: list[str]) -> dict[str, dict[
     return out
 
 
-def search_places(
-    cur: Any,
-    query: str,
-    country_iso2: str | None = None,
-    limit: int = 5,
-) -> dict[str, Any]:
-    """Resolve a free-text place name to ranked destination candidates."""
-    text, suffix_country = split_country_suffix(query)
-    country = (country_iso2 or suffix_country or "").strip().upper() or None
-    limit = max(1, min(25, int(limit)))
-    norm = normalize_name(text)
-    if not norm:
-        raise ValueError("query must contain a place name.")
+COUNTRY_SYNONYMS = {
+    "uk": "GB", "u k": "GB", "england": "GB", "scotland": "GB", "wales": "GB",
+    "great britain": "GB", "britain": "GB", "usa": "US", "u s a": "US", "u s": "US",
+    "america": "US", "united states of america": "US", "holland": "NL",
+    "czechia": "CZ", "south korea": "KR", "korea": "KR", "russia": "RU",
+    "turkiye": "TR", "uae": "AE", "ivory coast": "CI", "vietnam": "VN",
+}
+OFFICIAL_NAME_WEIGHT = 5  # an exact official-name match beats an alternate name
+                          # unless the alternate-name city is > 5x larger
 
-    if DESTINATION_ID_RE.match(text.strip()):
-        cur.execute(
-            "SELECT destination_id, name, country_iso2, population, timezone, lat, lon "
-            "FROM destinations WHERE destination_id = %s",
-            (text.strip(),),
+
+def split_qualifier(query: str) -> tuple[str, str | None]:
+    """'Porto, Portugal' -> ('Porto', 'Portugal'); 'Austin, TX' -> ('Austin', 'TX')."""
+    text = (query or "").strip()
+    if "," not in text:
+        return text, None
+    head, _, tail = text.rpartition(",")
+    head, tail = head.strip(), tail.strip()
+    if not head or not tail or len(tail) > 60:
+        return text, None
+    return head, tail
+
+
+def split_country_suffix(query: str) -> tuple[str, str | None]:
+    """Backward-compatible helper: split only a trailing two-letter code."""
+    head, tail = split_qualifier(query)
+    if tail and len(tail) == 2 and tail.isalpha():
+        return head, tail.upper()
+    return (query or "").strip(), None
+
+
+def _qualifier_filter(cur: Any, qualifier: str, available: set[str]) -> tuple[str, dict[str, Any], list[str]]:
+    """SQL filter for a ', <country or region>' qualifier, plus matched country codes."""
+    q_norm = normalize_name(qualifier)
+    q_code = re.sub(r"[^A-Za-z]", "", qualifier).upper()
+    countries: set[str] = set()
+    if q_norm in COUNTRY_SYNONYMS:
+        countries.add(COUNTRY_SYNONYMS[q_norm])
+    if len(q_code) == 2 and len(qualifier.strip()) <= 3:
+        countries.add("GB" if q_code == "UK" else q_code)
+    if "country_facts" in available:
+        cur.execute("SELECT country_iso2, name FROM country_facts")
+        for row in cur.fetchall():
+            if normalize_name(row["name"]) == q_norm:
+                countries.add(str(row["country_iso2"]))
+    clauses = ["d.country_iso2 = ANY(%(q_countries)s)"]
+    params: dict[str, Any] = {"q_countries": sorted(countries)}
+    if "destination_admin1" in available:
+        clauses.append(
+            "d.destination_id IN (SELECT destination_id FROM destination_admin1 "
+            "WHERE admin1_norm = %(q_norm)s OR (%(q_code)s <> '' AND admin1_code = %(q_code)s))"
         )
-        rows = [dict(r) | {"match": "id", "matched_alias": None, "similarity": 1.0}
-                for r in cur.fetchall()]
-        return {"query": query, "country_iso2": country, "matches": rows}
+        params |= {"q_norm": q_norm, "q_code": q_code if 2 <= len(q_code) <= 3 else ""}
+    return "AND (" + " OR ".join(clauses) + ")", params, sorted(countries)
 
-    country_sql = "AND d.country_iso2 = %(country)s" if country else ""
-    params = {"norm": norm, "prefix": norm.replace("%", "") + "%", "country": country,
-              "limit": limit, "min_sim": FUZZY_MIN_SIMILARITY}
-    if "destination_aliases" in _existing_tables(cur, ["destination_aliases"]):
+
+def _candidate_rows(cur: Any, text: str, norm: str, filter_sql: str,
+                    filter_params: dict[str, Any], has_aliases: bool) -> list[dict[str, Any]]:
+    params = {"norm": norm, "prefix": norm.replace("%", "") + "%",
+              "min_sim": FUZZY_MIN_SIMILARITY} | filter_params
+    if has_aliases:
         cur.execute(
             f"""
             WITH hits AS (
@@ -434,7 +495,7 @@ def search_places(
                    d.timezone, d.lat, d.lon,
                    b.alias AS matched_alias, b.tier, b.sim
             FROM best b JOIN destinations d USING (destination_id)
-            WHERE (b.tier > 1 OR b.sim >= %(min_sim)s) {country_sql}
+            WHERE (b.tier > 1 OR b.sim >= %(min_sim)s) {filter_sql}
             ORDER BY b.tier DESC, b.sim DESC, d.population DESC
             LIMIT 50
             """,
@@ -450,18 +511,76 @@ def search_places(
                         THEN 4 ELSE 2 END AS tier,
                    1.0 AS sim
             FROM destinations d
-            WHERE (d.name ILIKE %(raw_prefix)s OR d.ascii_name ILIKE %(raw_prefix)s) {country_sql}
+            WHERE (d.name ILIKE %(raw_prefix)s OR d.ascii_name ILIKE %(raw_prefix)s) {filter_sql}
             ORDER BY tier DESC, d.population DESC
             LIMIT 50
             """,
             params | {"raw": text, "raw_prefix": text.replace("%", "") + "%"},
         )
     rows = [dict(r) for r in cur.fetchall()]
-    if rows:
-        top_tier = max(int(r["tier"]) for r in rows)
+    exact = [r for r in rows if int(r["tier"]) >= 3]
+    if exact:
         # An exact name match hides weaker fuzzy noise ("new york" ~ "York").
-        if top_tier >= 3:
-            rows = [r for r in rows if int(r["tier"]) >= 3]
+        # Official names win unless the alternate-name city is much larger
+        # ("Porto" -> Porto, not Bordeaux; "St Petersburg" -> Russia, not Florida).
+        rows = sorted(
+            exact,
+            key=lambda r: (int(r["population"] or 0)
+                           * (OFFICIAL_NAME_WEIGHT if int(r["tier"]) == 4 else 1)),
+            reverse=True,
+        )
+    return rows
+
+
+def search_places(
+    cur: Any,
+    query: str,
+    country_iso2: str | None = None,
+    limit: int = 5,
+) -> dict[str, Any]:
+    """Resolve a free-text place name to ranked destination candidates.
+
+    A trailing ", <qualifier>" is read as a country (code, name or common
+    synonym) or a first-level region (US state code, province name). It takes
+    priority over ``country_iso2``. If the qualifier matches nothing, the
+    search is retried without it and ``qualifier.applied`` is false.
+    """
+    text, qualifier = split_qualifier(query)
+    limit = max(1, min(25, int(limit)))
+    norm = normalize_name(text)
+    if not norm:
+        raise ValueError("query must contain a place name.")
+
+    if DESTINATION_ID_RE.match(text.strip()):
+        cur.execute(
+            "SELECT destination_id, name, country_iso2, population, timezone, lat, lon "
+            "FROM destinations WHERE destination_id = %s",
+            (text.strip(),),
+        )
+        rows = [dict(r) | {"match": "id", "matched_alias": None, "similarity": 1.0}
+                for r in cur.fetchall()]
+        return {"query": query, "qualifier": None, "matches": rows}
+
+    available = _existing_tables(
+        cur, ["destination_aliases", "destination_admin1", "country_facts"]
+    )
+    has_aliases = "destination_aliases" in available
+    qualifier_info: dict[str, Any] | None = None
+    rows: list[dict[str, Any]] = []
+    if qualifier:
+        filter_sql, filter_params, countries = _qualifier_filter(cur, qualifier, available)
+        rows = _candidate_rows(cur, text, norm, filter_sql, filter_params, has_aliases)
+        qualifier_info = {"text": qualifier, "country_codes": countries, "applied": bool(rows)}
+        if not rows:
+            # Not a country/region we know, or no city there: search the name alone.
+            rows = _candidate_rows(cur, text, norm, "", {}, has_aliases)
+    else:
+        country = (country_iso2 or "").strip().upper() or None
+        country_sql = "AND d.country_iso2 = %(country)s" if country else ""
+        rows = _candidate_rows(cur, text, norm, country_sql, {"country": country}, has_aliases)
+        if country:
+            qualifier_info = {"text": country, "country_codes": [country], "applied": True}
+
     tier_names = {4: "exact", 3: "exact_alternate_name", 2: "prefix", 1: "fuzzy"}
     matches = [
         {
@@ -478,17 +597,18 @@ def search_places(
         }
         for r in rows[:limit]
     ]
-    return {"query": query, "country_iso2": country, "matches": matches}
+    return {"query": query, "qualifier": qualifier_info, "matches": matches}
 
 
 def resolve_place(cur: Any, place: str, country_iso2: str | None = None) -> dict[str, Any]:
     """Pick one destination for ``place`` and report the alternatives honestly."""
     result = search_places(cur, place, country_iso2=country_iso2, limit=6)
     matches = result["matches"]
+    qualifier = result.get("qualifier")
     if not matches:
+        where = f" in {qualifier['text']}" if qualifier and qualifier.get("applied") else ""
         raise ValueError(
-            f"No loaded city matches {place!r}"
-            + (f" in {result['country_iso2']}" if result["country_iso2"] else "")
+            f"No loaded city matches {place!r}{where}"
             + ". Only cities with population >= 40,000 are loaded; try search_places."
         )
     chosen = matches[0]
@@ -498,10 +618,15 @@ def resolve_place(cur: Any, place: str, country_iso2: str | None = None) -> dict
         chosen["match"] not in exact_kinds
         or any(o["match"] in exact_kinds for o in others)
     )
+    # A best guess that is only a fuzzy match is not safe to describe as
+    # "the" city: callers must ask the user to confirm or pick.
+    needs_choice = chosen["match"] == "fuzzy"
     return {
         "destination_id": chosen["destination_id"],
         "resolved": chosen,
         "ambiguous": ambiguous,
+        "needs_choice": needs_choice,
+        "qualifier": qualifier,
         "other_matches": others if ambiguous else [],
     }
 
@@ -533,6 +658,8 @@ def build_profile(cur: Any, destination_id: str) -> dict[str, Any]:
         groups.setdefault(metric.group, []).append(entry)
         if entry["status"] == "not_measured":
             not_measured.append(metric.label)
+        elif entry["status"] == "none_listed":
+            not_measured.append(metric.label + " (none listed; likely a map-coverage gap)")
     basics["nearest_airports_iata"] = basics.pop("iata_codes") or []
     return {
         "place": basics,
@@ -571,10 +698,12 @@ def build_comparison(cur: Any, destination_ids: list[str]) -> dict[str, Any]:
                 "percentile_global": entry.get("percentile_global"),
                 "percentile_in_country": entry.get("percentile_in_country"),
             }
-            if entry["value"] is not None:
+            if entry["status"] == "measured":
                 comparable[i] = float(entry["value"])
         best = None
-        if metric.better and len(comparable) >= 2 and not metric.country_only:
+        # Only name a winner when every compared city has a value.
+        if (metric.better and len(comparable) == len(ids) and len(ids) >= 2
+                and not metric.country_only):
             pick = max if metric.better == "higher" else min
             best_value = pick(comparable.values())
             winners = [i for i, v in comparable.items() if v == best_value]
@@ -594,10 +723,14 @@ def build_comparison(cur: Any, destination_ids: list[str]) -> dict[str, Any]:
         country_rows[code] = {
             "name": (ctx.get("facts") or {}).get("name"),
             "currency_code": (ctx.get("facts") or {}).get("currency_code"),
+            "granularity": "country",
             "indicators": {
                 ind["key"]: {
-                    "value": ind["value"], "year": ind["year"], "unit": ind["unit"],
+                    "label": ind["label"], "value": ind["value"], "year": ind["year"],
+                    "unit": ind["unit"], "better": ind["better"],
                     "percentile_among_countries": ind["percentile_among_countries"],
+                    "reading_among_countries": ind["reading_among_countries"],
+                    "source": ind["source"],
                 }
                 for ind in ctx.get("indicators", [])
             },
@@ -622,8 +755,10 @@ def build_comparison(cur: Any, destination_ids: list[str]) -> dict[str, Any]:
             ]
             for i in ids
         },
+        "climate_note": CLIMATE_NOTE,
         "country_context": country_rows,
+        "not_in_database_for_any_city": NOT_IN_DATABASE,
         "how_to_read": HOW_TO_READ
-        + " 'best' is null when values tie, fewer than two places have data, or the "
+        + " 'best' is null when values tie, any compared city lacks data, or the "
         "metric is in local currency.",
     }
