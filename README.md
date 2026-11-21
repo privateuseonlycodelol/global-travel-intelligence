@@ -594,9 +594,12 @@ Name lookup rules:
   (`Austin, TX`, `London, Ontario`, `Glasgow, Scotland`). Several can be
   combined (`Austin, Texas, USA`); all must match. Raw region codes are only
   matched for US states, because other countries' GeoNames codes collide with
-  ISO country codes. The `country_iso2` argument is read the same way when no
-  qualifier is typed; with one, it is tried first as the country of a region
-  code (`Salem, OR` + `US`), and a result outside it asks the user.
+  ISO country codes. The `country_iso2` argument only ever means a country
+  (`UK`, `USA`, `Portugal` are normalized; `CA` is Canada, never California).
+  With a typed qualifier it is an extra filter (`Richmond, CA` + `CA` →
+  British Columbia); a result outside it asks the user.
+- An exact alternate name never silently beats a city whose official name is
+  exactly what was typed (`Dili` asks between Dili, TL and Delhi).
 - An exact official name beats an exact alternate name unless the
   alternate-name city is more than 5x larger (`Porto` → Portugal,
   `St Petersburg` → Russia).
@@ -612,6 +615,9 @@ Name lookup rules:
   GOA) only count as exact when typed in capitals.
 - POI counts of zero are reported as `status: none_listed` and are not ranked:
   in Overture Maps, zero usually means missing coverage.
+- Broadband values from fewer than 10 Ookla tests, or zero, are not ranked;
+  `sample_size` reports the test count. Cuisine variety of 0 (untagged
+  restaurants) is treated as not measured.
 - If a bare name is also a region whose largest city is bigger than the
   matched town (`Bali`), the tool asks and lists cities in that region.
 - Percentiles and bands place ties mid-range; `reading_*` counts only places

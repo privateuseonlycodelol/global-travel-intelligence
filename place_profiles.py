@@ -60,12 +60,22 @@ class Metric:
     country_only: bool = False  # percentile only within the country (e.g. local currency)
     note: str | None = None
     value_sql: str | None = None  # overrides table.column
+    sample_sql: str | None = None  # sample size shown next to the value
     zero_is_gap: bool = False     # 0 usually means "no map coverage": not ranked
 
 
 POI_NOTE = (
     "Counts what Overture Maps lists; coverage is thinner outside North America "
     "and Europe, so a low or zero count can mean missing map data."
+)
+
+MIN_BROADBAND_TESTS = 10
+BROADBAND_VALUE = (
+    "CASE WHEN b.total_tests >= " + str(MIN_BROADBAND_TESTS) + " AND {col} > 0 THEN {col} END"
+)
+BROADBAND_NOTE = (
+    f"Ookla tile medians within 5 km; values from fewer than {MIN_BROADBAND_TESTS} "
+    "tests, or zero, are not ranked. sample_size is the number of tests."
 )
 
 OVERTURE_TRANSPORT_SOURCE = (
@@ -97,7 +107,9 @@ METRICS: tuple[Metric, ...] = (
     Metric("cuisine_variety", "p", "cuisine_entropy",
            "Cuisine variety among listed restaurants (Shannon diversity)", "index", "higher",
            "food", "p.source", "p.observed_period",
-           value_sql="CASE WHEN p.restaurant_count > 0 THEN p.cuisine_entropy END"),
+           value_sql="CASE WHEN p.restaurant_count > 0 THEN p.cuisine_entropy END",
+           zero_is_gap=True,
+           note="0 usually means the listed restaurants carry no cuisine tags."),
     Metric("pedestrian_street_share", "m", "pedestrian_ratio_2km",
            "Share of street segments within 2 km that are pedestrian/cycle paths",
            "ratio 0-1", "higher", "getting_around", OVERTURE_TRANSPORT_SOURCE,
@@ -119,13 +131,19 @@ METRICS: tuple[Metric, ...] = (
            "getting_around", OVERTURE_TRANSPORT_SOURCE, OVERTURE_TRANSPORT_PERIOD),
     Metric("internet_download_mbps", "b", "median_down_mbps",
            "Typical fixed-broadband download speed", "Mbps", "higher",
-           "internet", "b.source", "b.observed_period"),
+           "internet", "b.source", "b.observed_period",
+           value_sql=BROADBAND_VALUE.format(col="b.median_down_mbps"), sample_sql="b.total_tests",
+           note=BROADBAND_NOTE),
     Metric("internet_upload_mbps", "b", "median_up_mbps",
            "Typical fixed-broadband upload speed", "Mbps", "higher",
-           "internet", "b.source", "b.observed_period"),
+           "internet", "b.source", "b.observed_period",
+           value_sql=BROADBAND_VALUE.format(col="b.median_up_mbps"), sample_sql="b.total_tests",
+           note=BROADBAND_NOTE),
     Metric("internet_latency_ms", "b", "avg_latency_ms",
            "Typical fixed-broadband latency", "ms", "lower",
-           "internet", "b.source", "b.observed_period"),
+           "internet", "b.source", "b.observed_period",
+           value_sql=BROADBAND_VALUE.format(col="b.avg_latency_ms"), sample_sql="b.total_tests",
+           note=BROADBAND_NOTE),
     Metric("tourist_nights_per_resident", "t", "nights_per_resident",
            "Tourist nights per resident in the surrounding region", "nights/resident",
            "lower", "crowding", "t.source", "t.observed_period",
@@ -200,9 +218,11 @@ def build_metric_sql(available_tables: set[str]) -> str:
         source = metric.source_expr if usable else "NULL"
         period = metric.period_expr if usable else "NULL"
         k = metric.key
+        sample = f"({metric.sample_sql})::double precision" if (usable and metric.sample_sql) else "NULL::double precision"
         base_cols += [
             f"{value} AS {k}",
             f"{raw} AS {k}__raw",
+            f"{sample} AS {k}__sample",
             f"({source})::text AS {k}__source",
             f"({period})::text AS {k}__period",
         ]
@@ -227,7 +247,7 @@ def build_metric_sql(available_tables: set[str]) -> str:
             f"(PARTITION BY ({k} IS NULL) ORDER BY {k} {order}) END"
         )
         ranked_cols += [
-            k, f"{k}__raw", f"{k}__source", f"{k}__period",
+            k, f"{k}__raw", f"{k}__sample", f"{k}__source", f"{k}__period",
             f"{strict} AS {k}__beats_global",
             f"{global_pct} AS {k}__pct_global",
             f"{mid_rank(f'country_iso2, ({k} IS NULL)')} AS {k}__pct_country",
@@ -272,8 +292,9 @@ def percentile_reading(beats: float | None, better: str | None, n: int, of: str,
                        key: str | None = None) -> str | None:
     """Plain words from the share of *other* places with a strictly worse value.
 
-    ``beats`` is 0-100: the percentage of the other n-1 places this one
-    strictly beats (ties are not counted as beaten).
+    ``beats`` is 0-100, unrounded: the percentage of the other n-1 places this
+    one strictly beats (ties are not counted as beaten). Only exactly 100 / 0
+    produce "the highest" / "the lowest".
     """
     if beats is None or n < 2:
         return None
@@ -290,7 +311,12 @@ def percentile_reading(beats: float | None, better: str | None, n: int, of: str,
         return f"the {top} of the {n:,} {of} with data"
     if beats <= 0:
         return f"the {bottom} (or tied for {bottom}) of the {n:,} {of} with data"
-    return f"{word} than {math.floor(beats)}% of the other {others:,} {of} with data"
+    shown = "<1" if beats < 1 else (">99" if beats > 99 else str(math.floor(beats)))
+    return f"{word} than {shown}% of the other {others:,} {of} with data"
+
+
+def _raw_pct(value: Any) -> float | None:
+    return None if value is None else float(value) * 100.0
 
 
 def _pct(value: Any) -> float | None:
@@ -326,7 +352,7 @@ def metric_entry(metric: Metric, row: dict[str, Any]) -> dict[str, Any]:
             "percentile_global": pct_global,
             "band_global": percentile_band(pct_global, metric.better, metric.key),
             "reading_global": percentile_reading(
-                _pct(row.get(f"{k}__beats_global")), metric.better, n_global, "cities",
+                _raw_pct(row.get(f"{k}__beats_global")), metric.better, n_global, "cities",
                 metric.key),
             "cities_with_data_global": n_global,
             "percentile_in_country": pct_country if n_country > 1 else None,
@@ -334,6 +360,8 @@ def metric_entry(metric: Metric, row: dict[str, Any]) -> dict[str, Any]:
             "source": row.get(f"{k}__source"),
             "observed_period": row.get(f"{k}__period"),
         })
+    if metric.sample_sql and row.get(f"{k}__sample") is not None:
+        entry["sample_size"] = int(row[f"{k}__sample"])
     if metric.note:
         entry["note"] = metric.note
     return entry
@@ -431,7 +459,16 @@ def fetch_country_context(cur: Any, country_codes: list[str]) -> dict[str, dict[
             "note": ("No World Bank indicators are published for this country or "
                      "territory; safety, price and air-quality context is unavailable."),
         }
+    indicators_loaded = False
     if "country_indicators" in available:
+        cur.execute("SELECT EXISTS (SELECT 1 FROM country_indicators) AS any")
+        indicators_loaded = bool(cur.fetchone()["any"])
+    if not indicators_loaded:
+        for ctx in out.values():
+            if "note" in ctx:
+                ctx["note"] = ("Country indicators (safety, prices, air quality) are not "
+                               "loaded in this database; run bootstrap_places.py.")
+    if indicators_loaded:
         cur.execute(
             """
             WITH r AS (
@@ -476,7 +513,7 @@ def fetch_country_context(cur: Any, country_codes: list[str]) -> dict[str, dict[
                 "percentile_among_countries": pct,
                 "band_among_countries": percentile_band(pct, row["better"], row["indicator"]),
                 "reading_among_countries": percentile_reading(
-                    _pct(row["beats"]), row["better"], int(row["n"]), "countries",
+                    _raw_pct(row["beats"]), row["better"], int(row["n"]), "countries",
                     row["indicator"]),
                 "countries_with_data": int(row["n"]),
                 "source": row["source"],
@@ -599,6 +636,20 @@ def _qualifier_filter(
         return "AND FALSE", params, [], False
     return ("AND (" + " OR ".join(clauses) + ")", params, sorted(countries),
             bool(countries) or region_known)
+
+
+def _normalize_country(cur: Any, value: str, available: set[str]) -> str | None:
+    """'UK' / 'United Kingdom' / 'gb' -> 'GB'; None when not a known country."""
+    known, names = _country_lookup(cur, available)
+    norm = normalize_name(value)
+    if norm in COUNTRY_SYNONYMS:
+        return COUNTRY_SYNONYMS[norm]
+    if norm in names:
+        return names[norm]
+    code = value.strip().upper()
+    if len(code) == 2 and code.isalpha() and (not known or code in known):
+        return code
+    return None
 
 
 def _combine_filters(
@@ -745,36 +796,35 @@ def search_places(
         rows = _candidate_rows_by_id(cur, text.strip(), available)
         return {"query": query, "qualifier": None, "matches": rows}
 
-    arg_country = (country_iso2 or "").strip() or None
-    if not qualifiers and arg_country:
-        # A country argument is read exactly like a typed ", <country>".
-        qualifiers = [arg_country]
-        arg_country = None
+    arg_text = (country_iso2 or "").strip() or None
+    arg_country = _normalize_country(cur, arg_text, available) if arg_text else None
+    country_sql = "AND d.country_iso2 = %(arg_country)s"
     qualifier_info: dict[str, Any] | None = None
     rows: list[dict[str, Any]] = []
     if qualifiers:
-        attempts: list[tuple[str, dict[str, Any], list[str], bool]] = []
+        filter_sql, filter_params, countries, recognized = _combine_filters(
+            cur, qualifiers, available)
         if arg_country:
-            # "Salem, IN" with country_iso2="US": try IN as a US region first.
-            attempts.append(_combine_filters(
-                cur, qualifiers, available, restrict_country=arg_country.upper()))
-        attempts.append(_combine_filters(cur, qualifiers, available))
-        countries: list[str] = []
-        recognized = False
-        for filter_sql, filter_params, countries, recognized in attempts:
+            # "Richmond, CA" with country_iso2="CA": both readings of CA are
+            # allowed, but the city must be in the requested country.
+            rows = _candidate_rows(cur, text, norm, filter_sql + " " + country_sql,
+                                   filter_params | {"arg_country": arg_country}, available)
+        if not rows:
             rows = _candidate_rows(cur, text, norm, filter_sql, filter_params, available)
-            if rows:
-                break
         qualifier_info = {"text": ", ".join(qualifiers), "country_codes": countries,
                           "recognized": recognized, "applied": bool(rows)}
-        if arg_country and rows and all(
-                r["country_iso2"] != arg_country.upper() for r in rows):
-            qualifier_info["conflicts_with_country_iso2"] = arg_country.upper()
-        if not rows:
-            # Not a country/region we know, or no loaded city there: search the
-            # name alone, and let resolve_place ask before using the result.
-            rows = _candidate_rows(cur, text, norm, "", {}, available)
-    else:
+        if arg_text and rows and all(r["country_iso2"] != arg_country for r in rows):
+            qualifier_info["conflicts_with_country_iso2"] = arg_country or arg_text
+    elif arg_text:
+        # The country argument only ever means a country ("CA" is Canada).
+        if arg_country:
+            rows = _candidate_rows(cur, text, norm, country_sql,
+                                   {"arg_country": arg_country}, available)
+        qualifier_info = {"text": arg_text, "country_codes": [arg_country] if arg_country else [],
+                          "recognized": bool(arg_country), "applied": bool(rows)}
+    if not rows:
+        # No qualifier, or nothing matched with it: search the name alone, and
+        # let resolve_place ask before using a result from elsewhere.
         rows = _candidate_rows(cur, text, norm, "", {}, available)
 
     tier_names = {4: "exact", 3: "exact_alternate_name", 2: "prefix", 1: "fuzzy"}
@@ -811,6 +861,11 @@ def choice_reason(chosen: dict[str, Any], others: list[dict[str, Any]],
         return "The name only approximately matches a loaded city."
     if chosen["match"] == "prefix":
         return "The name is only the start of a loaded city name, not a full match."
+    if chosen["match"] == "exact_alternate_name":
+        official = [o for o in others if o["match"] == "exact"]
+        if official:
+            return (f"{official[0]['name']!r} ({official[0]['country_iso2']}) has this "
+                    "exact official name; the best match only uses it as an alternate name.")
     if chosen["match"] in ("exact", "exact_alternate_name"):
         top = chosen.get("weight") or 0
         rivals = [o for o in others
@@ -843,6 +898,9 @@ def _same_name_region_cities(
         (normalize_name(text),),
     )
     rows = [dict(r) for r in cur.fetchall()]
+    # A same-name region in the chosen city's own country is fine (Goa,
+    # Washington); one elsewhere with a bigger city is not (Bali, Montana).
+    rows = [r for r in rows if r["country_iso2"] != chosen.get("country_iso2")]
     if not rows or any(r["destination_id"] == chosen_id for r in rows):
         return None
     if int(rows[0]["population"] or 0) < int(chosen.get("population") or 0):

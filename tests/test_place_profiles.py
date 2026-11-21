@@ -146,6 +146,11 @@ class MetricSqlTests(unittest.TestCase):
         self.assertIn("cume_dist()", sql)
         self.assertIn("/ 2.0", sql)
 
+    def test_broadband_needs_minimum_tests(self):
+        sql = pp.build_metric_sql(set(pp.TABLES.values()))
+        self.assertIn("b.total_tests >= 10 AND b.avg_latency_ms > 0", sql)
+        self.assertIn("AS internet_latency_ms__sample", sql)
+
     def test_poi_zero_is_excluded_from_ranking(self):
         sql = pp.build_metric_sql(set(pp.TABLES.values()))
         self.assertIn("NULLIF((p.restaurant_count)::double precision, 0) AS restaurant_count", sql)
@@ -211,13 +216,18 @@ class MetricEntryTests(unittest.TestCase):
     def test_reading_counts_only_strictly_beaten_others(self):
         self.assertEqual(pp.percentile_reading(29.6, "lower", 202, "countries"),
                          "lower than 29% of the other 201 countries with data")
-        self.assertEqual(pp.percentile_reading(99.5, None, 13101, "cities"),
-                         "larger than 99% of the other 13,100 cities with data")
+        self.assertEqual(pp.percentile_reading(98.5, None, 13101, "cities"),
+                         "larger than 98% of the other 13,100 cities with data")
         self.assertEqual(pp.percentile_reading(100.0, "higher", 10, "cities"),
                          "the highest of the 10 cities with data")
         self.assertEqual(pp.percentile_reading(0.0, "higher", 4000, "cities"),
                          "the lowest (or tied for lowest) of the 4,000 cities with data")
         self.assertIsNone(pp.percentile_reading(50, "higher", 1, "cities"))
+        # Near-top / near-bottom values are never rounded into superlatives.
+        self.assertEqual(pp.percentile_reading(99.992, None, 13101, "cities"),
+                         "larger than >99% of the other 13,100 cities with data")
+        self.assertEqual(pp.percentile_reading(0.4, "lower", 202, "countries", "price_level_vs_usd"),
+                         "cheaper than <1% of the other 201 countries with data")
 
     def test_zero_poi_count_is_none_listed_not_ranked(self):
         entry = pp.metric_entry(self.metric, {
@@ -377,6 +387,26 @@ class LiveDatabaseTests(unittest.TestCase):
             bali = pp.resolve_place(cur, "Bali")
         self.assertTrue(any(m.get("match") == "in_region" and m["country_iso2"] == "ID"
                             for m in bali["other_matches"]))
+
+    def test_round_five_regressions(self):
+        with self.conn.cursor() as cur:
+            for query, country in (("Dili", None), ("Puno", None), ("Montana", None),
+                                   ("Bolivar", None), ("San Diego", "CA"),
+                                   ("Salem, IN", "US"), ("Lisbon", "XX")):
+                self.assertTrue(pp.resolve_place(cur, query, country)["needs_choice"],
+                                (query, country))
+            for query, country, expected in (("London, UK", "UK", "GB"),
+                                             ("Glasgow, Scotland", "UK", "GB"),
+                                             ("Austin, TX", "USA", "US"),
+                                             ("Richmond, CA", "CA", "CA"),
+                                             ("Lisbon", "Portugal", "PT")):
+                result = pp.resolve_place(cur, query, country)
+                self.assertEqual(result["resolved"]["country_iso2"], expected, (query, country))
+                self.assertFalse(result["needs_choice"], (query, country))
+            profile = pp.build_profile(cur, pp.resolve_place(cur, "Lisbon")["destination_id"])
+        latency = next(m for g in profile["metrics"] for m in g["metrics"]
+                       if m["key"] == "internet_latency_ms")
+        self.assertGreaterEqual(latency["sample_size"], pp.MIN_BROADBAND_TESTS)
 
     def test_airport_codes_do_not_beat_city_names(self):
         with self.conn.cursor() as cur:
