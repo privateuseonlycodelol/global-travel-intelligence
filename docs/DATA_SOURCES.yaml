@@ -1,0 +1,196 @@
+version: 1
+status_date: "2026-11-21"
+policy:
+  third_party: "All external datasets are third-party; scores/percentiles/completeness are first-party derived calculations."
+  missing_values: "NULL means unavailable; no synthetic or LLM-generated city values."
+  scoring_imputation: "rank_destinations_v3 may use 0.5 for a missing dimension in ranking arithmetic only; data_completeness reports the gap."
+sources:
+  - id: geonames
+    party: third-party
+    publisher: GeoNames
+    dataset: cities15000.zip
+    url: https://download.geonames.org/export/dump/cities15000.zip
+    terms_url: https://www.geonames.org/export/
+    license: "CC BY (GeoNames terms; attribution required; version not stated on landing page)"
+    coverage: global
+    granularity: city/place
+    used_by: bootstrap_global_40k.py
+    status: implemented
+  - id: ourairports
+    party: third-party
+    publisher: OurAirports / David Megginson
+    dataset: airports.csv
+    url: https://davidmegginson.github.io/ourairports-data/airports.csv
+    terms_url: https://github.com/davidmegginson/ourairports-data
+    license: "Unlicense / public domain (repository metadata)"
+    coverage: global
+    granularity: airport
+    used_by: bootstrap_global_40k.py
+    status: implemented
+  - id: worldclim21
+    party: third-party
+    publisher: WorldClim
+    dataset: WorldClim 2.1 5m monthly tmax/tmin/prec, 1970-2000
+    url: https://www.worldclim.org/data/worldclim21.html
+    terms_url: https://worldclim.org/about.html
+    license: "Free for academic/non-commercial use; redistribution or commercial use requires prior permission"
+    coverage: global land
+    granularity: ~9 km raster sampled at city centroid
+    used_by: bootstrap_global_40k.py
+    status: implemented
+    commercial_warning: true
+  - id: overture_places
+    party: third-party
+    publisher: Overture Maps Foundation
+    dataset: "theme=places/type=place, release 2026-11-18.0"
+    url: https://docs.overturemaps.org/attribution/
+    license: "CDLA-Permissive 2.0 for named providers; some sources Apache 2.0/CC0; check per-provider list"
+    coverage: global
+    granularity: place/POI bbox center
+    used_by: bootstrap_global_40k.py
+    status: implemented
+  - id: overture_transportation
+    party: third-party
+    publisher: Overture Maps Foundation
+    dataset: "theme=transportation/type=segment, release 2026-11-18.0"
+    url: https://docs.overturemaps.org/attribution/
+    license: "ODbL; (c) OpenStreetMap contributors; includes TomTom data; share-alike applies"
+    coverage: "global source; 1,131 cities loaded across DE/GB/TR/ES/FR/PT/SE/LU in the 2026-11-21 reference run"
+    granularity: road/rail segment bbox center
+    used_by: bootstrap_phase3.py
+    status: implemented_partial
+  - id: ookla_fixed
+    party: third-party
+    publisher: Ookla
+    dataset: "Speedtest fixed performance tiles, 2026 Q2"
+    url: https://ookla-open-data.s3.amazonaws.com/parquet/performance/type=fixed/year=2026/quarter=2/2026-04-01_performance_fixed_tiles.parquet
+    terms_url: https://github.com/teamookla/ookla-open-data
+    license: "CC BY-NC-SA 4.0 (non-commercial; attribution; share-alike)"
+    coverage: global tiles
+    granularity: ~610 m tile; 5 km tests-weighted median
+    used_by: bootstrap_phase3.py
+    status: implemented
+    commercial_warning: true
+  - id: mobility_database
+    party: third-party
+    publisher: MobilityData
+    dataset: feeds_v2.csv
+    url: https://files.mobilitydatabase.org/feeds_v2.csv
+    terms_url: https://mobilitydatabase.org/terms-and-conditions
+    license: "Catalog metadata CC0 1.0; API code Apache 2.0; individual feeds retain provider licenses"
+    coverage: global catalog
+    granularity: feed bbox
+    used_by: bootstrap_phase3.py
+    status: implemented
+  - id: inside_airbnb
+    party: third-party
+    publisher: Inside Airbnb
+    dataset: "city/regional listings.csv.gz"
+    url: https://insideairbnb.com/get-the-data/
+    license: "CC BY 4.0; attribution required"
+    coverage: city/regional, not global
+    granularity: listing; nearest city within 10 km
+    used_by: "bootstrap_phase3.py --airbnb-dir"
+    status: implemented_optional
+    notes: "Local currency; no FX conversion."
+  - id: eurostat_tourism_nuts2
+    party: third-party
+    publisher: Eurostat / European Commission
+    dataset: "tour_occ_nin2m + demo_r_pjangrp3"
+    url: https://ec.europa.eu/eurostat/databrowser/view/tour_occ_nin2m/default/table
+    terms_url: https://ec.europa.eu/eurostat/help/copyright-notice
+    license: "Eurostat reuse with attribution; editorial content CC BY 4.0; statistical data reuse subject to Eurostat notice"
+    coverage: EU/EFTA/candidate countries
+    granularity: NUTS 2 annual nights / NUTS 2 population
+    used_by: bootstrap_supplemental.py
+    status: implemented_optional
+    notes: "Regional proxy, not city-level; 1,405 rows in 2026-11-21 global run."
+  - id: overture_transit_stops
+    party: third-party
+    publisher: Overture Maps Foundation
+    dataset: "Overture Places public-transport facility categories, release 2026-11-18.0"
+    url: https://docs.overturemaps.org/attribution/
+    license: "Overture Places: CDLA-Permissive 2.0 for named providers; some sources Apache 2.0/CC0"
+    coverage: global where Overture Places has transit facilities
+    granularity: distinct transit facilities within 5 km
+    used_by: bootstrap_transit_stops.py
+    status: implemented
+    notes: "Global run 2026-11-21: 9,008 cities; stations/facilities, not individual bus stop poles; not frequency or reliability."
+  - id: serpapi
+    party: third-party
+    publisher: SerpApi
+    dataset: "Google Flights / Google Hotels query results"
+    url: https://serpapi.com/search
+    terms_url: https://serpapi.com/legal
+    license: "Proprietary API terms; not open data"
+    coverage: query-dependent
+    granularity: route/date flight; city/date hotel median
+    used_by: mcp_server.py
+    status: implemented_optional
+candidates:
+  - id: fbi_crime_data_explorer
+    publisher: FBI / U.S. Department of Justice
+    dataset: "Crime Data Explorer API"
+    url: https://cde.ucr.cjis.gov/
+    api_url: https://api.usa.gov/crime/fbi/cde/
+    coverage: US agency/city
+    license: "US government data; API key; verify terms"
+    status: candidate_us_only
+  - id: uk_police
+    publisher: UK Home Office / police.uk
+    dataset: "Police API street-level crime"
+    url: https://data.police.uk/docs/
+    coverage: UK
+    license: "Open Government Licence; verify"
+    status: candidate_uk_only
+  - id: hud_fmr
+    publisher: U.S. HUD
+    dataset: "Fair Market Rents"
+    url: https://www.huduser.gov/portal/datasets/fmr.html
+    coverage: US county/MSA
+    license: "US government data; API/CSV; verify terms"
+    status: candidate_us_only
+  - id: open_meteo_historical
+    publisher: Open-Meteo (ERA5/ERA5-Land)
+    dataset: "Historical Weather API daily variables"
+    url: https://open-meteo.com/en/docs/historical-weather-api
+    coverage: global
+    license: "API terms; ERA5/Copernicus citation; verify commercial terms"
+    status: candidate
+  - id: copernicus_era5
+    publisher: Copernicus Climate Change Service
+    dataset: "ERA5 hourly/daily reanalysis"
+    url: https://cds.climate.copernicus.eu/datasets/reanalysis-era5-single-levels
+    coverage: global
+    license: "Copernicus licence; registration/API key; verify"
+    status: candidate
+  - id: mlab_ndt
+    publisher: Measurement Lab
+    dataset: "NDT measurements"
+    url: https://www.measurementlab.net/data/
+    coverage: global
+    license: "CC0 1.0"
+    status: candidate_crosscheck
+  - id: openstreetmap
+    publisher: OpenStreetMap contributors
+    dataset: "OSM/Geofabrik extracts"
+    url: https://www.openstreetmap.org/copyright
+    coverage: global
+    license: "ODbL; attribution and share-alike"
+    status: candidate_fallback
+  - id: openaq
+    publisher: OpenAQ
+    dataset: "air quality monitor data"
+    url: https://openaq.org/
+    coverage: global aggregator
+    license: "Per-source licenses vary; verify each provider"
+    status: candidate_not_scored
+excluded:
+  - id: numbeo
+    reason: "Crowd-sourced/self-reported; no probability sample or audited methodology."
+  - id: walkscore
+    reason: "Proprietary API; not open data."
+  - id: teleport
+    reason: "Proprietary/aggregated scores; not primary measurement."
+  - id: llm_estimates
+    reason: "Never used; no model output stored as data."

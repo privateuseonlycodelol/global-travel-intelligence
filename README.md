@@ -1,0 +1,688 @@
+# Global destinations DB (cities ≥ 40k)
+
+PostGIS bootstrap for a travel-ranking database covering every GeoNames city
+with **population ≥ 40,000** (~13k destinations after metro de-duplication),
+with climate, POI, airport, broadband, walkability/transit and optional monthly
+housing data attached.
+
+The goal is a **fixed number of bulk operations** instead of per-city API/S3
+calls:
+
+| Step | Source | Operation |
+| --- | --- | --- |
+| Cities | GeoNames `cities15000.zip` | one download, one `COPY` |
+| Airports | OurAirports `airports.csv` | one download, one PostGIS join |
+| Climate | WorldClim 2.1 `5m` GeoTIFFs | one local raster sample per variable, one `COPY` |
+| POIs | Overture Maps Places (S3 Parquet) | one DuckDB scan + grid hash join, one `COPY` |
+| Broadband | Ookla Open Data (S3 Parquet) | one DuckDB scan + grid hash join |
+| Walkability/transit | Overture Maps Transportation + Mobility Database GTFS | one transport scan + one CSV join |
+| Housing (optional) | Inside Airbnb city dumps | local CSV scan |
+| Tourism pressure (optional) | Eurostat NUTS 2 tourism + population | one API + GISCO boundary join |
+
+## Files
+
+| File | Purpose |
+| --- | --- |
+| `bootstrap_global_40k.py` | Phase 1 pipeline (cities, airports, climate, POIs) |
+| `bootstrap_phase3.py` | Phase 3 pipeline (broadband, walkability/transit, optional housing) and `rank_destinations_v3` |
+| `bootstrap_transit_stops.py` | Overture Places public-transport facility counts within 5 km |
+| `bootstrap_supplemental.py` | optional official-data loaders (currently Eurostat NUTS 2 tourism pressure) |
+| `mcp_server.py` | Phase 4 FastMCP server (Streamable HTTP, optional SerpApi live pricing) |
+| `Dockerfile` | container image for the pipeline and MCP server |
+| `docker-compose.yml` | MCP service + optional local PostGIS profile |
+| `requirements.txt` | Python dependencies for the full pipeline |
+| `.env.example` | Supabase and SerpApi connection settings |
+| `mcp.client.example.json` | example HTTP MCP client entry for the local server |
+| `docs/DATA_SOURCES.md` | source-by-source provenance, licences, coverage and candidate sources |
+| `docs/COVERAGE_REPORT.md` | measured coverage snapshot for the global run |
+| `sql/rank_examples.sql` | Phase 1/v2 scorer examples |
+| `sql/rank_examples_v3.sql` | Phase 3/v3 scorer examples |
+| `tests/` | offline unit tests for the Phase 1, Phase 3 and MCP helpers |
+| `data_cache/` | downloaded source data (git-ignored) |
+
+## 1. Install
+
+```bash
+python3 -m venv .venv
+source .venv/bin/activate
+pip install -r requirements.txt
+```
+
+Python 3.10+ is required. `rasterio` and `duckdb` ship manylinux wheels, so no
+GDAL install is needed on Linux/macOS.
+
+All later commands run **from this project directory with the virtualenv
+active**. If you did not activate it, use `.venv/bin/python` explicitly instead
+of `python`. These are not bare-host commands: a machine without Python,
+PostgreSQL/PostGIS and the project files cannot run them as written.
+
+## 1b. Docker (recommended on Unraid / Tower)
+
+If the host Python lacks the `ssl` module or you do not want to install
+PostGIS on the host, run the project in Docker.
+
+```bash
+cd /mnt/cache/appdata/travel
+
+cp .env.example .env
+# edit .env and set SUPABASE_DB_URL (and optionally SERPAPI_API_KEY)
+
+docker compose up -d --build
+curl http://127.0.0.1:8000/health
+```
+
+The `mcp` service builds the full image and runs `mcp_server.py` on port 8000.
+Batch jobs use the same image:
+
+```bash
+docker compose run --rm mcp python bootstrap_transit_stops.py
+docker compose run --rm mcp python bootstrap_phase3.py \
+  --countries TR,PT,GB,FR,DE --skip-ookla --skip-gtfs
+```
+
+For a fully local PostGIS database instead of Supabase:
+
+```bash
+# in .env:
+# SUPABASE_DB_URL=postgresql://postgres:travel@db:5432/travel_global
+
+docker compose --profile local-db up -d --build
+docker compose run --rm mcp python bootstrap_global_40k.py
+```
+
+The `db` service stores data in `./pgdata`; the app caches downloads in
+`./data_cache` and DuckDB spill files in `./duckdb_spill`.
+
+
+
+```bash
+export SUPABASE_DB_URL="postgresql://postgres:<PASSWORD>@db.<PROJECT_REF>.supabase.co:5432/postgres"
+```
+
+Notes:
+
+- Many new Supabase projects expose the direct `db.<ref>.supabase.co` host over
+  **IPv6 only**. If your network has no IPv6, use the **session pooler**
+  (dashboard → Connect → Session pooler):
+  `postgresql://postgres.<ref>:<PASSWORD>@aws-0-<region>.pooler.supabase.com:5432/postgres`.
+- The script disables client-side prepared statements automatically for
+  `pooler.supabase.com` and port `6543`. The **session pooler (5432)** is the
+  safest choice because the pipeline uses `COPY ... FROM STDIN` and DDL.
+- Enable PostGIS once if `CREATE EXTENSION` is rejected:
+  dashboard → Database → Extensions → `postgis`.
+- Free tier (500 MB) is enough: ~13k cities, ~157k climate rows and ~13k POI
+  rows measured 57–76 MB including indexes depending on vacuum state (about
+  45 MB of that is `climate_monthly`; repeated upserts leave dead tuples until
+  `VACUUM`).
+
+## 3. Run
+
+Fast end-to-end check (~1–2 min; Luxembourg is the smallest useful test):
+
+```bash
+python bootstrap_global_40k.py --countries LU
+```
+
+Country pair from the original plan:
+
+```bash
+python bootstrap_global_40k.py --countries SE,ES
+```
+
+Full global run:
+
+```bash
+python bootstrap_global_40k.py
+```
+
+Useful flags:
+
+| Flag | Effect |
+| --- | --- |
+| `--countries SE,ES` | limit cities (still uses the same global schema) |
+| `--skip-pois` | skip the Overture/S3 scan |
+| `--skip-climate` | skip WorldClim sampling |
+| `--skip-airports` | skip airport matching |
+| `--no-metro-dedupe` | keep PPLA2 boroughs and same-municipality districts (`PPLX` is always excluded) |
+| `--dedupe-radius-km 20` | radius for merging `PPLA2` boroughs |
+| `--municipality-radius-km 15` | radius for merging same-municipality districts |
+| `--municipality-pop-ratio 5` | how much larger the parent city must be |
+| `--no-prune` | keep rows in scope that this run no longer selects |
+| `--min-pop 40000` | city population threshold |
+| `--airport-km 100` | airport search radius |
+| `--overture-release 2026-11-18.0` | pin a different Overture release |
+| `--db-url ...` | override `SUPABASE_DB_URL` |
+| `--query-only` | only run coverage + ranking queries |
+
+Run the offline tests with:
+
+```bash
+python -m unittest discover -s tests -v
+```
+
+### Start the local services
+
+```bash
+# Start PostgreSQL + the MCP server
+./scripts/start_all.sh
+
+# Check server health
+./scripts/status_mcp.sh
+
+# Stop only the MCP server
+./scripts/stop_mcp.sh
+```
+
+The local server listens on `http://127.0.0.1:8000/mcp`; the health probe is
+`http://127.0.0.1:8000/health`. `mcp.client.example.json` is a generic HTTP
+client entry; client-specific config formats may differ.
+
+The script is **idempotent**: re-running updates cities, climate and POIs in
+place. Each run is authoritative for its scope: a global run prunes cities that
+no longer pass the filters, and a `--countries` run prunes only within those
+countries. Use `--no-prune` to keep stale rows. Airport updates are restricted
+to the run's cities, so a small test run cannot wipe a global dataset's codes.
+
+## 4. Verify
+
+```bash
+python bootstrap_global_40k.py --query-only
+```
+
+or from `psql`:
+
+```sql
+SELECT COUNT(*) FROM destinations;
+SELECT COUNT(*) FROM climate_monthly;
+
+SELECT name, country_iso2, population, iata_codes, final_score,
+       data_completeness, metrics
+FROM rank_destinations_v2(
+    p_months => ARRAY[6],
+    p_ideal_temp_min => 20.0,
+    p_ideal_temp_max => 26.0,
+    p_max_temp_c => 31.0,
+    p_require_airport => TRUE,
+    p_limit => 20
+);
+```
+
+More examples in [`sql/rank_examples.sql`](sql/rank_examples.sql).
+
+## 5. Measured Phase 1 local timings
+
+On a 12-core box with cached downloads and a local PostGIS 15:
+
+| Step | Global (13k cities) | SE+ES (~200 cities) | LU |
+| --- | --- | --- | --- |
+| schema + scorer | < 1 s | < 1 s | < 1 s |
+| GeoNames load + dedupe | ~2 s | < 1 s | < 1 s |
+| airport matching | ~5–10 s | < 1 s | < 1 s |
+| WorldClim sampling (3 × 12 rasters) | ~30–60 s | ~1.5 s | ~1 s |
+| Overture POI scan | ~5–15 min (network bound) | ~1.5 min | ~50 s |
+| verification queries | < 1 s | < 1 s | < 1 s |
+
+Reference run in this workspace: **13,101 cities**, 11,073 with an IATA code,
+157,188 climate rows, 76 MB total. A full-global POI pass depends on sustained
+S3 bandwidth; the country-scoped passes (LU, SE+ES) are the recommended smoke
+test before committing to it.
+
+The first DuckDB/Overture query is slow because DuckDB fetches Parquet metadata
+from S3; subsequent queries in the same process are much faster. Keep a warm
+`data_cache/` between runs. Long S3 scans retry up to 5 times on transient
+DNS/HTTP errors; each retry restarts the scan, so budget extra time on a flaky
+network.
+
+## 6. What was fixed relative to the draft
+
+The draft's architecture is sound. These are the correctness/scaling changes in
+this implementation:
+
+1. **NYC boroughs are `PPLA2`, not `PPLX`.** Filtering only `PPLX` leaves
+   Manhattan, Brooklyn, Queens and the Bronx in the table (verified against the
+   live GeoNames dump). Two merge rules run after the `PPLX` filter:
+   - `PPLA2` boroughs within 20 km of a ≥2× larger city (NYC boroughs);
+   - any record sharing country/admin1/admin2/admin3 within 15 km of a ≥5×
+     larger city (Barcelona's Sant Martí, Madrid's Chamartín, the Paris
+     arrondissements, Warsaw's districts).
+
+   The 5× threshold matters: admin3 is a county in some countries, so a lower
+   ratio merged Venice into Mestre and Grevenbroich into Neuss. Separate
+   municipalities in the same metro (L'Hospitalet, Badalona, Cambridge,
+   Oakland) are kept. The result is **~13,100 cities** (13,101 in the reference
+   run; raw ≥40k after the `PPLX` filter: 14,156). Disable both rules with
+   `--no-metro-dedupe`.
+2. **Country-scoped Overture scans.** A `--countries SE,ES` run now issues one
+   Parquet scan per country envelope and unions the results by place `id`, so
+   each scan can prune its own row groups. An OR-of-envelopes filter is
+   logically equivalent but blocks DuckDB's row-group pruning and turned a
+   2-country run into a 10+ minute global scan.
+3. **Antimeridian-safe grid cells.** Longitude cells are wrapped with
+   `((x % 3600) + 3600) % 3600`; the original 5×3 halo breaks at ±180°.
+4. **Null-safe Overture flags.** `list_contains(NULL, ...)` returns `NULL`, not
+   `FALSE`; flags are wrapped in `COALESCE`.
+5. **Closed businesses excluded.** `operating_status = 'permanently_closed'` is
+   filtered out (NULL is treated as open).
+6. **Cuisine entropy is actually about cuisine.** Generic
+   `taxonomy.primary = 'restaurant'` is excluded from the entropy buckets;
+   otherwise ~2k generic restaurants in Barcelona alone dominate one bucket and
+   flatten the signal.
+7. **Airport reset is scoped.** The draft's unconditional reset/update would
+   clear airports from cities outside a later `--countries` run. Both reset and
+   match are restricted to the current run's `destination_id`s.
+8. **Schema compatibility check.** `CREATE TABLE IF NOT EXISTS` silently keeps
+   an incompatible Phase-1 table; the script now fails with a column-level
+   message instead.
+9. **Download hardening.** Retries, `.part` files and zip validation.
+10. **Pooler support.** Prepared statements are disabled for Supabase poolers.
+11. **Deterministic rankings.** Ties break on population, not physical row
+    order.
+12. **Verification respects `--countries`**, so a test run does not rank rows
+    left over from earlier runs.
+13. **`restaurant_count` and cuisine entropy are separated.** The draft
+    computed the count from the same CTE that drops generic `restaurant`
+    labels, undercounting restaurants by roughly a third. The count now
+    includes every restaurant; only the entropy buckets exclude the generic
+    label.
+14. **Large airports are preferred.** Sorting purely by distance put Teterboro
+    ahead of JFK and San Carlos ahead of San Jose. The query now orders by
+    `large_airport` first, then distance, and stores 3 codes (the draft's
+    `[1:4]` slice stored 4).
+
+### Phase 3 fixes relative to the draft
+
+1. **Ookla tile coordinates are longitude/latitude centroids**, not Web Mercator
+   indices; the grid join uses `tile_x`/`tile_y` directly. The median is
+   **tests-weighted**, not a plain median.
+2. **Antimeridian-safe Ookla/Overture/listing cells** use wrapped longitude
+   buckets, and each country gets its own pruned Parquet envelope (grouped into
+   45° bands above 40 countries), with opposite-edge bands for cities just
+   across the dateline.
+3. **Mobility Database column names are the v2 ones**: `data_type='gtfs'`,
+   `status='active'`, `redirect.id`, and the four
+   `location.bounding_box.*` columns. `gtfs_rt` and `gbfs` feeds are excluded.
+4. **Overture transportation values are verified**: `subtype` is `road`/`rail`
+   and pedestrian classes include `footway`, `pedestrian`, `living_street`,
+   `steps`, `cycleway`, `path` and `bridleway`. The walkability score blends
+   the 2 km pedestrian ratio (60%) with the log of pedestrian segment count
+   (40%), so a tiny settlement cannot win on a fluke ratio of one footway.
+5. **GTFS-only transit is scored.** The draft's transit percentile required
+   rail data, so `--skip-overture-transport` silently dropped GTFS from the
+   score. The v3 scorer computes a rail percentile where rail exists and adds a
+   GTFS-feed component, so GTFS still contributes without the huge transport
+   scan.
+6. **Provenance is structured for every dimension**, including mobility,
+   broadband and housing, and empty dimensions are omitted instead of appearing
+   as `{}`.
+7. **Ties break on population**, not physical row order, as in v2.
+8. **The short-stay exit-gate example no longer requires GTFS.** Requiring a
+   feed for a three-day city break discarded cities that simply do not publish
+   one; the corrected example is in `sql/rank_examples_v3.sql`.
+9. **Inside Airbnb is a real optional loader**, not just a schema table. It
+   matches listings by coordinates, filters 30-night-capable listings and
+   records the sample size.
+10. **The Schengen rule is explicit**: 29 countries, applied only to stays
+    longer than 90 days for non-EU/EEA passports, with a legal caveat in the
+    docs.
+11. **Phase 4 split quote caches** key flight quotes by route+dates and hotel
+    quotes by city+dates, so changing the departure airport only refetches
+    flights.
+12. **Percentile scores are non-degenerate and missing data is neutral.**
+    Relative dimensions map to `0.05..0.95` (single/all-equal -> `0.5`), and
+    missing dimensions are imputed at `0.5` for the score. Complete-but-equal
+    data no longer scores zero, and a climate-only row cannot win just by
+    renormalizing its best dimension to 100%; `data_completeness` still exposes
+    thin evidence.
+13. **Inside Airbnb currency is explicit.** The column is
+    `median_monthly_local`, not `median_monthly_usd`; the loader performs no FX
+    conversion, and the docs say to zero the housing weight for cross-currency
+    searches.
+14. **Public transport access is measured directly.** Overture Places transit
+    facilities within 5 km provide a stop-density signal distinct from GTFS
+    feed presence; GTFS remains a separate coverage/frequency proxy.
+    Walkability combines the pedestrian-road ratio and pedestrian segment
+    count from Overture Transportation.
+
+## 7. Data caveats (read before trusting a ranking)
+
+- **City population** comes from GeoNames city-proper records and can be years
+  out of date. It is not a metro population. The source file is
+  `cities15000.zip`, so `--min-pop` below 15,000 cannot add smaller places.
+- **Metro de-duplication is a heuristic.** It removes sub-city records
+  (Manhattan/Brooklyn, Tokyo wards, Barcelona's Sant Martí). Separate
+  municipalities in the same metro — L'Hospitalet, Badalona, Cambridge,
+  Oakland, Pantin, Montreuil — are kept, because they are legally distinct
+  cities, and can rank beside the core city because their 5 km POI radii
+  overlap. London boroughs such as Westminster and Islington are `PPLA3` with
+  distinct admin3 codes, so they survive too; filter them or add a
+  metro-cluster key if you want one row per metro. Use
+  `--no-metro-dedupe` for every non-`PPLX` GeoNames row.
+- **WorldClim 2.1 is a 1970–2000 climatology**, not recent daily ERA5. The
+  `median_temp_max_c` / `median_temp_min_c` columns are monthly **means of daily
+  max/min** (the Phase-1 column names are retained); `precip_mm` is the monthly
+  total. WorldClim's own terms allow academic/non-commercial use and require
+  permission for redistribution or commercial use; see section 12.
+- **`avg_rainy_days` and `avg_hot_days_30c` are intentionally NULL** until the
+  Phase-2/4 Open-Meteo enrichment. The scorer falls back to `precip_mm` for the
+  rain component.
+- **Overture POIs** use the place's bbox center and a 5 km Haversine radius.
+  A large park or mall whose center is outside 5 km is not counted. Coverage is
+  excellent in North America/Europe and thinner elsewhere; a zero count can
+  mean "no data", not "no restaurants".
+- **`tourism_pressure` is partial, not global.** The supplemental Eurostat
+  loader fills NUTS 2 tourism nights for EU/EFTA regions (1,405 cities in the
+  reference run); non-EU cities remain NULL. All cities in the same NUTS 2
+  region share the same regional value, so it is a pressure proxy, not an
+  independent city observation. There is no single official
+  city-level global tourism dataset, so `s_low_crowding` is only present where
+  Eurostat publishes a value. The v2 scorer renormalizes missing crowding; the
+  v3 scorer neutral-imputes it at 0.5 and can reach 0.95 completeness. A high
+  score with low completeness (e.g. 0.35) means thin evidence — treat it as
+  provisional.
+- **Some Chinese district records survive.** GeoNames tags district-level
+  records such as Pudong and Minhang as `PPLA3`/`PPLA4` with district
+  populations, not as subdivisions of a shared municipality code, so the dedupe
+  rules keep them. Filter `country_iso2 <> 'CN'` or add a district exclusion if
+  that skews your results.
+- **Airports are straight-line within 100 km.** That can match an airport across
+  water or a mountain range that is not practically reachable. Large airports
+  are preferred over nearer medium/GA fields, then sorted by distance; only the
+  3 best IATA codes are stored. Without that preference, Teterboro outranks JFK
+  for New York and San Carlos outranks San Jose for San Francisco.
+- **GEONAMES `PPLX` exclusion** removes Tokyo's special wards but not all
+  borough-style records; see the metro pass above.
+
+## 8. Scaling notes for Phase 4
+
+`destination_id` is the stable anchor (`gn-<geonameid>`). Later sources can join
+on it without schema rewrites:
+
+- Open-Meteo daily ERA5: fill `avg_rainy_days` / `avg_hot_days_30c` for finalists.
+- Ookla Open Data (global Parquet): broadband metrics keyed by tile, spatially
+  joined to `centroid`.
+- Overture Maps Transportation: walkability and rail segment counts keyed by
+  segment bbox center.
+- Mobility Database GTFS feeds: active-feed coverage keyed by feed bbox and
+  joined by `destination_id`.
+
+For global Overture runs, 5–15 minutes is bandwidth-bound. If that becomes the
+bottleneck, materialize a filtered `places` Parquet subset in your own bucket
+once per Overture release and point `OVERTURE_S3_ROOT` at it.
+
+## 9. Phase 3: broadband, walkability, transit and housing
+
+Phase 3 enriches the Phase 1 `destinations` table and installs
+`rank_destinations_v3`. It assumes Phase 1 has already run on the same database.
+
+```bash
+# Fast partial load: Ookla + Mobility Database GTFS, no huge transportation scan
+python bootstrap_phase3.py --countries SE,ES --skip-overture-transport
+
+# Full Phase 3 for a small country (recommended first full test)
+python bootstrap_phase3.py --countries LU
+
+# Optional Inside Airbnb medians from local city dumps
+python bootstrap_phase3.py --countries ES \
+    --skip-ookla --skip-overture-transport --skip-gtfs \
+    --airbnb-dir data_cache/airbnb
+
+# Optional official EU tourism pressure (NUTS 2, Eurostat)
+python bootstrap_supplemental.py --eurostat-tourism --year 2024
+
+# Public transport access: Overture Places transit facilities within 5 km
+python bootstrap_transit_stops.py
+```
+
+| Flag | Effect |
+| --- | --- |
+| `--countries SE,ES` | only enrich cities in these countries |
+| `--min-pop 40000` | only enrich cities at/above this population |
+| `--skip-ookla` | skip the Ookla broadband scan |
+| `--skip-overture-transport` | skip the Overture transportation scan |
+| `--skip-gtfs` | skip Mobility Database GTFS |
+| `--skip-airbnb` | skip Inside Airbnb even if `--airbnb-dir` is set |
+| `--ookla-year 2026` | Ookla dataset year |
+| `--ookla-quarter 2` | Ookla quarter (1–4) |
+| `--ookla-km 5` | broadband search radius |
+| `--overture-release 2026-11-18.0` | pin an Overture release |
+| `--airbnb-dir DIR` | directory containing `**/listings.csv.gz` |
+| `--airbnb-room-type "Entire home/apt"` | room-type filter; pass `''` for all |
+| `--db-url ...` | override `SUPABASE_DB_URL` |
+| `--cache-dir DIR` | download/cache directory |
+| `--query-only` | only print coverage and a sample v3 ranking |
+
+`bootstrap_phase3.py` is idempotent. A country-scoped run only updates the
+cities in scope; re-running replaces the columns owned by each loader (Ookla
+and housing are replaced, while Overture and GTFS preserve each other's
+columns).
+
+### What Phase 3 adds
+
+| Table | Contents |
+| --- | --- |
+| `broadband_metrics` | tests-weighted median down/up Mbps, weighted latency, tile count, total tests |
+| `mobility_metrics` | 2 km pedestrian-road ratio, 2 km road/pedestrian segment counts, 5 km rail segment count, active GTFS feed count, 5 km transit facility count |
+| `housing_monthly` | median 30-night monthly cost in the listing's local currency, plus listing sample size (optional) |
+| `tourism_pressure` | Eurostat NUTS 2 annual tourist nights and nights per NUTS 2 resident (EU coverage only) |
+
+`rank_destinations_v3` scores eight dimensions with weights that sum to 1:
+climate, culture, food, walkability, transit, broadband, low crowding and
+housing cost. Missing dimensions are **neutral-imputed at 0.5 for the score**
+so a data-rich city is not punished for having measured, mediocre values;
+`data_completeness` reports how much real evidence the row has, so check it
+before trusting a high score. The Phase 3 tables are one row per city, so
+a global load adds only a few MB on top of Phase 1. Direct SQL calls use the
+extended-stay weights by default; the MCP server applies the
+short-stay/extended-stay weight profiles automatically. Relative dimensions
+(culture, food, walkability, transit, broadband, crowding, housing) are mapped
+to `0.05..0.95`; a single available value or an all-equal set scores `0.5`
+instead of collapsing to zero.
+
+The transport sub-scores are explicit:
+
+- **Walkability** = 60% pedestrian-road ratio percentile + 40% pedestrian
+  segment-count percentile (Overture Transportation, 2 km).
+- **Transit** = 40% transit-facility count percentile + 30% active GTFS feed
+  percentile + 30% rail-segment percentile (available components renormalized).
+- **Public transport access** is the 5 km count of Overture Places
+  `bus_station`, `train_station`, `metro_station`,
+  `public_transit_facility_or_service` and similar facilities. Walkability itself is 60% pedestrian-ratio rank
+plus 40% log pedestrian-segment-count rank, so both density and absolute
+walkable-network size matter.
+
+```sql
+SELECT name, country_iso2, population, final_score, data_completeness,
+       metrics, provenance
+FROM rank_destinations_v3(
+    p_months => ARRAY[6],
+    p_ideal_temp_min => 20.0,
+    p_ideal_temp_max => 26.0,
+    p_require_airport => TRUE,
+    p_min_broadband_mbps => 50,
+    p_require_gtfs => TRUE,
+    p_limit => 10
+);
+```
+
+More examples, including the short-stay and four-month extended-stay exit
+gates, are in [`sql/rank_examples_v3.sql`](sql/rank_examples_v3.sql).
+
+Large transportation scans are memory-bound. DuckDB gets **8 GiB** by default
+and spills to `data_cache/duckdb_tmp` (falling back to the system temp
+directory), so that path must be writable. Override with
+`DUCKDB_MEMORY_LIMIT=12GiB` / `DUCKDB_TEMP_LIMIT=32GiB`, or run
+country-scoped. A 2 GiB limit OOMs on Spain+Sweden; 8 GiB completed it.
+
+### Phase 3 data caveats
+
+- **Ookla** values are quarterly and tile-based. The scorer uses a
+  **tests-weighted median** of tile medians within 5 km, not a user-level
+  speed test. A city with no tiles has no broadband row.
+- **Overture transportation** uses each segment's bbox center. Long motorway or
+  rail segments whose center lies outside the radius are not counted even if
+  part of the segment is nearby. Pedestrian classes are `footway`,
+  `pedestrian`, `living_street`, `steps`, `path` and `bridleway`; the
+  denominator is every road segment within 2 km. The walk score combines the
+  pedestrian-road ratio (60%) with the pedestrian segment count (40%). The
+  2026-11-21 run loaded walk/rail for **1,131 cities** across DE, GB, TR, ES,
+  FR, PT, SE and LU; it is not global.
+- **GTFS coverage** comes from Mobility Database feed bounding boxes, not from
+  stop locations or service frequency. A national feed can cover many cities;
+  feeds wider than 15° are ignored so one national file does not mark a whole
+  continent as transit-served. `gtfs_active_feeds` counts active, non-superseded
+  static GTFS feeds whose bbox contains the city. Feeds whose bbox crosses the
+  antimeridian are skipped (rare).
+- **Transit stop counts use Overture Places facilities** (`bus_station`,
+  `train_station`, `metro_station`, `public_transit_facility_or_service`,
+  `light_rail_and_subway_station`, and similar) within 5 km. The reference run
+  populated **9,008 cities**. This counts stations/facilities, not individual
+  bus stop poles, and is not a frequency, reliability or journey-time measure.
+  Overture coverage varies by city.
+- **Inside Airbnb** is optional and city-by-city. The loader matches listing
+  coordinates to the nearest destination within 10 km, keeps listings that
+  allow a 30-night stay (`minimum_nights <= 30` and `maximum_nights >= 30`,
+  with `0` treated as unlimited), and estimates the monthly cost as
+  `nightly_price * 30`. It does not
+  model weekly/monthly discounts, taxes or cleaning fees. A median from a
+  handful of listings is noisy; `sample_listings` is reported so you can apply
+  your own minimum. **Inside Airbnb prices are in the listing's local
+  currency**, not USD: the loader does not perform FX conversion, so
+  `median_monthly_local` is only comparable within a currency area. Zero the
+  `p_w_housing` weight for cross-currency searches, or convert the column
+  before scoring. Listings are attributed to the nearest destination within
+  10 km, so a small-town dump near a larger city can inflate the larger city's
+  sample.
+- **The Schengen filter** implements the 90/180-day short-stay rule for
+  non-EU/EEA passports by excluding all 29 Schengen countries on stays longer
+  than 90 days. The SQL function applies `p_exclude_schengen` whenever it is
+  true; the MCP server is what gates it on `duration > 90 and not
+  passport_eu_eea`. It is a conservative planning heuristic, not legal advice,
+  and it does not model long-stay visas or bilateral agreements.
+- **Licences/attribution** differ by source (Ookla Open Data, Mobility
+  Database, Overture Maps, Inside Airbnb). Check the upstream terms before
+  redistributing the derived tables.
+
+## 10. Phase 4: MCP server and live pricing
+
+`mcp_server.py` exposes three tools over Streamable HTTP:
+
+| Tool | Purpose |
+| --- | --- |
+| `rank_destinations` | stage 1 SQL ranking, optional stage 2 live flight/hotel pricing |
+| `inspect_destination` | one city's climate curve, POIs, mobility, broadband, housing, tourism pressure and provenance |
+| `refresh_live_quotes` | force-refresh SerpApi quotes for 1–5 finalists |
+
+```bash
+export SUPABASE_DB_URL="postgresql://..."
+export SERPAPI_API_KEY="..."      # optional; without it stage 2 is skipped
+export QUOTE_TTL_HOURS="12"
+python mcp_server.py
+```
+
+The server creates `flight_quote_cache` and `hotel_quote_cache` on startup.
+Flight quotes are keyed by `(origin_iata, destination_iata, start_date,
+end_date)`; hotel quotes are keyed by `(destination_id, start_date, end_date)`,
+so changing the departure airport does not refetch hotels.
+
+Stage 2 runs only for short stays with exact dates and an origin airport. It
+calls SerpApi for the finalist pool (default 8, max 15), concurrently, and
+re-ranks by static score plus live trip cost and flight duration. Without
+dates, an origin airport or `SERPAPI_API_KEY`, the server returns stage 1
+rankings untouched with `live_pricing_status` explaining why. Flight pricing
+uses the first stored `iata_codes` entry (large-airport-first, then distance),
+so in a multi-airport metro it may not be the cheapest international gateway
+(e.g. LGA before JFK for New York).
+
+Recommended first request after the database is loaded:
+
+```bash
+curl -s http://localhost:8000/health
+```
+
+Then point your MCP client at `http://localhost:8000/mcp`.
+
+### Deploy
+
+```bash
+docker build -t travel-ranking .
+docker run --rm -p 8000:8000 \
+  -e SUPABASE_DB_URL="postgresql://..." \
+  -e MCP_PATH="/mcp-<random-32-char-hex>" \
+  travel-ranking
+```
+
+ChatGPT cannot reach `localhost`; use a public HTTPS host (Railway, Fly.io,
+Render, Cloud Run) or OpenAI's Secure MCP Tunnel. The server is read-only except
+for the two quote-cache tables, so a public endpoint relies on an unguessable
+`MCP_PATH`; set `MCP_PATH` to a random value rather than leaving `/mcp` public.
+Add `SERPAPI_API_KEY` only when live pricing is wanted.
+
+## 11. Measured Phase 3 local timings
+
+These are from the local PostGIS 15 workspace used for development, with warm
+downloads and a single-country scope:
+
+| Step | LU | Notes |
+| --- | --- | --- |
+| schema + scorer | < 1 s | `CREATE OR REPLACE FUNCTION` |
+| Ookla (LU bbox) | ~10 s | one HTTPS Parquet scan |
+| Overture transportation (LU bbox) | ~15 s | one S3 scan |
+| Mobility Database GTFS join | ~1 s | global CSV, 2.7k usable feeds |
+| Inside Airbnb (local fixture) | < 1 s | local files |
+| Transit stops, global Overture Places | ~25 min | 9,008 cities; S3-bound |
+| v3 ranking | < 1 s | expected sub-second on 13k rows |
+
+Full global Phase 3 is bandwidth-bound, especially the Overture transportation
+scan. Use `--countries` for a smoke test, then a single global pass when the
+network is stable.
+
+## 12. Third-party data, licences and provenance
+
+Every dataset in this project is third-party data. The only first-party
+artifacts are the derived scores, percentiles, `data_completeness` and the
+loader code. The full source-by-source registry, with URLs, licences, coverage,
+granularity and implementation status, is in
+[`docs/DATA_SOURCES.md`](docs/DATA_SOURCES.md); a measured snapshot is in
+[`docs/COVERAGE_REPORT.md`](docs/COVERAGE_REPORT.md).
+
+Implemented third-party sources:
+
+| Dimension | Source | Licence / terms | Coverage |
+| --- | --- | --- | --- |
+| Cities | GeoNames `cities15000` | CC BY; attribution required | global |
+| Airports | OurAirports | Unlicense/public domain | global |
+| Climate | WorldClim 2.1 `5m` | **non-commercial academic use; redistribution/commercial use requires permission** | global |
+| POIs | Overture Maps Places | CDLA-Permissive 2.0 (some source datasets Apache 2.0/CC0) | global |
+| Walkability/rail | Overture Maps Transportation | **ODbL; © OpenStreetMap contributors; share-alike for derived databases** | partial: 1,131 cities across DE/GB/TR/ES/FR/PT/SE/LU |
+| Broadband | Ookla Open Data | **CC BY-NC-SA 4.0; non-commercial; attribution required** | global tiles |
+| GTFS coverage | Mobility Database | catalog metadata CC0 1.0; individual feeds retain provider licences | global catalog |
+| Public transport stops | Overture Places transit facilities | CDLA-Permissive 2.0 / per-provider terms | global where Overture Places has facilities |
+| Housing (optional) | Inside Airbnb | CC BY 4.0; local currency, no FX conversion | city/regional dumps |
+| Tourism pressure (optional) | Eurostat `tour_occ_nin2m` + `demo_r_pjangrp3` | Eurostat reuse with attribution (CC BY 4.0 for editorial content; statistical data reuse subject to Eurostat notice) | EU/EFTA NUTS 2 |
+| Live quotes (optional) | SerpApi Google Flights/Hotels | proprietary API terms; not open data | query-time |
+
+**Important commercial-use caveats.** WorldClim and Ookla both restrict
+commercial use/redistribution; Overture Transportation is ODbL and
+share-alike; individual GTFS feeds and Inside Airbnb data carry their own
+terms. Do not redistribute the derived database commercially without checking
+those terms. `SerpApi` data is subject to SerpApi/Google terms.
+
+**Missing data policy.** Null means unavailable; it is never replaced with a
+fabricated city-level value. The v3 scorer neutral-imputes a missing dimension
+at `0.5` **only for ranking arithmetic**, and `data_completeness` continues to
+report the missing evidence. Where a global city-level official source does
+not exist (for example safety/crime or rent), the dimension remains absent and
+the candidate official sources are listed in `docs/DATA_SOURCES.md` rather
+than filled with a low-quality proxy.
+
+The supplementary official source currently implemented is Eurostat NUTS 2
+tourism pressure:
+
+```bash
+python bootstrap_supplemental.py --eurostat-tourism --year 2024
+```
+
+It assigns a city to a NUTS 2 region by official GISCO boundaries, stores the
+NUTS 2 annual nights and nights per NUTS 2 resident, and leaves non-EU or
+unpublished regions NULL.
+

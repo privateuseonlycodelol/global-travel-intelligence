@@ -1,0 +1,33 @@
+services:
+  mcp:
+    build: .
+    environment:
+      SUPABASE_DB_URL: "${SUPABASE_DB_URL:-}"
+      SERPAPI_API_KEY: "${SERPAPI_API_KEY:-}"
+      PORT: "8000"
+      MCP_PATH: "/mcp"
+      DUCKDB_MEMORY_LIMIT: "${DUCKDB_MEMORY_LIMIT:-12GiB}"
+      DUCKDB_TEMP_LIMIT: "${DUCKDB_TEMP_LIMIT:-8GiB}"
+    ports:
+      - "8000:8000"
+    volumes:
+      - ./data_cache:/app/data_cache
+      - ./duckdb_spill:/tmp/duckdb_spill
+    restart: unless-stopped
+
+  # Optional local PostGIS. Start it with:
+  #   docker compose --profile local-db up -d --build
+  # and set in .env:
+  #   SUPABASE_DB_URL=postgresql://postgres:travel@db:5432/travel_global
+  db:
+    image: postgis/postgis:15-3.4
+    profiles: ["local-db"]
+    environment:
+      POSTGRES_USER: postgres
+      POSTGRES_PASSWORD: travel
+      POSTGRES_DB: travel_global
+    ports:
+      - "5432:5432"
+    volumes:
+      - ./pgdata:/var/lib/postgresql/data
+    restart: unless-stopped

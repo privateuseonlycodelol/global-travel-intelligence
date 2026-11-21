@@ -1,0 +1,10 @@
+.venv/
+data_cache/
+duckdb_spill/
+pgdata/
+__pycache__/
+tests/__pycache__/
+*.pyc
+.env
+travel-src.tar.gz
+.git/
