@@ -102,6 +102,16 @@ class Admin1Tests(unittest.TestCase):
 
 
 class QualifierTests(unittest.TestCase):
+    def test_choice_reason(self):
+        exact = {"match": "exact", "weight": 1000}
+        self.assertIsNone(pp.choice_reason(exact, [], None))
+        self.assertIsNotNone(pp.choice_reason(exact, [], {"text": "TX", "applied": False}))
+        self.assertIsNotNone(pp.choice_reason({"match": "fuzzy"}, [], None))
+        self.assertIsNone(pp.choice_reason({"match": "prefix"}, [], None))
+        self.assertIsNotNone(pp.choice_reason({"match": "prefix"}, [{"match": "prefix"}], None))
+        self.assertIsNotNone(pp.choice_reason(exact, [{"match": "exact", "weight": 600}], None))
+        self.assertIsNone(pp.choice_reason(exact, [{"match": "exact", "weight": 100}], None))
+
     def test_split_qualifier(self):
         self.assertEqual(pp.split_qualifier("Porto, Portugal"), ("Porto", "Portugal"))
         self.assertEqual(pp.split_qualifier("Austin, TX"), ("Austin", "TX"))
@@ -128,6 +138,11 @@ class MetricSqlTests(unittest.TestCase):
         sql = pp.build_metric_sql(set(pp.TABLES.values()))
         self.assertIn("ORDER BY internet_latency_ms DESC", sql)
         self.assertIn("ORDER BY restaurant_count ASC", sql)
+
+    def test_ties_use_mid_rank(self):
+        sql = pp.build_metric_sql(set(pp.TABLES.values()))
+        self.assertIn("cume_dist()", sql)
+        self.assertIn("/ 2.0", sql)
 
     def test_poi_zero_is_excluded_from_ranking(self):
         sql = pp.build_metric_sql(set(pp.TABLES.values()))
@@ -160,6 +175,12 @@ class MetricEntryTests(unittest.TestCase):
         self.assertIsNone(entry["value"])
         self.assertNotIn("percentile_global", entry)
 
+    def test_dataset_missing_everywhere_is_not_loaded(self):
+        metric = next(x for x in pp.METRICS if x.key == "short_let_monthly_local")
+        entry = pp.metric_entry(metric, {"short_let_monthly_local__n_global": 0,
+                                         "destination_id": "gn-1"})
+        self.assertEqual(entry["status"], "not_loaded")
+
     def test_single_city_country_has_no_country_percentile(self):
         entry = pp.metric_entry(self.metric, {
             "restaurant_count": 5, "restaurant_count__pct_country": 0.0,
@@ -177,11 +198,21 @@ class MetricEntryTests(unittest.TestCase):
         self.assertEqual(pp.percentile_band(10, None), "smallest 25%")
         self.assertIsNone(pp.percentile_band(None, "higher"))
 
+    def test_price_bands_use_price_words(self):
+        self.assertEqual(pp.percentile_band(30, "lower", "price_level_vs_usd"), "pricier than most")
+        self.assertEqual(pp.percentile_band(95, "lower", "price_level_vs_usd"), "cheapest 10%")
+        self.assertEqual(pp.percentile_reading(29.6, "lower", 202, "countries", "price_level_vs_usd"),
+                         "cheaper than 29% of the 202 countries with data")
+
     def test_reading_spells_out_direction(self):
         self.assertEqual(pp.percentile_reading(29.6, "lower", 202, "countries"),
-                         "lower than 30% of the 202 countries with data")
+                         "lower than 29% of the 202 countries with data")
         self.assertEqual(pp.percentile_reading(91.7, None, 13101, "cities"),
-                         "larger than 92% of the 13,101 cities with data")
+                         "larger than 91% of the 13,101 cities with data")
+        self.assertEqual(pp.percentile_reading(99.5, None, 13101, "cities"),
+                         "larger than 99% of the 13,101 cities with data")
+        self.assertEqual(pp.percentile_reading(100.0, "higher", 10, "cities"),
+                         "higher than 100% of the 10 cities with data")
         self.assertIsNone(pp.percentile_reading(50, "higher", 1, "cities"))
 
     def test_zero_poi_count_is_none_listed_not_ranked(self):
@@ -309,17 +340,34 @@ class LiveDatabaseTests(unittest.TestCase):
                 ("Porto, Portugal", "Porto", "PT"), ("Valencia, Spain", "Valencia", "ES"),
                 ("London, Ontario", "London", "CA"), ("London, UK", "London", "GB"),
                 ("Portland, ME", "Portland", "US"), ("Washington, DC", "Washington", "US"),
+                ("London, ON", "London", "CA"), ("Victoria, BC", "Victoria", "CA"),
+                ("Sydney, NSW", "Sydney", "AU"), ("Perth, WA", "Perth", "AU"),
             ):
-                resolved = pp.resolve_place(cur, query)["resolved"]
+                result = pp.resolve_place(cur, query)
+                resolved = result["resolved"]
                 self.assertEqual((resolved["name"], resolved["country_iso2"]),
                                  (expected_name, expected_country), query)
+                self.assertFalse(result["needs_choice"], query)
             item_wins = pp.resolve_place(cur, "Madrid, ES", country_iso2="PT")
             self.assertEqual(item_wins["resolved"]["country_iso2"], "ES")
 
-    def test_fuzzy_guess_needs_choice(self):
+    def test_unsafe_guesses_need_choice(self):
         with self.conn.cursor() as cur:
-            self.assertTrue(pp.resolve_place(cur, "Lisbn")["needs_choice"])
-            self.assertFalse(pp.resolve_place(cur, "Lisbon")["needs_choice"])
+            for query in ("Lisbn", "Paris, TX", "Naples, FL", "Portland, UK", "Bath",
+                          "Barca", "Springfield", "Richmond, CA"):
+                self.assertTrue(pp.resolve_place(cur, query)["needs_choice"], query)
+            for query in ("Lisbon", "Paris", "Portland", "London", "Porto"):
+                self.assertFalse(pp.resolve_place(cur, query)["needs_choice"], query)
+
+    def test_airport_codes_do_not_beat_city_names(self):
+        with self.conn.cursor() as cur:
+            self.assertEqual(pp.resolve_place(cur, "San")["resolved"]["country_iso2"], "ML")
+            self.assertEqual(pp.resolve_place(cur, "LIS")["resolved"]["name"], "Lisbon")
+
+    def test_candidates_carry_region(self):
+        with self.conn.cursor() as cur:
+            regions = {m["region"] for m in pp.search_places(cur, "Portland")["matches"]}
+        self.assertTrue({"Oregon", "Maine"} <= regions)
 
     def test_price_levels_are_plausible(self):
         with self.conn.cursor() as cur:

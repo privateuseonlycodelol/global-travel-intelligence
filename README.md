@@ -600,8 +600,17 @@ Name lookup rules:
 - When the best match is only fuzzy, `place_profile`, `compare_places` and
   `inspect_destination` return `needs_choice: true` with candidates instead of
   describing a possibly wrong city.
+- A qualifier that matches no loaded city ("Paris, TX": Paris, Texas is under
+  40,000 people), a prefix shared by several cities ("Bath"), or several
+  same-name cities of similar size ("Springfield") also return `needs_choice`
+  with a `reason`. Candidates include their state/province (`region`).
+  Canadian and Australian abbreviations (ON, BC, NSW, WA, ...) are understood.
+- All-caps 3-4 letter alternate names (mostly airport codes such as SAN or
+  GOA) only count as exact when typed in capitals.
 - POI counts of zero are reported as `status: none_listed` and are not ranked:
   in Overture Maps, zero usually means missing coverage.
+- Tied values share the middle of their rank range. Country rankings use each
+  country's latest available year, so years can differ; quote them.
 
 `inspect_destination` now returns the 12-month climate once, under `climate`;
 the duplicate `climate_monthly` and `climate_12m` keys were removed.

@@ -1159,9 +1159,11 @@ def _choice_payload(place: str, resolution: dict[str, Any]) -> dict[str, Any]:
     return {
         "needs_choice": True,
         "query": place,
+        "reason": resolution.get("choice_reason"),
         "message": (
-            f"{place!r} does not exactly match a loaded city. Ask the user which "
-            "of these they mean, then call again with its destination_id."
+            f"{place!r} cannot be matched to one city with confidence. Ask the "
+            "user which of these they mean (or whether none), then call again "
+            "with its destination_id."
         ),
         "candidates": [resolution["resolved"], *resolution["other_matches"]],
     }
@@ -1275,6 +1277,8 @@ def compare_places(
                 )
             comparison = place_profiles.build_comparison(cur, ids)
     payload = {
+        # True when an input was set aside: ask about it before relying on this.
+        "needs_choice": bool(choices),
         "matches": resolutions,
         "unresolved": unresolved,
         "choices": choices,
