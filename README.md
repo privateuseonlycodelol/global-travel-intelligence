@@ -589,11 +589,14 @@ and the country section reports `status: not_loaded`.
 
 Name lookup rules:
 
-- A trailing `, <qualifier>` is read as a country code, country name or common
-  synonym (`UK`, `USA`), or as a state/province (`Austin, TX`,
-  `London, Ontario`). It overrides the `country_iso2` argument. If nothing
-  matches with the qualifier, the name is searched alone and
-  `qualifier.applied` is `false`.
+- Trailing `, <qualifier>` parts are read as a country code, country name or
+  common synonym (`UK`, `USA`), or as a state/province/UK nation
+  (`Austin, TX`, `London, Ontario`, `Glasgow, Scotland`). Several can be
+  combined (`Austin, Texas, USA`); all must match. Raw region codes are only
+  matched for US states, because other countries' GeoNames codes collide with
+  ISO country codes. The `country_iso2` argument is read the same way when no
+  qualifier is typed; with one, it is tried first as the country of a region
+  code (`Salem, OR` + `US`), and a result outside it asks the user.
 - An exact official name beats an exact alternate name unless the
   alternate-name city is more than 5x larger (`Porto` → Portugal,
   `St Petersburg` → Russia).
@@ -609,8 +612,15 @@ Name lookup rules:
   GOA) only count as exact when typed in capitals.
 - POI counts of zero are reported as `status: none_listed` and are not ranked:
   in Overture Maps, zero usually means missing coverage.
-- Tied values share the middle of their rank range. Country rankings use each
-  country's latest available year, so years can differ; quote them.
+- If a bare name is also a region whose largest city is bigger than the
+  matched town (`Bali`), the tool asks and lists cities in that region.
+- Percentiles and bands place ties mid-range; `reading_*` counts only places
+  with a strictly worse value ("higher than 62% of the other 3,999 cities").
+  Country rankings use each country's latest available year, so years can
+  differ; quote them.
+- `compare_places` asks about every uncertain name before comparing, marks
+  `partial: true` when a name is not loaded, and leaves `best` empty when the
+  top two values are within 5%.
 
 `inspect_destination` now returns the 12-month climate once, under `climate`;
 the duplicate `climate_monthly` and `climate_12m` keys were removed.

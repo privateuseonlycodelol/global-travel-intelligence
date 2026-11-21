@@ -1258,6 +1258,14 @@ def compare_places(
     with _get_pool().connection() as conn:
         with conn.cursor() as cur:
             ids, resolutions, unresolved, choices = _resolve_many(cur, requested, country_iso2)
+            if choices:
+                # Ask about every uncertain name before comparing anything.
+                return _jsonable({
+                    "needs_choice": True,
+                    "matches": resolutions,
+                    "choices": choices,
+                    "unresolved": unresolved,
+                })
             if len(ids) < 2:
                 if choices:
                     return _jsonable({
@@ -1277,8 +1285,12 @@ def compare_places(
                 )
             comparison = place_profiles.build_comparison(cur, ids)
     payload = {
-        # True when an input was set aside: ask about it before relying on this.
-        "needs_choice": bool(choices),
+        "needs_choice": False,
+        "partial": bool(unresolved),
+        **({"partial_message": (
+            "Not found among loaded cities (population >= 40,000): "
+            + ", ".join(unresolved) + ". Tell the user this comparison leaves them out."
+        )} if unresolved else {}),
         "matches": resolutions,
         "unresolved": unresolved,
         "choices": choices,

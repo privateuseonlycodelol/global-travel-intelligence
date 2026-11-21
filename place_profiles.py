@@ -68,6 +68,12 @@ POI_NOTE = (
     "and Europe, so a low or zero count can mean missing map data."
 )
 
+OVERTURE_TRANSPORT_SOURCE = (
+    "CASE WHEN m.pedestrian_segments_2km IS NOT NULL OR m.rail_segments_5km IS NOT NULL "
+    "THEN 'Overture Maps Transportation' END"
+)
+OVERTURE_TRANSPORT_PERIOD = "substring(m.observed_period from 'overture-[^;]+')"
+
 TABLES = {
     "p": "poi_metrics",
     "m": "mobility_metrics",
@@ -77,7 +83,8 @@ TABLES = {
 }
 
 METRICS: tuple[Metric, ...] = (
-    Metric("population", "d", "population", "City population (city proper, not metro)",
+    Metric("population", "d", "population",
+           "Population (GeoNames; usually the city proper, sometimes the wider city)",
            "people", None, "basics", "'GeoNames cities15000'", "NULL"),
     Metric("museum_culture_count", "p", "museum_culture_count",
            "Museums, galleries and cultural venues listed in Overture Maps within 5 km",
@@ -93,19 +100,23 @@ METRICS: tuple[Metric, ...] = (
            value_sql="CASE WHEN p.restaurant_count > 0 THEN p.cuisine_entropy END"),
     Metric("pedestrian_street_share", "m", "pedestrian_ratio_2km",
            "Share of street segments within 2 km that are pedestrian/cycle paths",
-           "ratio 0-1", "higher", "getting_around", "m.source", "m.observed_period",
+           "ratio 0-1", "higher", "getting_around", OVERTURE_TRANSPORT_SOURCE,
+           OVERTURE_TRANSPORT_PERIOD,
            note="Overture Transportation; loaded only for some countries."),
     Metric("transit_stations_5km", "m", "transit_stops_5km",
            "Bus, rail and metro stations within 5 km", "stations", "higher",
            "getting_around", "m.transit_stops_source", "m.transit_stops_period",
            note="Station/facility count, not service frequency."),
     Metric("transit_timetable_feeds", "m", "gtfs_active_feeds",
-           "Public-transport timetable (GTFS) feeds covering the city", "feeds",
-           "higher", "getting_around", "m.source", "m.observed_period",
-           note="Feed coverage, not service quality; regional feeds count too."),
+           "Public-transport timetable (GTFS) feeds whose area includes the city "
+           "(potential coverage)", "feeds", "higher", "getting_around",
+           "CASE WHEN m.gtfs_active_feeds IS NOT NULL THEN 'Mobility Database GTFS' END",
+           "substring(m.observed_period from 'mobility-[0-9]{4}-[0-9]{2}')",
+           note=("Counts feeds whose bounding box contains the city centre; it does not "
+                 "confirm that routes or stops serve the city, or how often.")),
     Metric("rail_segments_5km", "m", "rail_segments_5km",
            "Rail track segments within 5 km", "segments", "higher",
-           "getting_around", "m.source", "m.observed_period"),
+           "getting_around", OVERTURE_TRANSPORT_SOURCE, OVERTURE_TRANSPORT_PERIOD),
     Metric("internet_download_mbps", "b", "median_down_mbps",
            "Typical fixed-broadband download speed", "Mbps", "higher",
            "internet", "b.source", "b.observed_period"),
@@ -148,7 +159,8 @@ NOT_IN_DATABASE = [
 HOW_TO_READ = (
     "percentile_global: 0-100 among all loaded cities that have this value; 100 is "
     "best (most for 'higher' metrics, least for 'lower' metrics; for population, "
-    "largest). band_* and reading_* say the same in words, with direction. "
+    "largest), with ties placed mid-range. band_* puts it in words; reading_* "
+    "counts only places with a strictly worse value. "
     "percentile_in_country is the same within the country. status 'not_measured' "
     "means the source has no value for this city; 'none_listed' means the map "
     "source lists none, which usually reflects missing coverage rather than zero. "
@@ -209,8 +221,14 @@ def build_metric_sql(available_tables: set[str]) -> str:
         global_pct = (
             "NULL::double precision" if metric.country_only else mid_rank(f"({k} IS NULL)")
         )
+        strict = (
+            "NULL::double precision" if metric.country_only else
+            f"CASE WHEN {k} IS NULL THEN NULL ELSE percent_rank() OVER "
+            f"(PARTITION BY ({k} IS NULL) ORDER BY {k} {order}) END"
+        )
         ranked_cols += [
             k, f"{k}__raw", f"{k}__source", f"{k}__period",
+            f"{strict} AS {k}__beats_global",
             f"{global_pct} AS {k}__pct_global",
             f"{mid_rank(f'country_iso2, ({k} IS NULL)')} AS {k}__pct_country",
             f"count({k}) OVER () AS {k}__n_global",
@@ -250,15 +268,29 @@ def percentile_band(pct: float | None, better: str | None = "higher",
     return labels[-1]
 
 
-def percentile_reading(pct: float | None, better: str | None, n: int, of: str,
+def percentile_reading(beats: float | None, better: str | None, n: int, of: str,
                        key: str | None = None) -> str | None:
-    """'lower than 70% of 200 countries with data' -- direction spelled out."""
-    if pct is None or n < 2:
+    """Plain words from the share of *other* places with a strictly worse value.
+
+    ``beats`` is 0-100: the percentage of the other n-1 places this one
+    strictly beats (ties are not counted as beaten).
+    """
+    if beats is None or n < 2:
         return None
-    word = "cheaper" if key in PRICE_KEYS else {
-        "higher": "higher", "lower": "lower"}.get(better or "", "larger")
-    shown = math.floor(pct) if pct < 100 else 100  # never claim 100% unless it is
-    return f"{word} than {shown}% of the {n:,} {of} with data"
+    if key in PRICE_KEYS:
+        word, top, bottom = "cheaper", "cheapest", "priciest"
+    elif better == "lower":
+        word, top, bottom = "lower", "lowest", "highest"
+    elif better == "higher":
+        word, top, bottom = "higher", "highest", "lowest"
+    else:
+        word, top, bottom = "larger", "largest", "smallest"
+    others = n - 1
+    if beats >= 100:
+        return f"the {top} of the {n:,} {of} with data"
+    if beats <= 0:
+        return f"the {bottom} (or tied for {bottom}) of the {n:,} {of} with data"
+    return f"{word} than {math.floor(beats)}% of the other {others:,} {of} with data"
 
 
 def _pct(value: Any) -> float | None:
@@ -294,7 +326,8 @@ def metric_entry(metric: Metric, row: dict[str, Any]) -> dict[str, Any]:
             "percentile_global": pct_global,
             "band_global": percentile_band(pct_global, metric.better, metric.key),
             "reading_global": percentile_reading(
-                pct_global, metric.better, n_global, "cities", metric.key),
+                _pct(row.get(f"{k}__beats_global")), metric.better, n_global, "cities",
+                metric.key),
             "cities_with_data_global": n_global,
             "percentile_in_country": pct_country if n_country > 1 else None,
             "cities_with_data_in_country": n_country,
@@ -395,6 +428,8 @@ def fetch_country_context(cur: Any, country_codes: list[str]) -> dict[str, dict[
             "status": "loaded",
             "facts": row,
             "indicators": [],
+            "note": ("No World Bank indicators are published for this country or "
+                     "territory; safety, price and air-quality context is unavailable."),
         }
     if "country_indicators" in available:
         cur.execute(
@@ -414,6 +449,10 @@ def fetch_country_context(cur: Any, country_codes: list[str]) -> dict[str, dict[
                                   * count(*) OVER (PARTITION BY indicator) - 1)
                                  / (count(*) OVER (PARTITION BY indicator) - 1)) / 2.0
                        END AS pct,
+                       CASE WHEN better = 'lower'
+                            THEN percent_rank() OVER (PARTITION BY indicator ORDER BY value DESC)
+                            ELSE percent_rank() OVER (PARTITION BY indicator ORDER BY value)
+                       END AS beats,
                        count(*) OVER (PARTITION BY indicator) AS n
                 FROM country_indicators
             )
@@ -426,6 +465,7 @@ def fetch_country_context(cur: Any, country_codes: list[str]) -> dict[str, dict[
             if code not in out or "indicators" not in out[code]:
                 continue
             pct = _pct(row["pct"])
+            out[code].pop("note", None)
             out[code]["indicators"].append({
                 "key": row["indicator"],
                 "label": row["label"],
@@ -436,7 +476,8 @@ def fetch_country_context(cur: Any, country_codes: list[str]) -> dict[str, dict[
                 "percentile_among_countries": pct,
                 "band_among_countries": percentile_band(pct, row["better"], row["indicator"]),
                 "reading_among_countries": percentile_reading(
-                    pct, row["better"], int(row["n"]), "countries", row["indicator"]),
+                    _pct(row["beats"]), row["better"], int(row["n"]), "countries",
+                    row["indicator"]),
                 "countries_with_data": int(row["n"]),
                 "source": row["source"],
                 "source_indicator": row["source_indicator"],
@@ -445,26 +486,31 @@ def fetch_country_context(cur: Any, country_codes: list[str]) -> dict[str, dict[
 
 
 COUNTRY_SYNONYMS = {
-    "uk": "GB", "u k": "GB", "england": "GB", "scotland": "GB", "wales": "GB",
-    "great britain": "GB", "britain": "GB", "usa": "US", "u s a": "US", "u s": "US",
+    "uk": "GB", "u k": "GB", "great britain": "GB", "britain": "GB", "usa": "US", "u s a": "US", "u s": "US",
     "america": "US", "united states of america": "US", "holland": "NL",
     "czechia": "CZ", "south korea": "KR", "korea": "KR", "russia": "RU",
     "turkiye": "TR", "uae": "AE", "ivory coast": "CI", "vietnam": "VN",
 }
-OFFICIAL_NAME_WEIGHT = 5  # an exact official-name match beats an alternate name
-                          # unless the alternate-name city is > 5x larger
+OFFICIAL_NAME_WEIGHT = 10  # an exact official-name match beats an alternate name
+                           # unless the alternate-name city is > 10x larger
+
+
+def split_qualifiers(query: str) -> tuple[str, list[str]]:
+    """'Austin, Texas, USA' -> ('Austin', ['Texas', 'USA'])."""
+    parts = [part.strip() for part in (query or "").split(",")]
+    if len(parts) < 2 or not parts[0] or any(not p or len(p) > 60 for p in parts[1:]):
+        return (query or "").strip(), []
+    return parts[0], parts[1:]
 
 
 def split_qualifier(query: str) -> tuple[str, str | None]:
-    """'Porto, Portugal' -> ('Porto', 'Portugal'); 'Austin, TX' -> ('Austin', 'TX')."""
-    text = (query or "").strip()
-    if "," not in text:
-        return text, None
-    head, _, tail = text.rpartition(",")
-    head, tail = head.strip(), tail.strip()
-    if not head or not tail or len(tail) > 60:
-        return text, None
-    return head, tail
+    """'Porto, Portugal' -> ('Porto', 'Portugal'); only the last qualifier."""
+    head, qualifiers = split_qualifiers(query)
+    if not qualifiers:
+        return head, None
+    if len(qualifiers) > 1:
+        return ", ".join([head, *qualifiers[:-1]]), qualifiers[-1]
+    return head, qualifiers[0]
 
 
 def split_country_suffix(query: str) -> tuple[str, str | None]:
@@ -488,20 +534,33 @@ REGION_ABBREVIATIONS = {
 SIMILAR_SIZE_RATIO = 0.5  # rival exact match at >= half the weighted size -> ask
 
 
-def _qualifier_filter(
-    cur: Any, qualifier: str, available: set[str]
-) -> tuple[str, dict[str, Any], list[str], bool]:
-    """SQL filter for ', <country or region>', the matched countries, and whether
-    the qualifier names anything known at all."""
-    q_norm = normalize_name(qualifier)
-    q_code = re.sub(r"[^A-Za-z]", "", qualifier).upper()
-    known_countries: set[str] = set()
+def _country_lookup(cur: Any, available: set[str]) -> tuple[set[str], dict[str, str]]:
+    known: set[str] = set()
     names: dict[str, str] = {}
     if "country_facts" in available:
         cur.execute("SELECT country_iso2, name FROM country_facts")
         for row in cur.fetchall():
-            known_countries.add(str(row["country_iso2"]))
+            known.add(str(row["country_iso2"]))
             names[normalize_name(row["name"])] = str(row["country_iso2"])
+    return known, names
+
+
+def _qualifier_filter(
+    cur: Any, qualifier: str, available: set[str], index: int = 0,
+    restrict_country: str | None = None,
+) -> tuple[str, dict[str, Any], list[str], bool]:
+    """SQL filter for one ', <country or region>' qualifier, the countries it
+    names, and whether it names anything known at all.
+
+    Raw two/three-letter region codes are only matched for the US (state
+    postal codes); elsewhere GeoNames codes collide with ISO country codes
+    (Serbia's "SE", Switzerland's "BE"). Canadian/Australian abbreviations go
+    through REGION_ABBREVIATIONS. ``restrict_country`` limits the region
+    reading to one country (``country_iso2`` given alongside "Salem, IN").
+    """
+    q_norm = normalize_name(qualifier)
+    q_code = re.sub(r"[^A-Za-z]", "", qualifier).upper()
+    known_countries, names = _country_lookup(cur, available)
     countries: set[str] = set()
     if q_norm in COUNTRY_SYNONYMS:
         countries.add(COUNTRY_SYNONYMS[q_norm])
@@ -511,25 +570,67 @@ def _qualifier_filter(
         code = "GB" if q_code == "UK" else q_code
         if not known_countries or code in known_countries:
             countries.add(code)
-    region_norms = sorted({q_norm, *( [REGION_ABBREVIATIONS[q_code]] if q_code in REGION_ABBREVIATIONS else [])})
-    region_code = q_code if 2 <= len(q_code) <= 3 else ""
+    region_norms = sorted({q_norm, *([REGION_ABBREVIATIONS[q_code]]
+                                     if q_code in REGION_ABBREVIATIONS else [])})
+    us_code = q_code if 2 <= len(q_code) <= 3 else ""
+    sfx = f"_{index}"
+    params: dict[str, Any] = {f"q_countries{sfx}": sorted(countries)}
+    clauses = [] if restrict_country else [f"d.country_iso2 = ANY(%(q_countries{sfx})s)"]
     region_known = False
-    clauses = ["d.country_iso2 = ANY(%(q_countries)s)"]
-    params: dict[str, Any] = {"q_countries": sorted(countries)}
     if "destination_admin1" in available:
+        region_sql = (
+            f"SELECT r.destination_id FROM destination_admin1 r "
+            f"JOIN destinations rd ON rd.destination_id = r.destination_id "
+            f"WHERE (r.admin1_norm = ANY(%(q_norms{sfx})s) "
+            f"OR (%(q_code{sfx})s <> '' AND rd.country_iso2 = 'US' AND r.admin1_code = %(q_code{sfx})s))"
+            + (f" AND rd.country_iso2 = %(q_restrict{sfx})s" if restrict_country else "")
+        )
+        params |= {f"q_norms{sfx}": region_norms, f"q_code{sfx}": us_code,
+                   f"q_restrict{sfx}": restrict_country}
         cur.execute(
-            "SELECT EXISTS (SELECT 1 FROM destination_admin1 WHERE admin1_norm = ANY(%s) "
-            "OR (%s <> '' AND admin1_code = %s)) AS hit",
-            (region_norms, region_code, region_code),
+            "SELECT EXISTS (" + region_sql.replace(f"%(q_norms{sfx})s", "%(n)s")
+            .replace(f"%(q_code{sfx})s", "%(c)s").replace(f"%(q_restrict{sfx})s", "%(r)s")
+            + ") AS hit",
+            {"n": region_norms, "c": us_code, "r": restrict_country},
         )
         region_known = bool(cur.fetchone()["hit"])
-        clauses.append(
-            "d.destination_id IN (SELECT destination_id FROM destination_admin1 "
-            "WHERE admin1_norm = ANY(%(q_norms)s) OR (%(q_code)s <> '' AND admin1_code = %(q_code)s))"
-        )
-        params |= {"q_norms": region_norms, "q_code": region_code}
+        clauses.append(f"d.destination_id IN ({region_sql})")
+    if not clauses:
+        return "AND FALSE", params, [], False
     return ("AND (" + " OR ".join(clauses) + ")", params, sorted(countries),
             bool(countries) or region_known)
+
+
+def _combine_filters(
+    cur: Any, qualifiers: list[str], available: set[str],
+    restrict_country: str | None = None,
+) -> tuple[str, dict[str, Any], list[str], bool]:
+    """AND together one filter per qualifier ("Texas" AND "USA")."""
+    sql, params, countries, recognized = "", {}, [], True
+    for index, qualifier in enumerate(qualifiers):
+        part_sql, part_params, part_countries, part_known = _qualifier_filter(
+            cur, qualifier, available, index, restrict_country)
+        sql += " " + part_sql
+        params |= part_params
+        countries = part_countries or countries
+        recognized = recognized and part_known
+    return sql, params, countries, recognized
+
+
+def _candidate_rows_by_id(cur: Any, destination_id: str, available: set[str]) -> list[dict[str, Any]]:
+    has_regions = "destination_admin1" in available
+    cur.execute(
+        f"""
+        SELECT d.destination_id, d.name, d.country_iso2, d.population, d.timezone,
+               d.lat, d.lon, {"r.admin1_name" if has_regions else "NULL::text"} AS region
+        FROM destinations d
+        {"LEFT JOIN destination_admin1 r ON r.destination_id = d.destination_id" if has_regions else ""}
+        WHERE d.destination_id = %s
+        """,
+        (destination_id,),
+    )
+    return [dict(r) | {"match": "id", "matched_alias": None, "similarity": 1.0}
+            for r in cur.fetchall()]
 
 
 def _looks_like_code(alias: str) -> bool:
@@ -631,44 +732,50 @@ def search_places(
     loaded city matches with it, the name is searched alone and
     ``qualifier.applied`` is false.
     """
-    text, qualifier = split_qualifier(query)
+    text, qualifiers = split_qualifiers(query)
     limit = max(1, min(25, int(limit)))
     norm = normalize_name(text)
     if not norm:
         raise ValueError("query must contain a place name.")
-
-    if DESTINATION_ID_RE.match(text.strip()):
-        cur.execute(
-            "SELECT destination_id, name, country_iso2, population, timezone, lat, lon "
-            "FROM destinations WHERE destination_id = %s",
-            (text.strip(),),
-        )
-        rows = [dict(r) | {"match": "id", "matched_alias": None, "similarity": 1.0}
-                for r in cur.fetchall()]
-        return {"query": query, "qualifier": None, "matches": rows}
-
     available = _existing_tables(
         cur, ["destination_aliases", "destination_admin1", "country_facts"]
     )
+
+    if DESTINATION_ID_RE.match(text.strip()):
+        rows = _candidate_rows_by_id(cur, text.strip(), available)
+        return {"query": query, "qualifier": None, "matches": rows}
+
+    arg_country = (country_iso2 or "").strip() or None
+    if not qualifiers and arg_country:
+        # A country argument is read exactly like a typed ", <country>".
+        qualifiers = [arg_country]
+        arg_country = None
     qualifier_info: dict[str, Any] | None = None
     rows: list[dict[str, Any]] = []
-    if qualifier:
-        filter_sql, filter_params, countries, recognized = _qualifier_filter(
-            cur, qualifier, available)
-        rows = _candidate_rows(cur, text, norm, filter_sql, filter_params, available)
-        qualifier_info = {"text": qualifier, "country_codes": countries,
+    if qualifiers:
+        attempts: list[tuple[str, dict[str, Any], list[str], bool]] = []
+        if arg_country:
+            # "Salem, IN" with country_iso2="US": try IN as a US region first.
+            attempts.append(_combine_filters(
+                cur, qualifiers, available, restrict_country=arg_country.upper()))
+        attempts.append(_combine_filters(cur, qualifiers, available))
+        countries: list[str] = []
+        recognized = False
+        for filter_sql, filter_params, countries, recognized in attempts:
+            rows = _candidate_rows(cur, text, norm, filter_sql, filter_params, available)
+            if rows:
+                break
+        qualifier_info = {"text": ", ".join(qualifiers), "country_codes": countries,
                           "recognized": recognized, "applied": bool(rows)}
+        if arg_country and rows and all(
+                r["country_iso2"] != arg_country.upper() for r in rows):
+            qualifier_info["conflicts_with_country_iso2"] = arg_country.upper()
         if not rows:
             # Not a country/region we know, or no loaded city there: search the
             # name alone, and let resolve_place ask before using the result.
             rows = _candidate_rows(cur, text, norm, "", {}, available)
     else:
-        country = (country_iso2 or "").strip().upper() or None
-        country_sql = "AND d.country_iso2 = %(country)s" if country else ""
-        rows = _candidate_rows(cur, text, norm, country_sql, {"country": country}, available)
-        if country:
-            qualifier_info = {"text": country, "country_codes": [country],
-                              "recognized": True, "applied": True}
+        rows = _candidate_rows(cur, text, norm, "", {}, available)
 
     tier_names = {4: "exact", 3: "exact_alternate_name", 2: "prefix", 1: "fuzzy"}
     matches = [
@@ -694,13 +801,16 @@ def search_places(
 def choice_reason(chosen: dict[str, Any], others: list[dict[str, Any]],
                   qualifier: dict[str, Any] | None) -> str | None:
     """Why the best match is not safe to present as *the* city, or None."""
+    if qualifier and qualifier.get("conflicts_with_country_iso2"):
+        return (f"{qualifier['text']!r} matched outside the requested country "
+                f"{qualifier['conflicts_with_country_iso2']}.")
     if qualifier and not qualifier.get("applied"):
         return (f"No loaded city (population >= 40,000) matches the name in "
                 f"{qualifier['text']!r}; these matches are elsewhere.")
     if chosen["match"] == "fuzzy":
         return "The name only approximately matches a loaded city."
-    if chosen["match"] == "prefix" and others:
-        return "The name is only the start of several loaded city names."
+    if chosen["match"] == "prefix":
+        return "The name is only the start of a loaded city name, not a full match."
     if chosen["match"] in ("exact", "exact_alternate_name"):
         top = chosen.get("weight") or 0
         rivals = [o for o in others
@@ -709,6 +819,40 @@ def choice_reason(chosen: dict[str, Any], others: list[dict[str, Any]],
         if rivals:
             return "Several loaded cities of similar size share this name."
     return None
+
+
+def _same_name_region_cities(
+    cur: Any, place: str, chosen: dict[str, Any]
+) -> tuple[dict[str, Any], list[dict[str, Any]]] | None:
+    """If the bare name is a region ("Bali") that does not contain the chosen
+    city and whose largest loaded city is at least as big, return the region
+    and its largest loaded cities. A big city that merely shares its name with
+    a smaller region (Taipei vs. the "Taipei" region of New Taipei) is kept."""
+    chosen_id = chosen["destination_id"]
+    text, qualifiers = split_qualifiers(place)
+    if qualifiers or "destination_admin1" not in _existing_tables(cur, ["destination_admin1"]):
+        return None
+    cur.execute(
+        """
+        SELECT d.destination_id, d.name, r.admin1_name AS region, d.country_iso2,
+               d.population, d.timezone, d.lat, d.lon
+        FROM destination_admin1 r JOIN destinations d USING (destination_id)
+        WHERE r.admin1_norm = %s
+        ORDER BY d.population DESC
+        """,
+        (normalize_name(text),),
+    )
+    rows = [dict(r) for r in cur.fetchall()]
+    if not rows or any(r["destination_id"] == chosen_id for r in rows):
+        return None
+    if int(rows[0]["population"] or 0) < int(chosen.get("population") or 0):
+        return None
+    cities = [
+        r | {"lat": round(float(r["lat"]), 4), "lon": round(float(r["lon"]), 4),
+             "matched_alias": None, "match": "in_region", "similarity": None}
+        for r in rows[:3]
+    ]
+    return {"name": rows[0]["region"], "country_iso2": rows[0]["country_iso2"]}, cities
 
 
 def resolve_place(cur: Any, place: str, country_iso2: str | None = None) -> dict[str, Any]:
@@ -730,6 +874,13 @@ def resolve_place(cur: Any, place: str, country_iso2: str | None = None) -> dict
         or any(o["match"] in exact_kinds for o in others)
     )
     reason = choice_reason(chosen, others, qualifier)
+    region_cities = _same_name_region_cities(cur, place, chosen)
+    if region_cities and reason is None:
+        region, cities = region_cities
+        reason = (f"{region['name']!r} is also a region ({region['country_iso2']}); "
+                  f"the best city match is not in it.")
+        known = {m["destination_id"] for m in matches}
+        others = others + [c for c in cities if c["destination_id"] not in known]
     for match in matches:
         match.pop("weight", None)
     return {
@@ -808,27 +959,34 @@ def build_comparison(cur: Any, destination_ids: list[str]) -> dict[str, Any]:
     country_context = fetch_country_context(cur, countries)
 
     metrics_out: list[dict[str, Any]] = []
+    not_loaded: list[str] = []
     for metric in METRICS:
         values: dict[str, Any] = {}
         comparable: dict[str, float] = {}
         for i in ids:
             entry = metric_entry(metric, metric_rows.get(i, {}))
             values[i] = {
-                "value": entry["value"],
-                "status": entry["status"],
-                "percentile_global": entry.get("percentile_global"),
-                "percentile_in_country": entry.get("percentile_in_country"),
+                key: entry.get(key)
+                for key in ("value", "status", "percentile_global", "band_global",
+                            "reading_global", "percentile_in_country", "source",
+                            "observed_period")
             }
             if entry["status"] == "measured":
                 comparable[i] = float(entry["value"])
+            if entry["status"] == "not_loaded" and metric.label not in not_loaded:
+                not_loaded.append(metric.label)
         best = None
         # Only name a winner when every compared city has a value.
         if (metric.better and len(comparable) == len(ids) and len(ids) >= 2
                 and not metric.country_only):
             pick = max if metric.better == "higher" else min
             best_value = pick(comparable.values())
+            ordered = sorted(comparable.values(), reverse=metric.better == "higher")
+            runner_up = ordered[1]
+            # Within 5% of the runner-up is too close to call a winner.
+            close = abs(best_value - runner_up) <= 0.05 * max(abs(best_value), abs(runner_up), 1e-9)
             winners = [i for i, v in comparable.items() if v == best_value]
-            best = winners[0] if len(winners) == 1 else None
+            best = winners[0] if len(winners) == 1 and not close else None
         metrics_out.append({
             "key": metric.key,
             "label": metric.label,
@@ -879,8 +1037,9 @@ def build_comparison(cur: Any, destination_ids: list[str]) -> dict[str, Any]:
         },
         "climate_note": CLIMATE_NOTE,
         "country_context": country_rows,
-        "not_in_database_for_any_city": NOT_IN_DATABASE,
+        "not_in_database_for_any_city": NOT_IN_DATABASE
+        + [label + " (dataset not loaded for any city)" for label in not_loaded],
         "how_to_read": HOW_TO_READ
-        + " 'best' is null when values tie, any compared city lacks data, or the "
-        "metric is in local currency.",
+        + " 'best' is null when values tie or are within 5%, any compared city lacks "
+        "data, or the metric is in local currency.",
     }

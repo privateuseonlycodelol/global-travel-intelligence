@@ -107,7 +107,7 @@ class QualifierTests(unittest.TestCase):
         self.assertIsNone(pp.choice_reason(exact, [], None))
         self.assertIsNotNone(pp.choice_reason(exact, [], {"text": "TX", "applied": False}))
         self.assertIsNotNone(pp.choice_reason({"match": "fuzzy"}, [], None))
-        self.assertIsNone(pp.choice_reason({"match": "prefix"}, [], None))
+        self.assertIsNotNone(pp.choice_reason({"match": "prefix"}, [], None))
         self.assertIsNotNone(pp.choice_reason({"match": "prefix"}, [{"match": "prefix"}], None))
         self.assertIsNotNone(pp.choice_reason(exact, [{"match": "exact", "weight": 600}], None))
         self.assertIsNone(pp.choice_reason(exact, [{"match": "exact", "weight": 100}], None))
@@ -117,6 +117,8 @@ class QualifierTests(unittest.TestCase):
         self.assertEqual(pp.split_qualifier("Austin, TX"), ("Austin", "TX"))
         self.assertEqual(pp.split_qualifier("Washington, D.C."), ("Washington", "D.C."))
         self.assertEqual(pp.split_qualifier("Lisbon"), ("Lisbon", None))
+        self.assertEqual(pp.split_qualifiers("Austin, Texas, USA"), ("Austin", ["Texas", "USA"]))
+        self.assertEqual(pp.split_qualifiers("Lisbon"), ("Lisbon", []))
         self.assertEqual(pp.split_qualifier(", PT"), (", PT", None))
 
 
@@ -202,17 +204,19 @@ class MetricEntryTests(unittest.TestCase):
         self.assertEqual(pp.percentile_band(30, "lower", "price_level_vs_usd"), "pricier than most")
         self.assertEqual(pp.percentile_band(95, "lower", "price_level_vs_usd"), "cheapest 10%")
         self.assertEqual(pp.percentile_reading(29.6, "lower", 202, "countries", "price_level_vs_usd"),
-                         "cheaper than 29% of the 202 countries with data")
+                         "cheaper than 29% of the other 201 countries with data")
+        self.assertEqual(pp.percentile_reading(100, "lower", 202, "countries", "price_level_vs_usd"),
+                         "the cheapest of the 202 countries with data")
 
-    def test_reading_spells_out_direction(self):
+    def test_reading_counts_only_strictly_beaten_others(self):
         self.assertEqual(pp.percentile_reading(29.6, "lower", 202, "countries"),
-                         "lower than 29% of the 202 countries with data")
-        self.assertEqual(pp.percentile_reading(91.7, None, 13101, "cities"),
-                         "larger than 91% of the 13,101 cities with data")
+                         "lower than 29% of the other 201 countries with data")
         self.assertEqual(pp.percentile_reading(99.5, None, 13101, "cities"),
-                         "larger than 99% of the 13,101 cities with data")
+                         "larger than 99% of the other 13,100 cities with data")
         self.assertEqual(pp.percentile_reading(100.0, "higher", 10, "cities"),
-                         "higher than 100% of the 10 cities with data")
+                         "the highest of the 10 cities with data")
+        self.assertEqual(pp.percentile_reading(0.0, "higher", 4000, "cities"),
+                         "the lowest (or tied for lowest) of the 4,000 cities with data")
         self.assertIsNone(pp.percentile_reading(50, "higher", 1, "cities"))
 
     def test_zero_poi_count_is_none_listed_not_ranked(self):
@@ -342,6 +346,8 @@ class LiveDatabaseTests(unittest.TestCase):
                 ("Portland, ME", "Portland", "US"), ("Washington, DC", "Washington", "US"),
                 ("London, ON", "London", "CA"), ("Victoria, BC", "Victoria", "CA"),
                 ("Sydney, NSW", "Sydney", "AU"), ("Perth, WA", "Perth", "AU"),
+                ("Austin, Texas, USA", "Austin", "US"), ("Portland, Oregon, USA", "Portland", "US"),
+                ("Belgrade, RS", "Belgrade", "RS"), ("Glasgow, Scotland", "Glasgow", "GB"),
             ):
                 result = pp.resolve_place(cur, query)
                 resolved = result["resolved"]
@@ -350,14 +356,27 @@ class LiveDatabaseTests(unittest.TestCase):
                 self.assertFalse(result["needs_choice"], query)
             item_wins = pp.resolve_place(cur, "Madrid, ES", country_iso2="PT")
             self.assertEqual(item_wins["resolved"]["country_iso2"], "ES")
+            salem = pp.resolve_place(cur, "Salem, OR", country_iso2="US")
+            self.assertEqual(salem["resolved"]["country_iso2"], "US")
+            uk = pp.resolve_place(cur, "London", country_iso2="UK")
+            self.assertEqual(uk["resolved"]["country_iso2"], "GB")
 
     def test_unsafe_guesses_need_choice(self):
         with self.conn.cursor() as cur:
             for query in ("Lisbn", "Paris, TX", "Naples, FL", "Portland, UK", "Bath",
-                          "Barca", "Springfield", "Richmond, CA"):
+                          "Barca", "Springfield", "Richmond, CA", "Aspen", "Bali",
+                          "London, Scotland", "Belgrade, SE"):
                 self.assertTrue(pp.resolve_place(cur, query)["needs_choice"], query)
-            for query in ("Lisbon", "Paris", "Portland", "London", "Porto"):
+            self.assertTrue(pp.resolve_place(cur, "Salem, IN", country_iso2="US")["needs_choice"])
+            self.assertEqual(pp.resolve_place(cur, "Cancun")["resolved"]["country_iso2"], "MX")
+            for query in ("Lisbon", "Paris", "Portland", "London", "Porto", "Madrid", "Taipei"):
                 self.assertFalse(pp.resolve_place(cur, query)["needs_choice"], query)
+
+    def test_region_name_offers_cities_in_region(self):
+        with self.conn.cursor() as cur:
+            bali = pp.resolve_place(cur, "Bali")
+        self.assertTrue(any(m.get("match") == "in_region" and m["country_iso2"] == "ID"
+                            for m in bali["other_matches"]))
 
     def test_airport_codes_do_not_beat_city_names(self):
         with self.conn.cursor() as cur:
