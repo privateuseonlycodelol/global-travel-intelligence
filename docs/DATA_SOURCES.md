@@ -299,7 +299,7 @@ Islington (449), Osaka (428), Paris (408), Geneva (392) and New York City
 | Coverage | Global; 10,351 urban areas built from 2025 OSM |
 | Granularity | Urban area (GHSL urban-centre boundary), not a neighbourhood |
 | Used by | `bootstrap_walkability.py` → `street_network_metrics` |
-| Status | **Implemented; 8,291 of 13,101 loaded cities matched in the reference run** |
+| Status | **Implemented; 8,444 of 13,101 loaded cities matched in the reference run** |
 | Notes | `intersect_count_clean_topo / built_up_area_m2` gives intersections per km²; `prop_deadend` gives dead-end share. Street network is the OSM drivable/public network, so pedestrian-only paths are mostly absent. |
 
 The GHSL urban-centre centroids used to match these indicators to cities come

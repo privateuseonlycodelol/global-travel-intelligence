@@ -72,6 +72,7 @@ CENTROIDS_GPKG_NAME = "GHS_UCDB_THEME_GEOGRAPHY_GLOBE_R2024A.gpkg"
 
 MAX_MATCH_KM = 25.0
 NEARBY_MATCH_KM = 12.0
+MAX_NAME_MATCH_KM = 100.0  # large urban centres can have a distant centroid
 MOLLWEIDE_RADIUS_M = 6371008.8  # ESRI:54009 World Mollweide
 
 SOURCE = (
@@ -263,9 +264,11 @@ def match_destinations(
 ) -> dict[str, Match]:
     """Match ``(destination_id, name, iso2, lat, lon)`` rows to urban centres.
 
-    A name match wins even when a different urban centre is slightly closer. A
-    nameless match is accepted only inside ``nearby_km``, which keeps a suburb
-    attached to its metro while refusing a separate town 20 km away.
+    A name match wins even when a different urban centre is slightly closer, and
+    is not limited by ``max_km``: a large urban centre's centroid can sit more
+    than 25 km from the city record (Phoenix is 26 km). A nameless match is
+    accepted only inside ``nearby_km``, which keeps a suburb attached to its
+    metro while refusing a separate town 20 km away.
     """
     grid: dict[tuple[int, int], list[UrbanCentre]] = {}
     for centre in centres.values():
@@ -283,9 +286,12 @@ def match_destinations(
                     if wanted_iso3 and centre.country_iso3 != wanted_iso3:
                         continue
                     distance = haversine_km(lat, lon, centre.lat, centre.lon)
-                    if distance > max_km:
-                        continue
                     name_hit = bool(wanted_name) and wanted_name in centre.names
+                    if name_hit:
+                        if distance > MAX_NAME_MATCH_KM:
+                            continue
+                    elif distance > max_km:
+                        continue
                     candidates.append((0 if name_hit else 1, distance, centre))
         candidates.sort(key=lambda item: (item[0], item[1]))
         for name_rank, distance, centre in candidates:

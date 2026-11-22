@@ -118,6 +118,16 @@ class MatchingTests(unittest.TestCase):
         )
         self.assertEqual(matches, {})
 
+    def test_name_match_survives_a_distant_urban_centre_centroid(self):
+        # Phoenix's GHSL centroid is ~26 km from the GeoNames point, beyond the
+        # nearby-match search radius.
+        city = centre(1, "phoenix", "USA", 33.59, -112.30)
+        matches = bw.match_destinations(
+            [("gn-1", "Phoenix", "US", 33.448, -112.074)], {1: city}, self.ISO3
+        )
+        self.assertEqual(matches["gn-1"].centre.uc_id, 1)
+        self.assertEqual(matches["gn-1"].kind, "name")
+
 
 class MetricWiringTests(unittest.TestCase):
     def test_metrics_are_in_the_profile_query(self):

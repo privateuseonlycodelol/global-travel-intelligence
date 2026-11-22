@@ -375,9 +375,9 @@ this implementation:
   mean "no data", not "no restaurants".
 - **Street connectivity is not a walkability score.** `street_network_metrics`
   reports intersections per km² and dead-end share for the surrounding GHSL
-  urban centre (8,291 cities in the reference run). It is matched by name or
+  urban centre (8,444 cities in the reference run). It is matched by name or
   within 12 km, so a small separate town can inherit its larger neighbour's
-  value; the distance and match kind are stored, and 4,810 unmatched cities
+  value; the distance and match kind are stored, and 4,657 unmatched cities
   remain NULL. It describes the whole urban centre, not a neighbourhood, and
   excludes sidewalks, crossings, safety and destination access.
 - **`tourism_pressure` is partial, not global.** The supplemental Eurostat
@@ -493,8 +493,8 @@ measure that does not depend on that scan:
 
 The loader matches urban centres to loaded cities by name and country, or by
 distance (≤12 km; 25 km search radius) using the GHSL urban-centre centroids
-(CC BY 4.0). In the reference run it matched **8,291 of 13,101 cities**, of
-which 6,152 matched by name. Cities such as Berlin, Paris or Bangkok therefore
+(CC BY 4.0). In the reference run it matched **8,444 of 13,101 cities**, of
+which 6,337 matched by name. Cities such as Berlin, Paris or Bangkok therefore
 have a connectivity value even though the Overture pedestrian scan never ran
 there.
 
@@ -763,7 +763,7 @@ Implemented third-party sources:
 | Climate | WorldClim 2.1 `5m` | **non-commercial academic use; redistribution/commercial use requires permission** | global |
 | POIs | Overture Maps Places | CDLA-Permissive 2.0 (some source datasets Apache 2.0/CC0) | global |
 | Walkability/rail | Overture Maps Transportation | **ODbL; © OpenStreetMap contributors; share-alike for derived databases** | partial: 1,131 cities across DE/GB/TR/ES/FR/PT/SE/LU |
-| Street connectivity (walkability component) | Global Urban Street Networks Indicators (Boeing 2026) + GHSL UCDB centroids | indicators CC0 1.0; underlying OSM street data ODbL; GHSL CC BY 4.0 | 8,291 cities matched, from 10,351 global urban areas |
+| Street connectivity (walkability component) | Global Urban Street Networks Indicators (Boeing 2026) + GHSL UCDB centroids | indicators CC0 1.0; underlying OSM street data ODbL; GHSL CC BY 4.0 | 8,444 cities matched, from 10,351 global urban areas |
 | Broadband | Ookla Open Data | **CC BY-NC-SA 4.0; non-commercial; attribution required** | global tiles |
 | GTFS coverage | Mobility Database | catalog metadata CC0 1.0; individual feeds retain provider licences | global catalog |
 | Public transport stops | Overture Places transit facilities | CDLA-Permissive 2.0 / per-provider terms | global where Overture Places has facilities |

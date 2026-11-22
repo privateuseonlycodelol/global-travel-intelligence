@@ -1018,7 +1018,7 @@ def rank_destinations(
             "coverage_notes": [
                 "tourism_pressure is Eurostat NUTS 2 only (EU/EFTA); not global city-level",
                 "walkability/rail may be absent if Overture Transportation was not loaded; "
-                "street_network_metrics covers 8,291 cities with OSM urban-centre data",
+                "street_network_metrics covers 8,444 cities with OSM urban-centre data",
                 "transit_stops_5km is an Overture Places facility count, not service frequency",
                 "housing_monthly, when present, is in local currency (no FX conversion)",
                 "missing dimensions are NULL; see docs/DATA_SOURCES.md",
