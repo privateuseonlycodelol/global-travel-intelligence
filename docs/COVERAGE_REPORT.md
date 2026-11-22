@@ -1,7 +1,7 @@
 # Coverage and Rating Verification Snapshot
 
 Database: local PostGIS 15, database `travel_global`
-Date: **2026-11-21**
+Date: **2026-11-21** (global street-network metrics added 2026-11-22)
 Purpose: record what is actually loaded, what is missing, and the checks used
 before trusting a ranking. This is evidence, not a claim that these are the
 final production numbers.
@@ -19,6 +19,7 @@ final production numbers.
 | `broadband_metrics` | 11,902 | Ookla 2026 Q2 fixed tiles |
 | `mobility_metrics` | 9,553 | GTFS + transit stops + walk/rail rows |
 | `mobility_metrics` with walk/rail | 1,131 | Overture Transportation loaded for DE, GB, TR, ES, FR, PT, SE and LU |
+| `street_network_metrics` | 8,291 | 6,152 name matches + 2,139 within 12 km; from 10,351 global urban areas |
 | `mobility_metrics` with GTFS > 0 | 4,000 | Mobility Database |
 | `mobility_metrics` with transit stops | 9,008 | Overture Places transit facilities within 5 km |
 | `tourism_pressure` | 1,405 | Eurostat NUTS 2 2024; EU/EFTA only |
@@ -34,6 +35,7 @@ final production numbers.
 | Dimension | Status | Reason / next official source |
 | --- | --- | --- |
 | Walkability / rail | Partial (1,131 cities) | Overture Transportation is loaded for DE, GB, TR, ES, FR, PT, SE and LU. The global scan hit repeated DNS/OOM failures; run by country/region. |
+| Street connectivity / dead ends | Broad (8,291 cities) | Global OSM street-network indicators (Boeing 2026) matched to the surrounding GHSL urban centre. 4,810 cities have no urban-centre match and stay NULL. |
 | Public transport stops | Broad (9,008 cities) | Overture Places transit facilities; not a complete stop-position/frequency feed. |
 | Tourism pressure | Partial (EU only) | Eurostat publishes NUTS 2 nights; no single global city-level official source found. |
 | Safety / crime | Missing | Eurostat crime is country-level; FBI/UK Police are country-specific. No global city-level source. |
@@ -47,6 +49,8 @@ final production numbers.
 | Measurement | Coverage | Meaning |
 | --- | ---: | --- |
 | Walkability (`pedestrian_ratio_2km` + pedestrian count) | 1,131 cities | Overture Transportation segments within 2 km; 60% ratio percentile + 40% count percentile |
+| Street intersections per km² (`intersections_per_km2`) | 8,291 cities | OSM street-network indicators for the GHSL urban centre; a connectivity component, not a walking score |
+| Dead-end share (`dead_end_share`) | 8,291 cities | Share of street nodes that are dead ends in the same urban centre |
 | Transit facility count (`transit_stops_5km`) | 9,008 cities | Overture Places bus/train/metro/light-rail/public-transit facilities within 5 km |
 | GTFS feed count (`gtfs_active_feeds`) | 4,000 cities | Mobility Database active static feeds whose bbox contains the city |
 | Rail segments (`rail_segments_5km`) | 1,131 cities | Overture Transportation rail segments within 5 km |

@@ -214,7 +214,8 @@ mcp = FastMCP(
         "read docs/DATA_SOURCES.md for source, licence and coverage. Missing data "
         "is NULL and must be reported as unavailable; a neutral 0.5 score component "
         "is ranking arithmetic, not an observed value. Tourism pressure is EU NUTS 2 "
-        "only; walkability/rail coverage depends on the last Overture load."
+        "only; pedestrian-network walkability depends on the last Overture load, while "
+        "global street intersections and dead ends come from OSM urban-centre data."
     ),
 )
 
@@ -1016,7 +1017,8 @@ def rank_destinations(
             ),
             "coverage_notes": [
                 "tourism_pressure is Eurostat NUTS 2 only (EU/EFTA); not global city-level",
-                "walkability/rail may be absent if Overture Transportation was not loaded",
+                "walkability/rail may be absent if Overture Transportation was not loaded; "
+                "street_network_metrics covers 8,291 cities with OSM urban-centre data",
                 "transit_stops_5km is an Overture Places facility count, not service frequency",
                 "housing_monthly, when present, is in local currency (no FX conversion)",
                 "missing dimensions are NULL; see docs/DATA_SOURCES.md",

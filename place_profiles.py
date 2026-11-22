@@ -90,6 +90,7 @@ TABLES = {
     "b": "broadband_metrics",
     "t": "tourism_pressure",
     "h": "housing_monthly",
+    "w": "street_network_metrics",
 }
 
 METRICS: tuple[Metric, ...] = (
@@ -115,6 +116,18 @@ METRICS: tuple[Metric, ...] = (
            "ratio 0-1", "higher", "getting_around", OVERTURE_TRANSPORT_SOURCE,
            OVERTURE_TRANSPORT_PERIOD,
            note="Overture Transportation; loaded only for some countries."),
+    Metric("street_intersections_per_km2", "w", "intersections_per_km2",
+           "Street intersections per km² of built-up urban area (street connectivity)",
+           "intersections/km²", None, "getting_around", "w.source", "w.observed_period",
+           note=("OpenStreetMap street network of the surrounding urban centre (GHSL boundary), "
+                 "not the exact neighbourhood. Dense grids are easier to walk, but this is not a "
+                 "walking score: large blocks or pedestrian zones can keep it low, and it says "
+                 "nothing about sidewalks, crossings, safety or destinations.")),
+    Metric("dead_end_street_share", "w", "dead_end_share",
+           "Share of street nodes that are dead ends (walkability component)",
+           "share 0-1", "lower", "getting_around", "w.source", "w.observed_period",
+           note=("OpenStreetMap street network of the surrounding urban centre (GHSL boundary). "
+                 "A high share usually means cul-de-sac suburbs; it is not a walking score.")),
     Metric("transit_stations_5km", "m", "transit_stops_5km",
            "Bus, rail and metro stations within 5 km", "stations", "higher",
            "getting_around", "m.transit_stops_source", "m.transit_stops_period",
@@ -171,6 +184,8 @@ NOT_IN_DATABASE = [
     "Visa and residence rules (only an EU/Schengen 90-day flag is used in ranking)",
     "Rainy days and hot days per month (Open-Meteo/ERA5 enrichment not run)",
     "City-level air quality (only the national PM2.5 exposure is loaded)",
+    "Neighbourhood-level walkability, sidewalk quality and crossing safety "
+    "(only whole-urban-centre street connectivity is loaded)",
     "Beaches, parks, healthcare and schools",
 ]
 
