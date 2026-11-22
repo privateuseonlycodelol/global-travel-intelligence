@@ -40,6 +40,35 @@ No 96 GB planet.
    - deletes the clip and drops the per-city database.
 5. The next request for that centre is served from the result table.
 
+## Region loop (the "do each city, delete the raw data" model)
+
+Yes: process one city at a time, keep only the result, and delete the raw
+inputs. Do it region by region so a 0.5-4 GB extract is downloaded once for
+all cities in that region, not once per city:
+
+```
+for region in regions:
+    download region.osm.pbf          # 0.5-4 GB, temporary
+    for centre in region.centres:
+        osmium extract centre.pbf    # 5-50 MB
+        download GHSL tile(s)        # ~30 MB each, cached
+        run GHSCI(centre)
+        write result row             # ~1 KB
+        delete centre.pbf
+        drop centre database
+    delete region.osm.pbf
+```
+
+Disk peak: one region extract + one city clip + one database, usually
+**under 5 GB**. Final state: result rows only, **~1 KB per city**.
+
+The trade-off is time: each city still takes 1-5 minutes of analysis. The
+region download is amortised across the region's cities. If a region has only
+one requested city, download it, run it, delete it, and move on.
+
+The same loop is what the queue worker does per request; the only difference
+is whether the region is kept in the 10 GB cache or deleted immediately.
+
 ## Timing
 
 | Step | First city in a region | Later cities |
