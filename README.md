@@ -382,7 +382,10 @@ this implementation:
   sidewalks, crossings, traffic safety, shade or transit, and mainland China,
   South Korea and Russia are not ranked because their listings are not openly
   licensed. Cities without a score stay NULL; the table is not a substitute for
-  a neighbourhood-level audit.
+  a neighbourhood-level audit. I also tested How Walkable's public point API
+  against every ranked city: its single-point score runs a median 26 points
+  above the published 5 km score (correlation 0.35; Phoenix +43), so it is not
+  used to fill missing cities.
 - **`tourism_pressure` is partial, not global.** The supplemental Eurostat
   loader fills NUTS 2 tourism nights for EU/EFTA regions (1,405 cities in the
   reference run); non-EU cities remain NULL. All cities in the same NUTS 2
