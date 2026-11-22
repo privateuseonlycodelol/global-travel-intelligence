@@ -124,6 +124,26 @@ cities in both. Keep them as separate fields.
 Trento's GHSCI index is computed from its own components; no batch `compare`
 is required for this field.
 
+## Sampling sweep
+
+Measured on the same Trento centre, changing only
+`sample_points.point_sampling_interval` in `process/configuration/config.yml`:
+
+| Spacing | Sample points | Wall time | Fresh food | Convenience | Transit | Local pop density | Local intersection | Daily living |
+| ---: | ---: | ---: | ---: | ---: | ---: | ---: | ---: | ---: |
+| 30 m | 23,534 | 103.6 s | 80.03% | 73.54% | 97.52% | 4,796.7 | 153.64 | 2.001 |
+| 60 m | 13,849 | 102.0 s | 80.67% | 74.06% | 97.64% | 4,840.3 | 153.52 | 2.021 |
+| 100 m | 10,409 | 102.5 s | 81.12% | 75.10% | 97.75% | 4,875.6 | 154.28 | 2.048 |
+
+The 100 m setting cuts sample points by 56%, but wall time is unchanged: the
+fixed cost is OSM import, network construction and PostGIS writes, not the
+per-point routing. The 25-city-reference index moves from 2.096 at 30 m to
+2.117 at 60 m and 2.170 at 100 m.
+
+This does **not** support a 2-4x speedup from coarser sampling on small
+cities. Large metros may differ because routing is a larger share; measure
+those before adopting a fast profile.
+
 ## Scale
 
 At 1.6 minutes for a small city (larger cities take longer), a full 13,101-city
