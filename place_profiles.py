@@ -90,7 +90,7 @@ TABLES = {
     "b": "broadband_metrics",
     "t": "tourism_pressure",
     "h": "housing_monthly",
-    "w": "street_network_metrics",
+    "v": "walkability_scores",
 }
 
 METRICS: tuple[Metric, ...] = (
@@ -116,18 +116,14 @@ METRICS: tuple[Metric, ...] = (
            "ratio 0-1", "higher", "getting_around", OVERTURE_TRANSPORT_SOURCE,
            OVERTURE_TRANSPORT_PERIOD,
            note="Overture Transportation; loaded only for some countries."),
-    Metric("street_intersections_per_km2", "w", "intersections_per_km2",
-           "Street intersections per km² of built-up urban area (street connectivity)",
-           "intersections/km²", None, "getting_around", "w.source", "w.observed_period",
-           note=("OpenStreetMap street network of the surrounding urban centre (GHSL boundary), "
-                 "not the exact neighbourhood. Dense grids are easier to walk, but this is not a "
-                 "walking score: large blocks or pedestrian zones can keep it low, and it says "
-                 "nothing about sidewalks, crossings, safety or destinations.")),
-    Metric("dead_end_street_share", "w", "dead_end_share",
-           "Share of street nodes that are dead ends (walkability component)",
-           "share 0-1", "lower", "getting_around", "w.source", "w.observed_period",
-           note=("OpenStreetMap street network of the surrounding urban centre (GHSL boundary). "
-                 "A high share usually means cul-de-sac suburbs; it is not a walking score.")),
+    Metric("walkability_score", "v", "score",
+           "Walkability score, 0-100 (higher is better)",
+           "score 0-100", "higher", "getting_around", "v.source", "v.observed_period",
+           note=("Published by How Walkable from Overture Maps and OpenStreetMap: everyday places "
+                 "within a walk, averaged across the 5 km around the city's busiest point. It is "
+                 "city-centre proximity, not a whole-metro sidewalk, crossing or safety audit. "
+                 "Only cities of 300,000+ in 95 countries are scored; mainland China, South Korea "
+                 "and Russia are not ranked.")),
     Metric("transit_stations_5km", "m", "transit_stops_5km",
            "Bus, rail and metro stations within 5 km", "stations", "higher",
            "getting_around", "m.transit_stops_source", "m.transit_stops_period",
@@ -185,7 +181,10 @@ NOT_IN_DATABASE = [
     "Rainy days and hot days per month (Open-Meteo/ERA5 enrichment not run)",
     "City-level air quality (only the national PM2.5 exposure is loaded)",
     "Neighbourhood-level walkability, sidewalk quality and crossing safety "
-    "(only whole-urban-centre street connectivity is loaded)",
+    "(the published score covers the city centre, not a neighbourhood)",
+    "A walkability score for cities outside the 690-city How Walkable ranking",
+    "Street-network form (intersections, dead ends) is stored for analysis but "
+    "deliberately not shown as walkability",
     "Beaches, parks, healthcare and schools",
 ]
 

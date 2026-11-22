@@ -16,7 +16,7 @@ calls:
 | POIs | Overture Maps Places (S3 Parquet) | one DuckDB scan + grid hash join, one `COPY` |
 | Broadband | Ookla Open Data (S3 Parquet) | one DuckDB scan + grid hash join |
 | Walkability/transit | Overture Maps Transportation + Mobility Database GTFS | one transport scan + one CSV join |
-| Street connectivity (global) | Global Urban Street Networks Indicators + GHSL urban-centre centroids | one TSV + one centroid layer, matched locally |
+| Walkability score (global) | How Walkable city ranking (Overture/OSM) | one CSV, name/alias match |
 | Housing (optional) | Inside Airbnb city dumps | local CSV scan |
 | Tourism pressure (optional) | Eurostat NUTS 2 tourism + population | one API + GISCO boundary join |
 
@@ -29,7 +29,8 @@ calls:
 | `bootstrap_transit_stops.py` | Overture Places public-transport facility counts within 5 km |
 | `bootstrap_supplemental.py` | optional official-data loaders (currently Eurostat NUTS 2 tourism pressure) |
 | `bootstrap_places.py` | city name aliases (fuzzy search) and country facts/indicators (GeoNames, World Bank) |
-| `bootstrap_walkability.py` | global street-intersection density and dead-end share per city (OSM street networks, GHSL urban centres) |
+| `bootstrap_walkability.py` | published 0-100 walkability score for 662 cities (How Walkable, CC BY 4.0) |
+| `bootstrap_street_network.py` | urban-form context: street-intersection density and dead-end share (stored, not shown in profiles) |
 | `place_profiles.py` | place search, plain-language profiles and comparison used by the MCP server |
 | `mcp_server.py` | Phase 4 FastMCP server (Streamable HTTP, optional SerpApi live pricing) |
 | `Dockerfile` | container image for the pipeline and MCP server |
@@ -373,13 +374,15 @@ this implementation:
   A large park or mall whose center is outside 5 km is not counted. Coverage is
   excellent in North America/Europe and thinner elsewhere; a zero count can
   mean "no data", not "no restaurants".
-- **Street connectivity is not a walkability score.** `street_network_metrics`
-  reports intersections per km² and dead-end share for the surrounding GHSL
-  urban centre (8,444 cities in the reference run). It is matched by name or
-  within 12 km, so a small separate town can inherit its larger neighbour's
-  value; the distance and match kind are stored, and 4,657 unmatched cities
-  remain NULL. It describes the whole urban centre, not a neighbourhood, and
-  excludes sidewalks, crossings, safety and destination access.
+- **The walkability score is a city-centre measure, not a metro verdict.**
+  `walkability_scores` holds the published How Walkable 0-100 score for 662
+  loaded cities (690 ranked). It averages everyday-place proximity across the
+  5 km around the busiest point, so a car-dependent city with a dense core can
+  score well (Houston 79) while its suburbs do not. It does not measure
+  sidewalks, crossings, traffic safety, shade or transit, and mainland China,
+  South Korea and Russia are not ranked because their listings are not openly
+  licensed. Cities without a score stay NULL; the table is not a substitute for
+  a neighbourhood-level audit.
 - **`tourism_pressure` is partial, not global.** The supplemental Eurostat
   loader fills NUTS 2 tourism nights for EU/EFTA regions (1,405 cities in the
   reference run); non-EU cities remain NULL. All cities in the same NUTS 2
@@ -443,7 +446,7 @@ python bootstrap_supplemental.py --eurostat-tourism --year 2024
 # Public transport access: Overture Places transit facilities within 5 km
 python bootstrap_transit_stops.py
 
-# Global street connectivity (fills the walkability gap outside the Overture countries)
+# Published 0-100 walkability score for 690 large cities
 python bootstrap_walkability.py
 ```
 
@@ -478,32 +481,37 @@ columns).
 | `mobility_metrics` | 2 km pedestrian-road ratio, 2 km road/pedestrian segment counts, 5 km rail segment count, active GTFS feed count, 5 km transit facility count |
 | `housing_monthly` | median 30-night monthly cost in the listing's local currency, plus listing sample size (optional) |
 | `tourism_pressure` | Eurostat NUTS 2 annual tourist nights and nights per NUTS 2 resident (EU coverage only) |
-| `street_network_metrics` | street intersections per km² of built-up urban area and dead-end share, matched from the surrounding GHSL urban centre |
+| `walkability_scores` | published 0-100 walkability score for 662 loaded cities (How Walkable, Overture/OSM) |
 
-### Global street connectivity (walkability component)
+### Published walkability score
 
-Overture walkability is only loaded for 1,131 cities in eight countries. The
-separate `bootstrap_walkability.py` loader adds a **global** street-connectivity
-measure that does not depend on that scan:
+`bootstrap_walkability.py` loads the *How Walkable* city ranking: a 0-100
+walkability score for 690 cities of 300,000+ people in 95 countries, published
+under **CC BY 4.0**. It counts everyday places (groceries, cafes, shops, parks,
+services) within a walk from Overture Maps and OpenStreetMap, averaged across
+the 5 km around each city's busiest point.
 
-- **intersections per km² of built-up area** in the surrounding urban centre,
-  from the *Global Urban Street Networks Indicators* dataset (Boeing 2026,
-  CC0; 2025 OpenStreetMap street networks for 10,351 urban areas);
-- **dead-end share**, the proportion of street nodes that are dead ends.
+The loader matches the ranked labels to loaded destinations by name and country,
+then by the GeoNames aliases already in the database (Cologne -> Köln, Seville
+-> Sevilla). In the reference run it matched **662 of 690** ranked cities.
 
-The loader matches urban centres to loaded cities by name and country, or by
-distance (≤12 km; 25 km search radius) using the GHSL urban-centre centroids
-(CC BY 4.0). In the reference run it matched **8,444 of 13,101 cities**, of
-which 6,337 matched by name. Cities such as Berlin, Paris or Bangkok therefore
-have a connectivity value even though the Overture pedestrian scan never ran
-there.
+What the score is and is not:
 
-This is a walkability *component*, not a walking score. It describes the whole
-urban centre, not a neighbourhood, and says nothing about sidewalks, crossings,
-traffic safety or how many destinations are within walking distance. Large
-blocks or pedestrian zones can keep intersection density low in a very walkable
-city, which is why the profile also reports the Overture pedestrian share where
-it exists. The values are not yet used by `rank_destinations_v3`.
+- It is a real published score, not a grid-density proxy, and it ranks Paris 99,
+  Tokyo 98, Berlin 90 and Phoenix 56.
+- It describes the area around the city centre, not the whole metro. A
+  car-dependent city with a dense core (Houston 79) can score well.
+- Mainland China, South Korea and Russia are not ranked because their business
+  listings are not openly licensed; cities under 300,000 are not ranked; 28
+  ranked labels (mostly Japanese and Philippine districts) did not match a
+  loaded destination and stay NULL.
+- It is amenity proximity, not sidewalk quality, crossings, traffic safety or
+  shade, and it is not yet used by `rank_destinations_v3`.
+
+The previous street-grid experiment (`street_network_metrics`, intersections per
+km² and dead-end share) is still loaded by `bootstrap_street_network.py` for
+analysis, but it is **not shown in profiles**: Houston outranking Berlin on that
+proxy showed it should not be presented as walkability.
 
 `rank_destinations_v3` scores eight dimensions with weights that sum to 1:
 climate, culture, food, walkability, transit, broadband, low crowding and
@@ -763,7 +771,7 @@ Implemented third-party sources:
 | Climate | WorldClim 2.1 `5m` | **non-commercial academic use; redistribution/commercial use requires permission** | global |
 | POIs | Overture Maps Places | CDLA-Permissive 2.0 (some source datasets Apache 2.0/CC0) | global |
 | Walkability/rail | Overture Maps Transportation | **ODbL; © OpenStreetMap contributors; share-alike for derived databases** | partial: 1,131 cities across DE/GB/TR/ES/FR/PT/SE/LU |
-| Street connectivity (walkability component) | Global Urban Street Networks Indicators (Boeing 2026) + GHSL UCDB centroids | indicators CC0 1.0; underlying OSM street data ODbL; GHSL CC BY 4.0 | 8,444 cities matched, from 10,351 global urban areas |
+| Walkability score (0-100) | How Walkable city ranking (Overture Maps + OpenStreetMap) | CC BY 4.0; attribution and link required | 690 cities ranked, 662 matched to loaded destinations |
 | Broadband | Ookla Open Data | **CC BY-NC-SA 4.0; non-commercial; attribution required** | global tiles |
 | GTFS coverage | Mobility Database | catalog metadata CC0 1.0; individual feeds retain provider licences | global catalog |
 | Public transport stops | Overture Places transit facilities | CDLA-Permissive 2.0 / per-provider terms | global where Overture Places has facilities |
@@ -772,9 +780,9 @@ Implemented third-party sources:
 | Live quotes (optional) | SerpApi Google Flights/Hotels | proprietary API terms; not open data | query-time |
 
 **Important commercial-use caveats.** WorldClim and Ookla both restrict
-commercial use/redistribution; Overture Transportation and the street data
-behind the connectivity indicators are ODbL and share-alike; individual GTFS
-feeds and Inside Airbnb data carry their own terms. Do not redistribute the derived database commercially without checking
+commercial use/redistribution; Overture Transportation is ODbL and share-alike; individual GTFS feeds and
+Inside Airbnb data carry their own terms. The walkability score is CC BY 4.0
+and must credit How Walkable with a link. Do not redistribute the derived database commercially without checking
 those terms. `SerpApi` data is subject to SerpApi/Google terms.
 
 **Missing data policy.** Null means unavailable; it is never replaced with a

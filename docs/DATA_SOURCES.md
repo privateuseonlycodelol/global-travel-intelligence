@@ -286,28 +286,25 @@ Islington (449), Osaka (428), Paris (408), Geneva (392) and New York City
 | Status | **Implemented** |
 | Notes | National values are returned under `country` with `granularity: country` and are never copied onto city rows or used in `rank_destinations_v3`. Some homicide values are a decade old; the year is returned with each value. |
 
-### 3.14 Global street-network indicators (walkability component)
+### 3.14 Published walkability score (How Walkable)
 
 | Field | Value |
 | --- | --- |
 | Party | Third-party |
-| Publisher | Geoff Boeing, University of Southern California |
-| Dataset | *Global Urban Street Networks Indicators* (2026 edition; 10,351 urban areas, 189 countries) |
-| DOI / URL | https://doi.org/10.7910/DVN/ZTFPTB; file `indicators.tab` |
-| Attribution | Boeing, G. (2026). *Urban science beyond samples: up-to-date street network models and indicators for every urban area in the world.* Environment and Planning B. |
-| Licence | Dataset **CC0 1.0**; underlying OpenStreetMap street data is **ODbL**, © OpenStreetMap contributors |
-| Coverage | Global; 10,351 urban areas built from 2025 OSM |
-| Granularity | Urban area (GHSL urban-centre boundary), not a neighbourhood |
-| Used by | `bootstrap_walkability.py` → `street_network_metrics` |
-| Status | **Implemented; 8,444 of 13,101 loaded cities matched in the reference run** |
-| Notes | `intersect_count_clean_topo / built_up_area_m2` gives intersections per km²; `prop_deadend` gives dead-end share. Street network is the OSM drivable/public network, so pedestrian-only paths are mostly absent. |
+| Publisher | How Walkable (Oscar Higson-Spence) |
+| Dataset | City walkability ranking, 690 cities in 95 countries, 0-100 |
+| URL | https://howwalkable.com/cities; data file https://howwalkable.com/cities.csv |
+| Attribution | "How Walkable" (https://howwalkable.com), with a link to the city ranking. |
+| Licence | **CC BY 4.0**; attribution and link required |
+| Coverage | 690 cities of 300,000+ people in 95 countries; mainland China, South Korea and Russia are not ranked |
+| Granularity | City centre plus the surrounding 5 km (not the whole metro, not a neighbourhood) |
+| Used by | `bootstrap_walkability.py` → `walkability_scores`; `place_profile` / `compare_places` |
+| Status | **Implemented; 662 of 690 ranked cities matched to loaded destinations (631 by name, 31 by GeoNames alias)** |
+| Method | Counts everyday places (groceries, cafes, shops, parks, services) within a walk at points across the 5 km around the city's busiest point, from Overture Maps and OpenStreetMap; `score` is the average across that area, `centre_score` is the single busiest point. |
+| Notes | Amenity proximity, not a sidewalk/crossing/safety audit. A car-dependent city with a dense core can score well (Houston 79). 28 ranked labels, mostly Japanese and Philippine districts, did not match a loaded destination. |
 
-The GHSL urban-centre centroids used to match these indicators to cities come
-from the UCDB R2024A geography theme
-(`GHS_UCDB_THEME_GEOGRAPHY_GLOBE_R2024A`, JRC, **CC BY 4.0**). Centroids are
-published in EPSG:54009 and converted to WGS84 by the loader. The match accepts
-a name match in the same country, or the nearest centre within 12 km (25 km
-search radius); distance and match kind are stored.
+The 28 unmatched labels are kept out of the database rather than mapped to a
+neighbouring core city. The score is not yet used by `rank_destinations_v3`.
 
 ## 4. Missing dimensions and verified candidate sources
 
@@ -365,16 +362,17 @@ without an explicit rate table and date.
 | Candidate | Granularity / coverage | Licence / status | Assessment |
 | --- | --- | --- | --- |
 | Overture Transportation | Segment; 1,131 cities loaded (DE/GB/TR/ES/FR/PT/SE/LU) | ODbL; verified schema | Implemented; global scan blocked by DNS/OOM, country runs work. |
-| Boeing global street-network indicators | Urban area; 10,351 areas, global | CC0 1.0 (derived) / ODbL (OSM) | **Implemented** as a global connectivity component; not a walking score. |
+| How Walkable city ranking | City centre + 5 km; 690 cities/95 countries | CC BY 4.0; implemented | **Implemented** as the published 0-100 walkability score. |
+| Boeing global street-network indicators | Urban area; 10,351 areas, global | CC0 1.0 (derived) / ODbL (OSM) | Loaded as urban-form context (`street_network_metrics`); not shown in profiles. |
 | OpenStreetMap / Geofabrik | Road/path network; global | ODbL; verified | Candidate for a full pedestrian-network scan; large extracts and processing required. |
 | GHSL (JRC) | Built-up/urbanisation raster; global | EU JRC open data; CC BY 4.0 for UCDB | Boundary/centroid context; not a walkability score. |
 | WHO/UN-Habitat | Country/global reports | Varies | Not city-level walkability. |
 
-**Decision:** Keep Overture as the primary pedestrian-network source and run by
-country/region. The Boeing indicators provide a documented global street-
-connectivity fallback; they do not replace a pedestrian-network walkability
-measure. Do not substitute a built-up raster for pedestrian-network
-walkability.
+**Decision:** Use the How Walkable score as the user-facing walkability number,
+and keep the Overture pedestrian-network share as a second, local measure.
+Boeing's street-grid indicators are stored as urban-form context only: the
+Houston-outranks-Berlin result showed that intersection density alone is not a
+walkability verdict. Do not substitute a built-up raster for walkability.
 
 ### 4.5 Rainy days / hot days
 
@@ -428,6 +426,7 @@ means without labelling the approximation.
 | `mobility_metrics` (walk/rail) | Overture Transportation | Yes (counts/ratio) | `Overture Maps Transportation` |
 | `mobility_metrics` (GTFS) | Mobility Database | Yes (bbox count) | `Mobility Database GTFS` |
 | `mobility_metrics` (transit stops) | Overture Places | Yes (5 km distinct count) | `Overture Maps Places (transit stops)` |
+| `walkability_scores` | How Walkable city ranking | No (published score; name/alias match) | `How Walkable (howwalkable.com), CC BY 4.0` |
 | `street_network_metrics` | Boeing street-network indicators + GHSL UCDB centroids | Yes (density; name/distance match) | `Global Urban Street Networks Indicators (Boeing 2026) from 2025 OpenStreetMap; GHSL urban centre boundary` |
 | `housing_monthly` | Inside Airbnb | Yes (median, nearest city) | `Inside Airbnb (local currency, 30+ night listings)` |
 | `tourism_pressure` | Eurostat NUTS 2 tourism + population | Yes (NUTS 2 assignment/division) | `Eurostat tour_occ_nin2m + demo_r_pjangrp3 (NUTS 2)` |

@@ -1,4 +1,4 @@
-"""Offline tests for the global street-network (walkability) loader."""
+"""Offline tests for the street-network (urban form) loader."""
 
 import sys
 import unittest
@@ -6,8 +6,7 @@ from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
 
-import bootstrap_walkability as bw  # noqa: E402
-import place_profiles as pp  # noqa: E402
+import bootstrap_street_network as bw  # noqa: E402
 
 
 def centre(uc_id, name, iso3, lat, lon, **kwargs):
@@ -127,22 +126,6 @@ class MatchingTests(unittest.TestCase):
         )
         self.assertEqual(matches["gn-1"].centre.uc_id, 1)
         self.assertEqual(matches["gn-1"].kind, "name")
-
-
-class MetricWiringTests(unittest.TestCase):
-    def test_metrics_are_in_the_profile_query(self):
-        sql = pp.build_metric_sql(set(pp.TABLES.values()))
-        self.assertIn("LEFT JOIN street_network_metrics w", sql)
-        for key in ("street_intersections_per_km2", "dead_end_street_share"):
-            self.assertIn(f"AS {key}__pct_global", sql)
-        self.assertIn("ORDER BY dead_end_street_share DESC", sql)
-
-    def test_metric_directions(self):
-        by_key = {metric.key: metric for metric in pp.METRICS}
-        # Connectivity is context, not a good/bad judgement: large blocks can
-        # keep it low in a very walkable city.
-        self.assertIsNone(by_key["street_intersections_per_km2"].better)
-        self.assertEqual(by_key["dead_end_street_share"].better, "lower")
 
 
 if __name__ == "__main__":
