@@ -27,6 +27,13 @@ One GHSCI run serves every destination in the same urban centre.
 
 Disk: 240 GB free. Planet + GHSL + outputs fit.
 
+**Disk lifecycle:** the 96 GB planet is temporary. Cut the 469 clips in one
+pass, then delete `planet.osm.pbf` before starting GHSCI. The clips are roughly
+10-20 GB; delete each after its run. Final results are about 1 MB per centre.
+Peak is Planet + clips (~110 GB); steady state is results only (~0.5 GB).
+If that peak is unacceptable, use country extracts and delete each after its
+batch; peak drops to roughly 10-30 GB, at the cost of more downloads.
+
 ## Per-centre pipeline
 
 1. Polygon from UCDB by `ID_UC_G0`.
