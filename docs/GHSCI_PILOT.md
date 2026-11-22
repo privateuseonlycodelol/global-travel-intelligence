@@ -81,9 +81,11 @@ Trento analysis, measured with GNU time on the 12-core / 31 GB host:
 | Filesystem write | ~100 MB |
 
 So one small city is roughly **1 core, 1-2 GB RAM, under 2 minutes**. Large
-metros need more memory and time; plan 2-4 GB and 5-15 minutes for a
-million-person city. Six workers on this host is a safe ceiling; eight risks
-memory pressure when several large metros run together.
+metros are **not yet measured**: a synthetic 2M-node benchmark of the
+neighbourhood pass alone suggests hours, so the earlier "5-15 minutes" figure
+is unsafe. Profile a 300k+ node centre before scheduling a global batch. Six
+workers on this host is a safe ceiling; eight risks memory pressure when
+several large metros run together.
 
 ## Trento results
 

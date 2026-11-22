@@ -11,9 +11,9 @@ counts there are still useful for estimating demand.
 | Item | Size | Lifecycle |
 | --- | ---: | --- |
 | Country/state OSM extract | 0.5–4 GB typical | LRU cache, capped at 10 GB |
-| GHSL 100 m tiles | ~30 MB each | LRU cache, capped at 2 GB |
+| GHSL 100 m tiles | ~95 MB each | LRU cache, capped at 2 GB (~20 tiles) |
 | City OSM clip | 5–50 MB | deleted after the run |
-| Per-city PostGIS database | 50–500 MB | dropped after export |
+| Per-city PostGIS database | 50–500 MB | dropped after export; put PG data on the large drive |
 | Result row | ~1 KB | kept |
 | Optional GeoPackage/figures | 1–20 MB | not kept by default |
 
@@ -21,6 +21,11 @@ Steady state: **results only**, well under 1 GB for all cities. Peak: one
 country extract plus a few clips, **under ~15 GB** with the cap.
 
 No 96 GB planet.
+
+**Root filesystem warning:** PostgreSQL currently stores data on `/`, which
+has only ~11 GB free. A few parallel city databases can fill it. Move the
+cluster's data directory to `/workspace` (248 GB free) or cap concurrency to
+one large city at a time before running the worker.
 
 ## Flow
 
