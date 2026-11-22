@@ -90,6 +90,11 @@ rest:
 4. **Store:** components and the index in `ghsci_city_indicators`; drop the
    per-city database after export.
 
+The production choice is the on-demand model in
+[GHSCI_ON_DEMAND.md](GHSCI_ON_DEMAND.md): no planet, a capped country-extract
+cache (10 GB) and a GHSL tile cache (2 GB). This section's batch numbers are
+kept only as an estimate of what a full precompute would cost.
+
 This gives full coverage without a 3-10 day blocking batch.
 
 ## 7. Rollout

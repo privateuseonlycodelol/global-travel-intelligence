@@ -1,6 +1,10 @@
 # GHSCI 1M+ run and on-demand queue
 
-Status: **runbook**. The single-city pilot is working
+> **Superseded:** the chosen model is on-demand only, with no planet file.
+> See [GHSCI_ON_DEMAND.md](GHSCI_ON_DEMAND.md). This file remains as the
+> demand-count and batch-cost reference.
+
+Status: **reference runbook**. The single-city pilot is working
 ([GHSCI_PILOT.md](GHSCI_PILOT.md)); this is the production plan for every city
 of 1,000,000+ people, then on-demand for the rest.
 
