@@ -82,15 +82,28 @@ Population-weighted, 500 m walk:
 | Daily living score (fresh food + convenience + transit, 0-3) | 2.51 |
 
 `pop_walkability` for Trento is 0.59, but that is a **within-city** relative
-index; it is not comparable with another city's value. The comparable
-`all_cities_pop_walkability` field is only produced when GHSCI's `compare` runs
-across a batch of cities.
+index; it is not comparable with another city's value.
 
-A manual z-score against the published 25-city dataset does **not** reproduce
-GHSCI's published `all_cities_pop_walkability` (mean absolute error 1.43), so
-that shortcut was rejected. The 25-city reference also correlates only 0.31
-with How Walkable for the 18 cities in both, so the two scores must not be
-merged.
+The comparable GHSCI index uses the published 25-city reference statistics in
+`process/configuration/indicators.yml`:
+
+```
+z = (local_nh_population_density - 11093.1) / 13637.9
+  + (local_nh_intersection_density - 98.44) / 36.96
+  + (local_daily_living - 1.028) / 0.915
+```
+
+This reproduces the published `all_cities_walkability` values for the 25-city
+dataset (maximum error < 0.001). For Trento it gives **2.10**, which is 4th of
+the 26 cities (88th percentile), driven by high intersection density (+1.49)
+and daily living (+1.06) against low population density (-0.46).
+
+The index is a z-score sum, not a 0-100 score, and it is not the same
+construct as How Walkable: the two correlate only 0.2-0.3 across the 18
+cities in both. Keep them as separate fields.
+
+Trento's GHSCI index is computed from its own components; no batch `compare`
+is required for this field.
 
 ## Scale
 
