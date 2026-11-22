@@ -66,6 +66,25 @@ With those changes, the bundled Las Palmas example completes in 1.7 minutes.
 Region: 26.0 km², 94,058 residents, 3,617 people/km², 23,534 sample points.
 Analysis time: **1.6 minutes**.
 
+## Measured resources
+
+Trento analysis, measured with GNU time on the 12-core / 31 GB host:
+
+| Metric | Value |
+| --- | ---: |
+| Wall clock | 1 min 44 s |
+| User CPU | 60 s |
+| System CPU | 9.6 s |
+| Average CPU | 67% of one core |
+| Peak resident memory | ~1.03 GB |
+| Filesystem read | ~1.2 GB |
+| Filesystem write | ~100 MB |
+
+So one small city is roughly **1 core, 1-2 GB RAM, under 2 minutes**. Large
+metros need more memory and time; plan 2-4 GB and 5-15 minutes for a
+million-person city. Six workers on this host is a safe ceiling; eight risks
+memory pressure when several large metros run together.
+
 ## Trento results
 
 Population-weighted, 500 m walk:
