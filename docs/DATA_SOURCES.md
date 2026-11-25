@@ -429,6 +429,7 @@ means without labelling the approximation.
 | `mobility_metrics` (GTFS) | Mobility Database | Yes (bbox count) | `Mobility Database GTFS` |
 | `mobility_metrics` (transit stops) | Overture Places | Yes (5 km distinct count) | `Overture Maps Places (transit stops)` |
 | `walkability_scores` | How Walkable city ranking | No (published score; name/alias match) | `How Walkable (howwalkable.com), CC BY 4.0` |
+| `ghsci_city_indicators` | GHSCI analysis (OSM + GHSL + UCDB) | Yes (access, density, index) | `GHSCI (healthysustainablecities/global-indicators)` |
 | `street_network_metrics` | Boeing street-network indicators + GHSL UCDB centroids | Yes (density; name/distance match) | `Global Urban Street Networks Indicators (Boeing 2026) from 2025 OpenStreetMap; GHSL urban centre boundary` |
 | `housing_monthly` | Inside Airbnb | Yes (median, nearest city) | `Inside Airbnb (local currency, 30+ night listings)` |
 | `tourism_pressure` | Eurostat NUTS 2 tourism + population | Yes (NUTS 2 assignment/division) | `Eurostat tour_occ_nin2m + demo_r_pjangrp3 (NUTS 2)` |

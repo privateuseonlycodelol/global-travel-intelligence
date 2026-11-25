@@ -166,6 +166,11 @@ METRICS: tuple[Metric, ...] = (
            "walkability_ghsci", "g.source", "g.observed_period",
            note="GHSCI population-weighted network access.",
            cohort="cities with a GHSCI run", source_url_expr="g.source_url"),
+    Metric("ghsci_pct_large_open_space_500m", "g", "pct_large_open_space_500m",
+           "Residents within a 500 m walk of large public open space", "%", "higher",
+           "walkability_ghsci", "g.source", "g.observed_period",
+           note="GHSCI population-weighted network access; large means 1.5 ha or more.",
+           cohort="cities with a GHSCI run", source_url_expr="g.source_url"),
     Metric("ghsci_local_population_density", "g", "local_nh_population_density",
            "GHSCI neighbourhood population density", "people/km²", None,
            "walkability_ghsci", "g.source", "g.observed_period",
@@ -436,17 +441,20 @@ def metric_entry(metric: Metric, row: dict[str, Any]) -> dict[str, Any]:
             elif beats_global <= 0:
                 band = "lowest"
         entry.update({
-            "percentile_global": pct_global,
-            "band_global": band,
-            "reading_global": percentile_reading(
-                beats_global, metric.better, n_global, metric.cohort,
-                metric.key),
             "cities_with_data_global": n_global,
-            "percentile_in_country": pct_country if n_country > 1 else None,
             "cities_with_data_in_country": n_country,
             "source": row.get(f"{k}__source"),
             "observed_period": row.get(f"{k}__period"),
         })
+        if n_global > 1:
+            entry.update({
+                "percentile_global": pct_global,
+                "band_global": band,
+                "reading_global": percentile_reading(
+                    beats_global, metric.better, n_global, metric.cohort,
+                    metric.key),
+            })
+        entry["percentile_in_country"] = pct_country if n_country > 1 else None
         if row.get(f"{k}__url"):
             entry["source_url"] = row[f"{k}__url"]
     if metric.sample_sql and row.get(f"{k}__sample") is not None:
