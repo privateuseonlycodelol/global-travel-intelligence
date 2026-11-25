@@ -656,6 +656,7 @@ means without labelling the approximation.
 | `destination_inland_water` | HydroLAKES v1.0 | Yes (nearest lake join) | `HydroLAKES v1.0 (lakes >= 10 ha, CC BY 4.0)` |
 | `destination_climate_class` | Köppen-Geiger 1991-2020 | No (point sample) | `Beck et al. 2023 Köppen-Geiger 1991-2020 (CC BY 4.0)` |
 | `destination_green_score` (view) | `destination_land_cover` | Yes (0.65 × 1 km + 0.35 × 15 km tree/shrub/grass) | `ESA WorldCover 2021 v200 (10 m)` |
+| `destination_green_score_full` (view) | vegetation + parks + PM2.5 + water | Yes (40/25/25/10 composite) | `First-party composite from ESA WorldCover, Overture Places, SatPM and HydroLAKES/Natural Earth` |
 | `flight_quote_cache` | SerpApi Google Flights | No (cached response) | `SerpApi Google Flights` |
 | `hotel_quote_cache` | SerpApi Google Hotels | No (cached response) | `SerpApi Google Hotels` |
 | `destination_aliases` | GeoNames alternatenames | Yes (normalized) | n/a |

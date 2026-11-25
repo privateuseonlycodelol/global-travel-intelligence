@@ -48,6 +48,7 @@ final production numbers.
 | `destination_inland_water` | 13,101 | HydroLAKES nearest lake/reservoir shore, area and type |
 | `destination_climate_class` | 13,101 | Köppen-Geiger 1991-2020 class at the city point |
 | `destination_green_score` (view) | 5,000 | Optional vegetation-cover score for cities with 1 km and 15 km land cover |
+| `destination_green_score_full` (view) | 4,040 scored | Full composite: vegetation 40%, parks 25%, air 25%, water 10% |
 | `flight_quote_cache` / `hotel_quote_cache` | 0 | Populated only by MCP stage 2 with SerpApi key |
 | `destination_aliases` | 188,403 | GeoNames names/alternatenames for all 13,101 cities (`bootstrap_places.py`) |
 | `country_facts` | 252 | GeoNames countryInfo; every destination has a country row |

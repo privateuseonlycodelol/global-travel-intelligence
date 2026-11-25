@@ -51,6 +51,7 @@ calls:
 | `bootstrap_gtfs.py` | global GTFS scheduled headways and service span |
 | `bootstrap_nature.py` | ecoregion landscape, Köppen class and 10 km terrain |
 | `bootstrap_land_cover.py` | ESA WorldCover land-cover fractions at 1 km and 15 km |
+| `bootstrap_green_score.py` | optional full green score from vegetation, parks, air and water |
 | `bootstrap_inland_water.py` | nearest HydroLAKES lake/reservoir per city |
 | `bootstrap_ucdb_themes.py` | GHSL urban-centre hazard and health-access themes |
 | `place_profiles.py` | place search, plain-language profiles and comparison used by the MCP server |
@@ -409,9 +410,10 @@ this implementation:
 - **Nature is regional context, not a beach or trail finder.** Ecoregion is the
   surrounding biome; terrain is a 10 km cell; coast distance is a straight line.
   They do not say whether there is a sandy beach, a trailhead or a park you can
-  enter. The optional green score is vegetation cover only, not nature quality:
-  it excludes cropland, built-up and water, and deserts or high mountains score
-  low by definition.
+  enter. There are two optional scores: a vegetation-only cover score and a
+  full composite (vegetation, park access, air quality, water access). Both
+  show their components, neither is nature quality, and neither is in
+  `final_score`.
 - **WorldClim 2.1 is a 1970–2000 climatology**, not recent daily ERA5. The
   `median_temp_max_c` / `median_temp_min_c` columns are monthly **means of daily
   max/min** (the Phase-1 column names are retained); `precip_mm` is the monthly

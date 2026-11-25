@@ -103,7 +103,36 @@ separate lines.
 - Source: ESA WorldCover 2021 v200, CC BY 4.0,
   https://esa-worldcover.org/en/data-access
 
-### Optional green score
+### Optional full green score
+
+The full composite combines four components:
+
+```
+full_green_score = 0.40 × vegetation
+                 + 0.25 × park access
+                 + 0.25 × air quality
+                 + 0.10 × water access
+```
+
+- **Vegetation** — the 1 km/15 km tree, shrub and grass score above.
+- **Park access** — Overture mapped parks per 100,000 residents, converted to
+  a percentile among scored cities.
+- **Air quality** — annual PM2.5 percentile, lower is better.
+- **Water access** — straight-line distance to the nearer of the coast and a
+  HydroLAKES lake/reservoir, linear decay to zero at 50 km.
+
+It is stored in `destination_green_score_full`. A city gets a full score only
+when all four components exist; **4,040 cities** currently qualify. A zero park
+count is `none_listed`, not evidence of no parks, so those cities stay
+unmeasured. The score is a first-party composite, not an observation, and it is
+not in `final_score`.
+
+Trento scores **50.4** (vegetation 48.4, parks 65.3, air 23.8, water 88.1);
+Paris **30.9** (12.7, 57.5, 16.5, 73.8); Innsbruck **41.0**; Dubai **27.7**
+(vegetation 3.3 but air 73.0 and water 74.2). The component breakdown is always
+shown, so a low-vegetation city cannot hide behind clean air.
+
+### Optional vegetation-only green score
 
 If you want one number, there is an **optional vegetation-cover score**:
 
@@ -125,7 +154,8 @@ score and its two components. It is **not** a nature-quality score:
 Trento scores **48.4** (25.7% local vegetation, 90.5% hinterland), Paris **12.7**
 (5.2% / 26.5%), Innsbruck **38.6** (14.8% / 82.7%) and Dubai **3.3**
 (3.4% / 3.0%). That reads as “how much vegetation is around the city”, not
-“how good its nature is”.
+“how good its nature is”. This vegetation-only score remains available
+alongside the full composite.
 
 ## Council decision and current trade-offs
 
@@ -177,6 +207,9 @@ profile to be useful.
 
 ```bash
 python bootstrap_nature.py
+python bootstrap_land_cover.py
+python bootstrap_inland_water.py
+python bootstrap_green_score.py
 python bootstrap_nature.py --report
 ```
 
