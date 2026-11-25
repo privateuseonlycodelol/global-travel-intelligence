@@ -443,6 +443,51 @@ exists; cities without it are neutral (0.5) and are reported via
 | Status | **Implemented; partial country coverage** |
 | Notes | Computes weekday peak, weekday midday and Sunday midday headways and span from `stop_times` + calendar. A feed counts only when its stops serve the city, not when its bbox contains the point. No real-time reliability, journey times or fares. See `docs/PUBLIC_TRANSPORT.md`. |
 
+### 3.24 Nature typology
+
+| Field | Value |
+| --- | --- |
+| Party | Third-party |
+| Publisher | RESOLVE / University of Minnesota; Amatulli et al. / Yale |
+| Dataset | RESOLVE Ecoregions 2017; Amatulli et al. 2018 GMTED 10 km median elevation, elevation standard deviation, TRI and TPI |
+| URL | https://storage.googleapis.com/teow2016/Ecoregions2017.zip ; https://doi.pangaea.de/10.1594/PANGAEA.867113 |
+| Licence | Ecoregions CC BY 4.0; topography CC BY 3.0 |
+| Coverage | 12,927 cities with a landscape match; 13,101 with terrain |
+| Granularity | City point for landscape; 10 km cell for terrain |
+| Used by | `bootstrap_nature.py` → `destination_landscape`, `destination_terrain`; `place_profile.nature` |
+| Status | **Implemented; land cover, water, shore and night sky planned** |
+| Notes | Ecoregion is the surrounding region, not the view from the window. Terrain is 10 km median/SD/TRI/TPI, not town elevation and not a trailhead. See `docs/NATURE.md`. |
+
+### 3.25 Inland water (HydroLAKES)
+
+| Field | Value |
+| --- | --- |
+| Party | Third-party |
+| Publisher | HydroSHEDS / WWF |
+| Dataset | HydroLAKES v1.0 lake and reservoir polygons, >= 10 ha |
+| URL | https://www.hydrosheds.org/products/hydrolakes |
+| Licence | CC BY 4.0; derived city rows only, original polygons not redistributed |
+| Coverage | 13,101 cities |
+| Granularity | Nearest lake shore distance, lake area and type |
+| Used by | `bootstrap_inland_water.py` → `destination_inland_water`; `place_profile.nature.inland_water` |
+| Status | **Implemented** |
+| Notes | Does not include rivers, small tarns or seasonal pans. Lake names are often blank in the source. |
+
+### 3.26 Land-cover fractions (ESA WorldCover)
+
+| Field | Value |
+| --- | --- |
+| Party | Third-party |
+| Publisher | ESA WorldCover project / Copernicus |
+| Dataset | WorldCover 2021 v200, 10 m, 11 classes |
+| URL | https://esa-worldcover.org/en/data-access ; AWS `s3://esa-worldcover/v200/2021/map` |
+| Licence | CC BY 4.0; attribution: © ESA WorldCover project / contains modified Copernicus Sentinel data (2021) |
+| Coverage | Global land; initial city batch is the largest 5,000 cities, growing |
+| Granularity | Class fractions inside 1 km and 15 km discs around the city point |
+| Used by | `bootstrap_land_cover.py` → `destination_land_cover`; `place_profile.nature.land_cover` |
+| Status | **Implemented; initial 5,000-city batch loaded (10,000 rows)** |
+| Notes | Tree, shrub, grass, crop, built-up, bare, snow, water, wetland, mangrove and moss stay separate. Cropland and built-up remain visible so a farming region is not called forest. The 15 km disc is sampled at about 200 m from COG overviews. No global 100 GB download; city windows are read remotely. |
+
 ## 4. Missing dimensions and verified candidate sources
 
 These sources were checked but are **not** loaded. They are listed so a
@@ -590,6 +635,10 @@ means without labelling the approximation.
 | `gtfs_feed` | Mobility Database GTFS catalogue + operator zip | No (metadata + content hash) | `Mobility Database feeds_v2.csv (CC0 metadata)` |
 | `gtfs_feed_place` | GTFS stops + GHSL urban centres | Yes (stop-in-centre join) | `Mobility Database GTFS + operator timetable` |
 | `transit_headway` | GTFS stop_times + calendar | Yes (headway/span aggregates) | `Mobility Database GTFS + operator timetable` |
+| `destination_landscape` | RESOLVE Ecoregions 2017 | Yes (point-in-polygon) | `RESOLVE Ecoregions 2017 (CC BY 4.0)` |
+| `destination_terrain` | Amatulli 2018 GMTED 10 km | No (point sample) | `Amatulli et al. 2018 GMTED 10 km (CC BY 3.0)` |
+| `destination_land_cover` | ESA WorldCover 2021 v200 | Yes (class fractions) | `ESA WorldCover 2021 v200 (10 m)` |
+| `destination_inland_water` | HydroLAKES v1.0 | Yes (nearest lake join) | `HydroLAKES v1.0 (lakes >= 10 ha, CC BY 4.0)` |
 | `flight_quote_cache` | SerpApi Google Flights | No (cached response) | `SerpApi Google Flights` |
 | `hotel_quote_cache` | SerpApi Google Hotels | No (cached response) | `SerpApi Google Hotels` |
 | `destination_aliases` | GeoNames alternatenames | Yes (normalized) | n/a |

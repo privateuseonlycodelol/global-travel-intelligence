@@ -49,6 +49,9 @@ calls:
 | `bootstrap_geography.py` | GeoNames elevation and Natural Earth coastline distance |
 | `bootstrap_airport_access.py` | nearest scheduled-service airport and 100 km counts |
 | `bootstrap_gtfs.py` | global GTFS scheduled headways and service span |
+| `bootstrap_nature.py` | ecoregion landscape and 10 km terrain |
+| `bootstrap_land_cover.py` | ESA WorldCover land-cover fractions at 1 km and 15 km |
+| `bootstrap_inland_water.py` | nearest HydroLAKES lake/reservoir per city |
 | `bootstrap_ucdb_themes.py` | GHSL urban-centre hazard and health-access themes |
 | `place_profiles.py` | place search, plain-language profiles and comparison used by the MCP server |
 | `mcp_server.py` | Phase 4 FastMCP server (Streamable HTTP, optional SerpApi live pricing) |
@@ -60,6 +63,7 @@ calls:
 | `docs/DATA_SOURCES.md` | source-by-source provenance, licences, coverage and candidate sources |
 | `docs/COVERAGE_REPORT.md` | measured coverage snapshot for the global run |
 | `docs/PUBLIC_TRANSPORT.md` | GTFS scheduled-service method, coverage, limits and commands |
+| `docs/NATURE.md` | nature typology, sources, what is loaded and what is rejected |
 | `sql/rank_examples.sql` | Phase 1/v2 scorer examples |
 | `sql/rank_examples_v3.sql` | Phase 3/v3 scorer examples |
 | `tests/` | offline unit tests for the Phase 1, Phase 3 and MCP helpers |
@@ -402,6 +406,10 @@ this implementation:
 - **Scheduled transit is not real-time reliability.** Headways come from static
   GTFS. They do not measure delays, cancellations, journey times, fares or
   ridership, and coverage is only where an operator publishes GTFS.
+- **Nature is regional context, not a beach or trail finder.** Ecoregion is the
+  surrounding biome; terrain is a 10 km cell; coast distance is a straight line.
+  They do not say whether there is a sandy beach, a trailhead or a park you can
+  enter.
 - **WorldClim 2.1 is a 1970–2000 climatology**, not recent daily ERA5. The
   `median_temp_max_c` / `median_temp_min_c` columns are monthly **means of daily
   max/min** (the Phase-1 column names are retained); `precip_mm` is the monthly
@@ -836,6 +844,9 @@ Implemented third-party sources:
 | Facilities | Overture Maps Places | CDLA-Permissive 2.0 | 13,101 cities within 5 km: hospital, pharmacy, school, grocery, park, beach |
 | Airport access | OurAirports | Public domain | 13,101 cities; nearest scheduled airport and 100 km counts |
 | Scheduled transit | Mobility Database GTFS | CC0 catalogue; producer licences | weekday peak, midday and Sunday headways/span; initial Italy/France load |
+| Nature | RESOLVE Ecoregions + Amatulli topography | CC BY 4.0 / CC BY 3.0 | 12,927 city landscapes; 13,101 terrains |
+| Land cover | ESA WorldCover 2021 | CC BY 4.0 | 1 km and 15 km class fractions; initial largest-city batch |
+| Inland water | HydroLAKES v1.0 | CC BY 4.0 | 13,101 cities; nearest lake/reservoir |
 | Hazard exposure | GHSL UCDB / MYRIAD-HES | CC BY 4.0 | 11,422 urban centres; event counts by hazard type, 2015 window |
 | Health access | GHSL UCDB / healthsites.io | ODbL / EC reuse | 11,422 urban centres; hospital and pharmacy access |
 | Broadband | Ookla Open Data | **CC BY-NC-SA 4.0; non-commercial; attribution required** | global tiles |

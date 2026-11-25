@@ -544,6 +544,179 @@ def fetch_climate(cur: Any, destination_ids: list[str]) -> dict[str, list[dict[s
     return out
 
 
+NATURE_NOTE = (
+    "Landscape is the surrounding ecoregion at the city point, not the view "
+    "from the window. Terrain is the 10 km cell around the city: median "
+    "elevation, elevation spread (standard deviation), ruggedness (TRI) and "
+    "relative position (TPI). These are regional context, not trail or beach "
+    "access."
+)
+
+
+def fetch_nature(cur: Any, destination_ids: list[str]) -> dict[str, dict[str, Any]]:
+    out: dict[str, dict[str, Any]] = {}
+    if "destination_landscape" in _existing_tables(cur, ["destination_landscape"]):
+        cur.execute(
+            """
+            SELECT destination_id, eco_id, ecoregion_name, biome_num, biome_name,
+                   realm, source, observed_period
+            FROM destination_landscape
+            WHERE destination_id = ANY(%s)
+            """,
+            (destination_ids,),
+        )
+        for row in cur.fetchall():
+            row = dict(row)
+            out.setdefault(str(row.pop("destination_id")), {})["landscape"] = row
+    if "destination_land_cover" in _existing_tables(cur, ["destination_land_cover"]):
+        cur.execute(
+            """
+            SELECT destination_id, radius_m, tree_fraction, shrub_fraction,
+                   grassland_fraction, cropland_fraction, built_up_fraction,
+                   bare_fraction, snow_fraction, water_fraction,
+                   wetland_fraction, mangrove_fraction, moss_fraction,
+                   valid_pixel_count, source, observed_period
+            FROM destination_land_cover
+            WHERE destination_id = ANY(%s)
+            """,
+            (destination_ids,),
+        )
+        for row in cur.fetchall():
+            row = dict(row)
+            out.setdefault(str(row.pop("destination_id")), {}).setdefault(
+                "land_cover", []
+            ).append(row)
+    if "destination_inland_water" in _existing_tables(cur, ["destination_inland_water"]):
+        cur.execute(
+            """
+            SELECT destination_id, lake_id, lake_name, lake_type, lake_area_km2,
+                   distance_km, source, observed_period
+            FROM destination_inland_water
+            WHERE destination_id = ANY(%s)
+            """,
+            (destination_ids,),
+        )
+        for row in cur.fetchall():
+            row = dict(row)
+            out.setdefault(str(row.pop("destination_id")), {})["inland_water"] = row
+    if "destination_terrain" in _existing_tables(cur, ["destination_terrain"]):
+        cur.execute(
+            """
+            SELECT destination_id, radius_m, elevation_median_m, elevation_sd_m,
+                   tri_median, tpi_median, relief_class, position_class,
+                   source, observed_period
+            FROM destination_terrain
+            WHERE destination_id = ANY(%s)
+            """,
+            (destination_ids,),
+        )
+        for row in cur.fetchall():
+            row = dict(row)
+            out.setdefault(str(row.pop("destination_id")), {})["terrain"] = row
+    return out
+
+
+LAND_COVER_LABELS = (
+    ("tree_fraction", "Tree cover"),
+    ("shrub_fraction", "Shrub"),
+    ("grassland_fraction", "Grassland"),
+    ("cropland_fraction", "Cropland"),
+    ("built_up_fraction", "Built-up"),
+    ("bare_fraction", "Bare or sparse"),
+    ("snow_fraction", "Snow or ice"),
+    ("water_fraction", "Water"),
+    ("wetland_fraction", "Wetland"),
+    ("mangrove_fraction", "Mangrove"),
+    ("moss_fraction", "Moss or lichen"),
+)
+
+
+def _land_cover_block(rows: list[dict[str, Any]]) -> dict[str, Any] | None:
+    if not rows:
+        return None
+    blocks = {}
+    for row in rows:
+        radius = int(row["radius_m"])
+        key = "1km" if radius == 1000 else "15km"
+        values = {}
+        for field, label in LAND_COVER_LABELS:
+            value = row.get(field)
+            values[field] = {
+                "label": label,
+                "percent": round(float(value) * 100, 1) if value is not None else None,
+            }
+        blocks[key] = {
+            "radius_km": radius / 1000,
+            "valid_pixels": row.get("valid_pixel_count"),
+            "classes": values,
+        }
+    first = rows[0]
+    return {
+        "one_km": blocks.get("1km"),
+        "fifteen_km": blocks.get("15km"),
+        "source": first.get("source"),
+        "observed_period": first.get("observed_period"),
+        "note": (
+            "ESA WorldCover 2021 10 m class fractions. Cropland and built-up "
+            "stay separate; a green farming region is not the same as forest. "
+            "The 15 km ring is sampled at about 200 m."
+        ),
+    }
+
+
+def nature_summary(row: dict[str, Any] | None) -> dict[str, Any]:
+    if not row:
+        return {"status": "not_loaded"}
+    landscape = row.get("landscape")
+    terrain = row.get("terrain")
+    return {
+        "status": "loaded" if (landscape or terrain) else "not_loaded",
+        "landscape": (
+            {
+                "biome": landscape.get("biome_name"),
+                "ecoregion": landscape.get("ecoregion_name"),
+                "realm": landscape.get("realm"),
+                "source": landscape.get("source"),
+                "observed_period": landscape.get("observed_period"),
+            }
+            if landscape else None
+        ),
+        "land_cover": _land_cover_block(row.get("land_cover") or []),
+        "inland_water": (
+            {
+                "nearest_lake_km": row["inland_water"].get("distance_km"),
+                "lake_name": row["inland_water"].get("lake_name"),
+                "lake_area_km2": row["inland_water"].get("lake_area_km2"),
+                "lake_type": {
+                    1: "lake", 2: "reservoir", 3: "regulated lake",
+                }.get(row["inland_water"].get("lake_type"), "unknown"),
+                "source": row["inland_water"].get("source"),
+                "observed_period": row["inland_water"].get("observed_period"),
+                "note": (
+                    "HydroLAKES lakes and reservoirs of at least 10 ha. Rivers, "
+                    "small tarns and seasonal pans are not included."
+                ),
+            }
+            if row.get("inland_water") else None
+        ),
+        "terrain": (
+            {
+                "radius_km": (terrain.get("radius_m") or 10000) // 1000,
+                "elevation_median_m": terrain.get("elevation_median_m"),
+                "elevation_sd_m": terrain.get("elevation_sd_m"),
+                "tri_median": terrain.get("tri_median"),
+                "tpi_median": terrain.get("tpi_median"),
+                "relief_class": terrain.get("relief_class"),
+                "position_class": terrain.get("position_class"),
+                "source": terrain.get("source"),
+                "observed_period": terrain.get("observed_period"),
+            }
+            if terrain else None
+        ),
+        "note": NATURE_NOTE,
+    }
+
+
 ROUTE_TYPE_LABELS = {
     0: "Tram",
     1: "Subway/metro",
@@ -1935,6 +2108,7 @@ def build_profile(cur: Any, destination_id: str) -> dict[str, Any]:
     ucdb = fetch_ucdb_themes(cur, [destination_id]).get(destination_id)
     air_monthly = fetch_air_quality_monthly(cur, [destination_id]).get(destination_id, [])
     transit = fetch_transit_service(cur, [destination_id]).get(destination_id, [])
+    nature = fetch_nature(cur, [destination_id]).get(destination_id)
     country = fetch_country_context(cur, [basics["country_iso2"]]).get(basics["country_iso2"], {})
 
     groups: dict[str, list[dict[str, Any]]] = {}
@@ -1981,6 +2155,7 @@ def build_profile(cur: Any, destination_id: str) -> dict[str, Any]:
         "health_access": health_access_summary(ucdb),
         "air_quality_monthly": air_quality_monthly_summary(air_monthly),
         "public_transport": transit_summary(transit),
+        "nature": nature_summary(nature),
         "country": country,
         "not_measured_for_this_city": not_measured,
         "not_in_database_for_any_city": NOT_IN_DATABASE + not_loaded,
@@ -2001,6 +2176,7 @@ def build_comparison(cur: Any, destination_ids: list[str]) -> dict[str, Any]:
     ucdb = fetch_ucdb_themes(cur, ids)
     air_monthly = fetch_air_quality_monthly(cur, ids)
     transit = fetch_transit_service(cur, ids)
+    nature = fetch_nature(cur, ids)
     countries = sorted({basics[i]["country_iso2"] for i in ids})
     country_context = fetch_country_context(cur, countries)
 
@@ -2117,6 +2293,7 @@ def build_comparison(cur: Any, destination_ids: list[str]) -> dict[str, Any]:
         "public_transport": {
             i: transit_summary(transit.get(i, [])) for i in ids
         },
+        "nature": {i: nature_summary(nature.get(i)) for i in ids},
         "country_context": country_rows,
         "not_in_database_for_any_city": NOT_IN_DATABASE
         + [label + " (dataset not loaded for any city)" for label in not_loaded],

@@ -1449,6 +1449,47 @@ def inspect_destination(
                 )
                 ghsci_indicators = cur.fetchone()
 
+            landscape = optional_row(
+                """
+                SELECT eco_id, ecoregion_name, biome_num, biome_name, realm,
+                       source, observed_period
+                FROM destination_landscape WHERE destination_id = %s
+                """,
+                (resolved_id,),
+                ("destination_landscape",),
+            )
+            terrain = optional_row(
+                """
+                SELECT radius_m, elevation_median_m, elevation_sd_m, tri_median,
+                       tpi_median, relief_class, position_class, source,
+                       observed_period
+                FROM destination_terrain WHERE destination_id = %s
+                """,
+                (resolved_id,),
+                ("destination_terrain",),
+            )
+            inland_water = optional_row(
+                """
+                SELECT lake_id, lake_name, lake_type, lake_area_km2, distance_km,
+                       source, observed_period
+                FROM destination_inland_water WHERE destination_id = %s
+                """,
+                (resolved_id,),
+                ("destination_inland_water",),
+            )
+            land_cover = optional_rows(
+                """
+                SELECT radius_m, tree_fraction, shrub_fraction,
+                       grassland_fraction, cropland_fraction, built_up_fraction,
+                       bare_fraction, snow_fraction, water_fraction,
+                       wetland_fraction, mangrove_fraction, moss_fraction,
+                       valid_pixel_count, source, observed_period
+                FROM destination_land_cover
+                WHERE destination_id = %s ORDER BY radius_m
+                """,
+                (resolved_id,),
+                ("destination_land_cover",),
+            )
             gtfs_feeds = optional_rows(
                 """
                 SELECT p.feed_id, f.provider, f.feed_name, f.license_url,
@@ -1498,6 +1539,10 @@ def inspect_destination(
         "hazard_exposure": hazard,
         "health_access": health_access,
         "work_overlap": place_profiles.work_overlap(destination.get("timezone")),
+        "landscape": landscape,
+        "terrain": terrain,
+        "land_cover": land_cover,
+        "inland_water": inland_water,
         "gtfs_feeds": gtfs_feeds,
         "transit_service": transit_service,
         "poi_metrics": poi_metrics,
@@ -1582,9 +1627,10 @@ def place_profile(
     Also returns 12-month WorldClim and recent NASA POWER climate, monthly and
     annual PM2.5, official local-currency rent where available, 5 km facility
     counts, elevation/coast distance/daylight, airport access, scheduled GTFS
-    headways and service span, monthly EU tourism, metro hazard and health
-    access, country context (currency, languages, price level, homicide, water,
-    sanitation -- national values) and US/UK travel advisories.
+    headways and service span, ecoregion landscape and 10 km terrain, monthly
+    EU tourism, metro hazard and health access, country context (currency,
+    languages, price level, homicide, water, sanitation -- national values) and
+    US/UK travel advisories.
     If the name is ambiguous, ``match.other_matches`` lists the alternatives; if it
     is only a fuzzy guess, the result has ``needs_choice: true`` and candidates
     instead of a profile.

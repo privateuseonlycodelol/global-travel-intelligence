@@ -42,6 +42,10 @@ final production numbers.
 | `gtfs_feed_place` | 2,101 | Feeds with stops mapped to a city, not bbox-only |
 | `transit_headway` | 3,952 | City × feed × day type × time band headway/span rows; 544 cities |
 | `transit_city_weekday_peak` (view) | 155 | Cities with a weekday 07:00–09:00 headway and at least 50 mapped stops |
+| `destination_landscape` | 12,927 | RESOLVE Ecoregions 2017 point-in-polygon match |
+| `destination_terrain` | 13,101 | Amatulli 2018 GMTED 10 km median elevation, SD, TRI, TPI |
+| `destination_land_cover` | 10,000 | ESA WorldCover 2021, 5,000 largest cities × 1 km and 15 km; growing |
+| `destination_inland_water` | 13,101 | HydroLAKES nearest lake/reservoir shore, area and type |
 | `flight_quote_cache` / `hotel_quote_cache` | 0 | Populated only by MCP stage 2 with SerpApi key |
 | `destination_aliases` | 188,403 | GeoNames names/alternatenames for all 13,101 cities (`bootstrap_places.py`) |
 | `country_facts` | 252 | GeoNames countryInfo; every destination has a country row |
