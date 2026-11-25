@@ -141,13 +141,15 @@ inspect_destination, refresh_live_quotes
 
 rank_destinations(start_month=6, ideal_temp_min=20, ideal_temp_max=26,
                   min_population=200000, limit=3)
-→ 3 results (London, City of Westminster, Paris); Westminster is a
-  separate GeoNames record inside the London urban centre, a known
-  metro-fragmentation limitation.
+→ San Francisco, London, Paris. Each row carries a metro_group; the London
+  group includes all matched boroughs, and only one row per GHSL centre is
+  returned by default.
 
 inspect_destination(city_name="Barcelona", country_iso2="ES")
-→ 12 climate rows; broadband, mobility (walk/rail + GTFS + transit stops) and crowding
-  populated; housing is NULL because Inside Airbnb was not loaded
+→ 12 climate rows, 12 recent monthly normals, city PM2.5, rent, facilities,
+  elevation/coast distance, airport access, monthly tourism, metro assignment
+  and both country advisories. housing_monthly is NULL because Inside Airbnb
+  was not loaded; rent_monthly is the official local-currency series.
 ```
 
 Stage 2 correctly reports `disabled_missing_serpapi_key` when no key is set;

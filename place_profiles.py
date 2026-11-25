@@ -254,8 +254,8 @@ METRIC_GROUP_LABELS = {
 }
 
 NOT_IN_DATABASE = [
-    "Long-term rent outside the 42 Eurostat cities (no global city-level open "
-    "source loaded)",
+    "Long-term rent outside the ~160 Eurostat/ONS cities (no global "
+    "city-level open source loaded)",
     "City-level crime rates (national advisories and the homicide rate are "
     "country-scoped)",
     "Neighbourhood-level walkability, sidewalk quality and crossing safety "
@@ -264,7 +264,8 @@ NOT_IN_DATABASE = [
     "published 25-city study cities only)",
     "Street-network form (intersections, dead ends) is stored for analysis but "
     "deliberately not shown as walkability",
-    "Beaches, parks, healthcare and schools as city metrics",
+    "Healthcare, school and park quality or capacity (only Overture presence "
+    "counts are loaded)",
 ]
 
 HOW_TO_READ = (
@@ -590,9 +591,9 @@ def tourism_seasonality(rows: list[dict[str, Any]]) -> dict[str, Any]:
 
 
 FACILITY_FIELDS = (
-    ("hospital", "hospital_count_5km", "Hospitals"),
+    ("hospital", "hospital_count_5km", "Places tagged hospital"),
     ("pharmacy", "pharmacy_count_5km", "Pharmacies"),
-    ("school", "school_count_5km", "Schools"),
+    ("school", "school_count_5km", "Places tagged school"),
     ("grocery", "grocery_count_5km", "Grocery stores"),
     ("park", "park_count_5km", "Parks"),
     ("beach", "beach_count_5km", "Beaches"),
@@ -600,7 +601,8 @@ FACILITY_FIELDS = (
 FACILITY_NOTE = (
     "Overture Places counts within 5 km. These are presence counts, not quality "
     "or capacity; zero means none listed in the source, not proof that none "
-    "exists, and map coverage is uneven."
+    "exists, and map coverage is uneven. Overture's hospital tag includes many "
+    "clinics, so the count is not the number of hospitals."
 )
 
 

@@ -366,7 +366,7 @@ exists; cities without it are neutral (0.5) and are reported via
 | Granularity | Point-of-interest count; presence only |
 | Used by | `bootstrap_facilities.py` → `facility_metrics`; `place_profile.facilities` |
 | Status | **Implemented, global scan** |
-| Notes | A zero is `none_listed`, not proof that no facility exists. Coverage is uneven: Beijing has far fewer mapped pharmacies and schools than European cities. Counts are not quality or capacity. |
+| Notes | A zero is `none_listed`, not proof that no facility exists. Coverage is uneven: Beijing has far fewer mapped pharmacies and schools than European cities. Counts are not quality or capacity, and Overture's hospital tag includes many clinics, so it is not a hospital count. |
 
 ### 3.19 Elevation and coastline distance
 
