@@ -21,6 +21,7 @@ from __future__ import annotations
 
 import math
 import re
+from datetime import date
 import unicodedata
 from dataclasses import dataclass
 from typing import Any, Iterable
@@ -62,6 +63,8 @@ class Metric:
     value_sql: str | None = None  # overrides table.column
     sample_sql: str | None = None  # sample size shown next to the value
     zero_is_gap: bool = False     # 0 usually means "no map coverage": not ranked
+    cohort: str = "cities"        # what the global percentile is among
+    source_url_expr: str | None = None  # attribution URL, if the licence requires one
 
 
 POI_NOTE = (
@@ -115,15 +118,25 @@ METRICS: tuple[Metric, ...] = (
            "Share of street segments within 2 km that are pedestrian/cycle paths",
            "ratio 0-1", "higher", "getting_around", OVERTURE_TRANSPORT_SOURCE,
            OVERTURE_TRANSPORT_PERIOD,
-           note="Overture Transportation; loaded only for some countries."),
+           note="Overture Transportation; loaded only for 1,131 cities in 8 countries.",
+           cohort="cities in the 8-country Overture sample"),
     Metric("walkability_score", "v", "score",
-           "Walkability score, 0-100 (higher is better)",
+           "Walkability score, 0-100 (5 km area average around the busiest point)",
            "score 0-100", "higher", "getting_around", "v.source", "v.observed_period",
            note=("Published by How Walkable from Overture Maps and OpenStreetMap: everyday places "
                  "within a walk, averaged across the 5 km around the city's busiest point. It is "
-                 "city-centre proximity, not a whole-metro sidewalk, crossing or safety audit. "
+                 "a 5 km area average, not a whole-metro sidewalk, crossing or safety audit. "
                  "Only cities of 300,000+ in 95 countries are scored; mainland China, South Korea "
-                 "and Russia are not ranked.")),
+                 "and Russia are not ranked."),
+           cohort="scored cities (300k+, 95 countries)",
+           source_url_expr="v.url"),
+    Metric("walkability_centre_score", "v", "centre_score",
+           "Walkability at the single busiest point, 0-100",
+           "score 0-100", "higher", "getting_around", "v.source", "v.observed_period",
+           note=("The same How Walkable score at the busiest point only. Compare it with the "
+                 "5 km area average to see how far walkability extends beyond the core."),
+           cohort="scored cities (300k+, 95 countries)",
+           source_url_expr="v.url"),
     Metric("transit_stations_5km", "m", "transit_stops_5km",
            "Bus, rail and metro stations within 5 km", "stations", "higher",
            "getting_around", "m.transit_stops_source", "m.transit_stops_period",
@@ -182,7 +195,8 @@ NOT_IN_DATABASE = [
     "City-level air quality (only the national PM2.5 exposure is loaded)",
     "Neighbourhood-level walkability, sidewalk quality and crossing safety "
     "(the published score covers the city centre, not a neighbourhood)",
-    "A walkability score for cities outside the 690-city How Walkable ranking",
+    "GHSCI on-demand scoring for cities outside the 690-city How Walkable "
+    "ranking (design only; not enabled)",
     "Street-network form (intersections, dead ends) is stored for analysis but "
     "deliberately not shown as walkability",
     "Beaches, parks, healthcare and schools",
@@ -196,6 +210,8 @@ HOW_TO_READ = (
     "percentile_in_country is the same within the country. status 'not_measured' "
     "means the source has no value for this city; 'none_listed' means the map "
     "source lists none, which usually reflects missing coverage rather than zero. "
+    "cohort names what the global percentile is among (for example, only the "
+    "8-country Overture sample or only scored cities). "
     "Country indicators are national values, not city measurements; each country's "
     "latest available year is used, so years can differ between countries -- quote them."
 )
@@ -231,6 +247,7 @@ def build_metric_sql(available_tables: set[str]) -> str:
         value = f"NULLIF({raw}, 0)" if metric.zero_is_gap else raw
         source = metric.source_expr if usable else "NULL"
         period = metric.period_expr if usable else "NULL"
+        url = metric.source_url_expr if (usable and metric.source_url_expr) else "NULL"
         k = metric.key
         sample = f"({metric.sample_sql})::double precision" if (usable and metric.sample_sql) else "NULL::double precision"
         base_cols += [
@@ -239,6 +256,7 @@ def build_metric_sql(available_tables: set[str]) -> str:
             f"{sample} AS {k}__sample",
             f"({source})::text AS {k}__source",
             f"({period})::text AS {k}__period",
+            f"({url})::text AS {k}__url",
         ]
         order = "DESC" if metric.better == "lower" else "ASC"
         def mid_rank(partition: str) -> str:
@@ -261,7 +279,7 @@ def build_metric_sql(available_tables: set[str]) -> str:
             f"(PARTITION BY ({k} IS NULL) ORDER BY {k} {order}) END"
         )
         ranked_cols += [
-            k, f"{k}__raw", f"{k}__sample", f"{k}__source", f"{k}__period",
+            k, f"{k}__raw", f"{k}__sample", f"{k}__source", f"{k}__period", f"{k}__url",
             f"{strict} AS {k}__beats_global",
             f"{global_pct} AS {k}__pct_global",
             f"{mid_rank(f'country_iso2, ({k} IS NULL)')} AS {k}__pct_country",
@@ -347,6 +365,7 @@ def metric_entry(metric: Metric, row: dict[str, Any]) -> dict[str, Any]:
         "better": metric.better,
         "value": None if value is None else round(float(value), 3),
         "status": "not_measured" if value is None else "measured",
+        "cohort": metric.cohort,
     }
     if value is None and int(row.get(f"{k}__n_global") or 0) == 0 and row:
         entry["status"] = "not_loaded"
@@ -357,16 +376,25 @@ def metric_entry(metric: Metric, row: dict[str, Any]) -> dict[str, Any]:
             "source": row.get(f"{k}__source"),
             "observed_period": row.get(f"{k}__period"),
         })
+        if row.get(f"{k}__url"):
+            entry["source_url"] = row[f"{k}__url"]
     if value is not None:
         pct_global = _pct(row.get(f"{k}__pct_global"))
         pct_country = _pct(row.get(f"{k}__pct_country"))
         n_global = int(row.get(f"{k}__n_global") or 0)
         n_country = int(row.get(f"{k}__n_country") or 0)
+        beats_global = _raw_pct(row.get(f"{k}__beats_global"))
+        band = percentile_band(pct_global, metric.better, metric.key)
+        if beats_global is not None and n_global > 1 and metric.key not in PRICE_KEYS:
+            if beats_global >= 100:
+                band = "highest"
+            elif beats_global <= 0:
+                band = "lowest"
         entry.update({
             "percentile_global": pct_global,
-            "band_global": percentile_band(pct_global, metric.better, metric.key),
+            "band_global": band,
             "reading_global": percentile_reading(
-                _raw_pct(row.get(f"{k}__beats_global")), metric.better, n_global, "cities",
+                beats_global, metric.better, n_global, metric.cohort,
                 metric.key),
             "cities_with_data_global": n_global,
             "percentile_in_country": pct_country if n_country > 1 else None,
@@ -374,6 +402,8 @@ def metric_entry(metric: Metric, row: dict[str, Any]) -> dict[str, Any]:
             "source": row.get(f"{k}__source"),
             "observed_period": row.get(f"{k}__period"),
         })
+        if row.get(f"{k}__url"):
+            entry["source_url"] = row[f"{k}__url"]
     if metric.sample_sql and row.get(f"{k}__sample") is not None:
         entry["sample_size"] = int(row[f"{k}__sample"])
     if metric.note:
@@ -527,6 +557,7 @@ def fetch_country_context(cur: Any, country_codes: list[str]) -> dict[str, dict[
                 "better": row["better"],
                 "value": round(float(row["value"]), 3),
                 "year": int(row["year"]),
+                "is_stale": (date.today().year - int(row["year"])) > 5,
                 "percentile_among_countries": pct,
                 "band_among_countries": percentile_band(pct, row["better"], row["indicator"]),
                 "reading_among_countries": percentile_reading(
@@ -593,6 +624,7 @@ REGION_ABBREVIATIONS = {
 }
 REGION_DOMINANCE_RATIO = 3  # a city 3x larger than the rest of its region stands for it
 SIMILAR_SIZE_RATIO = 0.5  # rival exact match at >= half the weighted size -> ask
+SAME_COUNTRY_RATIO = 0.10  # a same-country namesake at >= 10% of the size -> ask
 
 
 def _country_lookup(cur: Any, available: set[str]) -> tuple[set[str], dict[str, str]]:
@@ -873,7 +905,8 @@ def search_places(
 
 
 def choice_reason(chosen: dict[str, Any], others: list[dict[str, Any]],
-                  qualifier: dict[str, Any] | None) -> str | None:
+                  qualifier: dict[str, Any] | None,
+                  query: str | None = None) -> str | None:
     """Why the best match is not safe to present as *the* city, or None."""
     if qualifier and qualifier.get("conflicts_with_country_iso2"):
         return (f"{qualifier['text']!r} matched outside the requested country "
@@ -890,6 +923,18 @@ def choice_reason(chosen: dict[str, Any], others: list[dict[str, Any]],
         if official:
             return (f"{official[0]['name']!r} ({official[0]['country_iso2']}) has this "
                     "exact official name; the best match only uses it as an alternate name.")
+        if query and normalize_name(query) not in normalize_name(chosen.get("name")):
+            return ("No loaded city has this as its exact official name; this match "
+                    "uses only an alternate name.")
+    if chosen["match"] == "exact":
+        top = chosen.get("weight") or 0
+        same_country = [o for o in others
+                        if o["match"] == "exact"
+                        and o.get("country_iso2") == chosen.get("country_iso2")
+                        and top and (o.get("weight") or 0) >= SAME_COUNTRY_RATIO * top]
+        if same_country:
+            return ("Another loaded city in the same country has this exact name; "
+                    "add a region or country to choose.")
     if chosen["match"] in ("exact", "exact_alternate_name"):
         top = chosen.get("weight") or 0
         rivals = [o for o in others
@@ -1001,7 +1046,7 @@ def resolve_place(cur: Any, place: str, country_iso2: str | None = None) -> dict
         chosen["match"] not in exact_kinds
         or any(o["match"] in exact_kinds for o in others)
     )
-    reason = choice_reason(chosen, others, qualifier)
+    reason = choice_reason(chosen, others, qualifier, query=place)
     country_cities = _country_name_cities(cur, place, chosen)
     if country_cities and reason is None:
         country, cities = country_cities
@@ -1104,7 +1149,9 @@ def build_comparison(cur: Any, destination_ids: list[str]) -> dict[str, Any]:
                 key: entry.get(key)
                 for key in ("value", "status", "percentile_global", "band_global",
                             "reading_global", "percentile_in_country", "source",
-                            "observed_period")
+                            "observed_period", "sample_size", "cohort",
+                            "cities_with_data_global", "cities_with_data_in_country",
+                            "source_url")
             }
             if entry["status"] == "measured":
                 comparable[i] = float(entry["value"])
@@ -1122,6 +1169,13 @@ def build_comparison(cur: Any, destination_ids: list[str]) -> dict[str, Any]:
             close = abs(best_value - runner_up) <= 0.05 * max(abs(best_value), abs(runner_up), 1e-9)
             winners = [i for i, v in comparable.items() if v == best_value]
             best = winners[0] if len(winners) == 1 and not close else None
+            best_reason = (
+                "measured_all" if best else "tie_or_within_5_percent"
+            )
+        elif not metric.better or metric.country_only:
+            best_reason = "not_comparable"
+        else:
+            best_reason = "missing_data"
         metrics_out.append({
             "key": metric.key,
             "label": metric.label,
@@ -1129,6 +1183,7 @@ def build_comparison(cur: Any, destination_ids: list[str]) -> dict[str, Any]:
             "better": metric.better,
             "values": values,
             "best": best,
+            "best_reason": best_reason,
             **({"note": metric.note} if metric.note else {}),
         })
 

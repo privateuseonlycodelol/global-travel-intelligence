@@ -119,6 +119,22 @@ CREATE TABLE IF NOT EXISTS housing_monthly (
     observed_period      TEXT NOT NULL,
     updated_at           TIMESTAMPTZ NOT NULL DEFAULT NOW()
 );
+
+CREATE TABLE IF NOT EXISTS walkability_scores (
+    destination_id  TEXT PRIMARY KEY REFERENCES destinations(destination_id) ON DELETE CASCADE,
+    score           SMALLINT NOT NULL CHECK (score BETWEEN 0 AND 100),
+    centre_score    SMALLINT CHECK (centre_score BETWEEN 0 AND 100),
+    rank_position   INT,
+    ranked_cities   INT NOT NULL,
+    city_label      TEXT NOT NULL,
+    region          TEXT,
+    country_name    TEXT NOT NULL,
+    population      BIGINT,
+    source          TEXT NOT NULL,
+    observed_period TEXT NOT NULL,
+    url             TEXT,
+    updated_at      TIMESTAMPTZ NOT NULL DEFAULT NOW()
+);
 """
 
 PHASE3_SCORER_SQL = f"""
@@ -150,6 +166,7 @@ RETURNS TABLE (
     country_iso2       CHAR(2),
     population         INT,
     iata_codes         TEXT[],
+    excluded_for_no_evidence BIGINT,
     final_score        DOUBLE PRECISION,
     data_completeness  DOUBLE PRECISION,
     metrics            JSONB,
@@ -183,9 +200,9 @@ filtered AS (
         wc.peak_month_max_c,
         wc.avg_precip_mm,
         wc.avg_rainy_days_mo,
-        p.museum_culture_count,
-        p.restaurant_count,
-        p.cuisine_entropy,
+        CASE WHEN p.museum_culture_count > 0 THEN p.museum_culture_count END AS museum_culture_count,
+        CASE WHEN p.restaurant_count > 0 THEN p.restaurant_count END AS restaurant_count,
+        CASE WHEN p.restaurant_count > 0 THEN p.cuisine_entropy END AS cuisine_entropy,
         t.nights_per_resident,
         m.pedestrian_segments_2km,
         m.total_road_segments_2km,
@@ -193,9 +210,12 @@ filtered AS (
         m.rail_segments_5km,
         m.gtfs_active_feeds,
         m.transit_stops_5km,
-        b.median_down_mbps,
-        b.median_up_mbps,
-        b.avg_latency_ms,
+        ws.score                 AS walkability_score_100,
+        ws.centre_score          AS walkability_centre_score,
+        ws.ranked_cities         AS walkability_ranked_cities,
+        CASE WHEN b.total_tests >= 10 AND b.median_down_mbps > 0 THEN b.median_down_mbps END AS median_down_mbps,
+        CASE WHEN b.total_tests >= 10 AND b.median_up_mbps > 0 THEN b.median_up_mbps END AS median_up_mbps,
+        CASE WHEN b.total_tests >= 10 AND b.avg_latency_ms > 0 THEN b.avg_latency_ms END AS avg_latency_ms,
         b.total_tests,
         h.median_monthly_local,
         h.sample_listings,
@@ -218,13 +238,15 @@ filtered AS (
     LEFT JOIN poi_metrics p      ON p.destination_id  = d.destination_id
     LEFT JOIN tourism_pressure t ON t.destination_id  = d.destination_id
     LEFT JOIN mobility_metrics m ON m.destination_id  = d.destination_id
+    LEFT JOIN walkability_scores ws ON ws.destination_id = d.destination_id
     LEFT JOIN broadband_metrics b ON b.destination_id = d.destination_id
     LEFT JOIN housing_monthly h  ON h.destination_id  = d.destination_id
     WHERE (p_min_population IS NULL OR d.population >= p_min_population)
       AND (p_countries IS NULL OR d.country_iso2 = ANY(p_countries))
       AND (NOT COALESCE(p_require_airport, FALSE) OR cardinality(d.iata_codes) > 0)
       AND (NOT COALESCE(p_exclude_schengen, FALSE) OR d.country_iso2 NOT IN (SELECT iso2 FROM schengen))
-      AND (p_min_broadband_mbps IS NULL OR b.median_down_mbps >= p_min_broadband_mbps)
+      AND (p_min_broadband_mbps IS NULL OR
+           (b.total_tests >= 10 AND b.median_down_mbps >= p_min_broadband_mbps))
       AND (NOT COALESCE(p_require_gtfs, FALSE) OR COALESCE(m.gtfs_active_feeds, 0) > 0)
       AND (p_max_temp_c IS NULL OR wc.peak_month_max_c IS NULL OR wc.peak_month_max_c <= p_max_temp_c)
 ),
@@ -276,24 +298,17 @@ crowding_ranks AS (
 ),
 walk_values AS (
     SELECT destination_id,
-           pedestrian_ratio_2km AS ratio_value,
-           LN(1 + COALESCE(pedestrian_segments_2km, 0)) AS count_value
+           walkability_score_100 AS score_value
     FROM filtered
-    WHERE pedestrian_ratio_2km IS NOT NULL
+    WHERE walkability_score_100 IS NOT NULL
 ),
 walk_ranks AS (
     SELECT destination_id,
-           0.60 * CASE
+           CASE
                WHEN COUNT(*) OVER () = 1
-                 OR MIN(ratio_value) OVER () = MAX(ratio_value) OVER ()
+                 OR MIN(score_value) OVER () = MAX(score_value) OVER ()
                THEN 0.5
-               ELSE 0.05 + 0.90 * PERCENT_RANK() OVER (ORDER BY ratio_value)
-           END
-         + 0.40 * CASE
-               WHEN COUNT(*) OVER () = 1
-                 OR MIN(count_value) OVER () = MAX(count_value) OVER ()
-               THEN 0.5
-               ELSE 0.05 + 0.90 * PERCENT_RANK() OVER (ORDER BY count_value)
+               ELSE 0.05 + 0.90 * PERCENT_RANK() OVER (ORDER BY score_value)
            END AS s_walk
     FROM walk_values
 ),
@@ -443,6 +458,7 @@ SELECT
     w.country_iso2,
     w.population,
     w.iata_codes,
+    (SELECT count(*) FROM filtered) - count(*) OVER () AS excluded_for_no_evidence,
     ROUND((w.raw_weighted_sum / NULLIF(w.total_weight, 0))::NUMERIC, 4)::DOUBLE PRECISION AS final_score,
     ROUND(COALESCE(w.active_weight / NULLIF(w.total_weight, 0), 0)::NUMERIC, 2)::DOUBLE PRECISION AS data_completeness,
     jsonb_strip_nulls(jsonb_build_object(
@@ -457,7 +473,13 @@ SELECT
         'pedestrian_segments_2km', w.pedestrian_segments_2km,
         'total_road_segments_2km', w.total_road_segments_2km,
         'pedestrian_ratio_2km', ROUND(w.pedestrian_ratio_2km::NUMERIC, 3),
-        'walkability_score', ROUND(w.s_walk::NUMERIC, 3),
+        'walkability_score', w.walkability_score_100,
+        'walkability_centre_score', w.walkability_centre_score,
+        'walkability_ranked_cities', w.walkability_ranked_cities,
+        'walkability_percentile', ROUND(w.s_walk::NUMERIC, 3),
+        'walkability_basis', CASE WHEN w.walkability_score_100 IS NOT NULL
+            THEN 'How Walkable 0-100, 5 km area average; not a global score for every city'
+        END,
         'rail_segments_5km', w.rail_segments_5km,
         'gtfs_active_feeds', w.gtfs_active_feeds,
         'transit_stops_5km', w.transit_stops_5km,

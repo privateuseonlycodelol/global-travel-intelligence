@@ -1,5 +1,10 @@
 # GHSCI on demand
 
+> **Design only — not implemented.** There are no `ghsci_jobs` or
+> `ghsci_city_indicators` tables and `place_profile` does not queue cities.
+> The only walkability values served today are How Walkable 0–100 for 690
+> cities. Treat this document as the build plan.
+
 Chosen model: **no planet file, no global batch**. Compute a city when it is
 requested, cache the result, and keep only a bounded extract cache on disk.
 

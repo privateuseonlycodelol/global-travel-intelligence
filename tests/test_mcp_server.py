@@ -30,6 +30,7 @@ class RankSqlContractTests(unittest.TestCase):
     def test_rank_sql_calls_v3_with_all_filters(self):
         for token in (
             "rank_destinations_v3",
+            "excluded_for_no_evidence",
             "%s::INT[]",
             "%s::TEXT[]",
             "%s::BOOLEAN",
@@ -45,6 +46,7 @@ class RankSqlContractTests(unittest.TestCase):
             "live_candidate_pool",
             "w_trip_cost",
             "max_total_trip_usd",
+            "dedupe_metro",
         ):
             self.assertIn(name, rank.parameters)
 

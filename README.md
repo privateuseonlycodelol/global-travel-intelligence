@@ -308,9 +308,10 @@ this implementation:
    `location.bounding_box.*` columns. `gtfs_rt` and `gbfs` feeds are excluded.
 4. **Overture transportation values are verified**: `subtype` is `road`/`rail`
    and pedestrian classes include `footway`, `pedestrian`, `living_street`,
-   `steps`, `cycleway`, `path` and `bridleway`. The walkability score blends
-   the 2 km pedestrian ratio (60%) with the log of pedestrian segment count
-   (40%), so a tiny settlement cannot win on a fluke ratio of one footway.
+   `steps`, `cycleway`, `path` and `bridleway`. The separate Overture context
+   field blends the 2 km pedestrian ratio (60%) with the log of pedestrian
+   segment count (40%), so a tiny settlement cannot win on a fluke ratio of
+   one footway. It is not the How Walkable score and is not used in ranking.
 5. **GTFS-only transit is scored.** The draft's transit percentile required
    rail data, so `--skip-overture-transport` silently dropped GTFS from the
    score. The v3 scorer computes a rail percentile where rail exists and adds a
@@ -378,7 +379,9 @@ this implementation:
   `walkability_scores` holds the published How Walkable 0-100 score for 662
   loaded cities (690 ranked). It averages everyday-place proximity across the
   5 km around the busiest point, so a car-dependent city with a dense core can
-  score well (Houston 79) while its suburbs do not. It does not measure
+  score well (Houston 79) while its suburbs do not. The profile also shows
+  `walkability_centre_score` for the single busiest point (Phoenix 56 vs 99),
+  so the core-versus-area gap is visible. It does not measure
   sidewalks, crossings, traffic safety, shade or transit, and mainland China,
   South Korea and Russia are not ranked because their listings are not openly
   licensed. Cities without a score stay NULL; the table is not a substitute for
@@ -509,7 +512,13 @@ What the score is and is not:
   ranked labels (mostly Japanese and Philippine districts) did not match a
   loaded destination and stay NULL.
 - It is amenity proximity, not sidewalk quality, crossings, traffic safety or
-  shade, and it is not yet used by `rank_destinations_v3`.
+  shade.
+- `rank_destinations` uses this same 0–100 score where it exists. Cities
+  without it are neutral in the ranking, and `excluded_for_no_evidence`
+  reports rows dropped for having no active evidence. The raw Overture
+  `pedestrian_ratio_2km` remains a separate context field, not the score.
+- GHSCI on-demand is still a design, not a live feature; no GHSCI values are
+  served. See [docs/GHSCI_ON_DEMAND.md](docs/GHSCI_ON_DEMAND.md).
 
 The previous street-grid experiment (`street_network_metrics`, intersections per
 km² and dead-end share) is still loaded by `bootstrap_street_network.py` for
@@ -531,15 +540,16 @@ instead of collapsing to zero.
 
 The transport sub-scores are explicit:
 
-- **Walkability** = 60% pedestrian-road ratio percentile + 40% pedestrian
-  segment-count percentile (Overture Transportation, 2 km).
+- **Walkability** = percentile of the How Walkable 0–100 score where a
+  city has one (662 cities). Cities without it are neutral 0.5; the ranking
+  reports `excluded_for_no_evidence` and never treats missing as zero.
 - **Transit** = 40% transit-facility count percentile + 30% active GTFS feed
   percentile + 30% rail-segment percentile (available components renormalized).
 - **Public transport access** is the 5 km count of Overture Places
   `bus_station`, `train_station`, `metro_station`,
-  `public_transit_facility_or_service` and similar facilities. Walkability itself is 60% pedestrian-ratio rank
-plus 40% log pedestrian-segment-count rank, so both density and absolute
-walkable-network size matter.
+  `public_transit_facility_or_service` and similar facilities.
+- **`pedestrian_ratio_2km`** is separate Overture context, not the ranking
+  walkability score.
 
 ```sql
 SELECT name, country_iso2, population, final_score, data_completeness,

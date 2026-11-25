@@ -48,8 +48,9 @@ final production numbers.
 
 | Measurement | Coverage | Meaning |
 | --- | ---: | --- |
-| Walkability (`pedestrian_ratio_2km` + pedestrian count) | 1,131 cities | Overture Transportation segments within 2 km; 60% ratio percentile + 40% count percentile |
-| Walkability score (`walkability_score`) | 662 cities | Published 0-100 score: everyday places within a walk, averaged over the 5 km around the busiest point |
+| Overture pedestrian context (`pedestrian_ratio_2km`) | 1,131 cities | 8-country sample; context only, not the ranking score |
+| Walkability score (`walkability_score`) | 662 cities | Published How Walkable 0-100: everyday places within a walk, averaged over the 5 km around the busiest point; used by the ranking where present |
+| Walkability at the busiest point (`walkability_centre_score`) | 662 cities | Same source, single point; shows the core-vs-area gap (Phoenix 99 vs 56) |
 | Transit facility count (`transit_stops_5km`) | 9,008 cities | Overture Places bus/train/metro/light-rail/public-transit facilities within 5 km |
 | GTFS feed count (`gtfs_active_feeds`) | 4,000 cities | Mobility Database active static feeds whose bbox contains the city |
 | Rail segments (`rail_segments_5km`) | 1,131 cities | Overture Transportation rail segments within 5 km |
@@ -122,11 +123,14 @@ GET /health
  "quote_ttl_hours":12.0,"mcp_path":"/mcp"}
 
 MCP tools listed:
-inspect_destination, rank_destinations, refresh_live_quotes
+search_places, place_profile, compare_places, rank_destinations,
+inspect_destination, refresh_live_quotes
 
 rank_destinations(start_month=6, ideal_temp_min=20, ideal_temp_max=26,
                   min_population=200000, limit=3)
-→ 3 results (London, City of Westminster, Paris)
+→ 3 results (London, City of Westminster, Paris); Westminster is a
+  separate GeoNames record inside the London urban centre, a known
+  metro-fragmentation limitation.
 
 inspect_destination(city_name="Barcelona", country_iso2="ES")
 → 12 climate rows; broadband, mobility (walk/rail + GTFS + transit stops) and crowding

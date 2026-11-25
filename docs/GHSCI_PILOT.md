@@ -89,18 +89,38 @@ several large metros run together.
 
 ## Trento results
 
-Population-weighted, 500 m walk:
+City-wide (region) values:
+
+| Indicator | Value |
+| --- | ---: |
+| Area | 26.0 km² |
+| Population | 94,058 |
+| Population per km² | 3,617 |
+| Intersections per km² | 108.3 |
+| Urban sample points | 23,534 |
+
+Population-weighted 500 m walk:
 
 | Indicator | Value |
 | --- | ---: |
 | Residents within 500 m of a fresh-food market | 80.0% |
 | Residents within 500 m of a convenience store | 73.5% |
-| Residents within 500 m of public transport (OSM) | 97.5% |
+| Residents within 500 m of public transport (OSM stops) | 97.5% |
 | Residents within 500 m of any public open space | 96.9% |
 | Residents within 500 m of large public open space | 55.3% |
-| Intersections per km² | 108.3 |
-| Population-weighted neighbourhood density | 6,233 people/km² |
-| Daily living score (fresh food + convenience + transit, 0-3) | 2.51 |
+
+The comparable index uses the **unweighted neighbourhood means**, not the
+city-wide or population-weighted values above:
+
+| Index input | Value |
+| --- | ---: |
+| `local_nh_population_density` | 4,796.7 |
+| `local_nh_intersection_density` | 153.64 |
+| `local_daily_living` | 2.001 |
+| **25-city-reference index** | **2.10** |
+
+Using the city-wide 108.3 or the population-weighted 6,233/2.51 would give a
+different number (about 1.53); that is why the inputs are listed separately.
 
 `pop_walkability` for Trento is 0.59, but that is a **within-city** relative
 index; it is not comparable with another city's value.

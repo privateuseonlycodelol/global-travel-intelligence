@@ -298,13 +298,15 @@ Islington (449), Osaka (428), Paris (408), Geneva (392) and New York City
 | Licence | **CC BY 4.0**; attribution and link required |
 | Coverage | 690 cities of 300,000+ people in 95 countries; mainland China, South Korea and Russia are not ranked |
 | Granularity | City centre plus the surrounding 5 km (not the whole metro, not a neighbourhood) |
-| Used by | `bootstrap_walkability.py` → `walkability_scores`; `place_profile` / `compare_places` |
+| Used by | `bootstrap_walkability.py` → `walkability_scores`; `place_profile` / `compare_places` / `rank_destinations` |
 | Status | **Implemented; 662 of 690 ranked cities matched to loaded destinations (631 by name, 31 by GeoNames alias)** |
 | Method | Counts everyday places (groceries, cafes, shops, parks, services) within a walk at points across the 5 km around the city's busiest point, from Overture Maps and OpenStreetMap; `score` is the average across that area, `centre_score` is the single busiest point. |
 | Notes | Amenity proximity, not a sidewalk/crossing/safety audit. A car-dependent city with a dense core can score well (Houston 79). 28 ranked labels, mostly Japanese and Philippine districts, did not match a loaded destination. The site's point API was tested against all 690 ranked cities: its point score runs a median 26 points above the published 5 km score (r = 0.35; Phoenix +43), so it is not used for missing cities. |
 
 The 28 unmatched labels are kept out of the database rather than mapped to a
-neighbouring core city. The score is not yet used by `rank_destinations_v3`.
+neighbouring core city. `rank_destinations_v3` uses the 0–100 score where it
+exists; cities without it are neutral (0.5) and are reported via
+`excluded_for_no_evidence` when no active dimension has evidence.
 
 ## 4. Missing dimensions and verified candidate sources
 

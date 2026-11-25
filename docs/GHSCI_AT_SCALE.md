@@ -1,5 +1,8 @@
 # Running GHSCI for every city
 
+> **Design only — no GHSCI values are served by the MCP server.** The pilot
+> exists; the queue, tables and on-demand worker do not.
+
 Status: **plan, with a working single-city pilot** (Trento, see
 [GHSCI_PILOT.md](GHSCI_PILOT.md)). This is how to get from 1 city to ~11,400.
 
@@ -19,7 +22,7 @@ centroid within a country, because GHSCI only needs the centre polygon.
 | Input | Source | Size / note |
 | --- | --- | --- |
 | Urban-centre polygons | GHS-UCDB R2024A geography theme | 11 MB GeoPackage, already downloaded |
-| Population | GHSL R2023A 100 m, 2025 epoch | 4.9 GB global zip, or 375 tiles (~30 MB each) |
+| Population | GHSL R2023A 100 m, 2025 epoch | 4.9 GB global zip, or 375 tiles (~95 MB each) |
 | OpenStreetMap | Geofabrik continent/country PBFs, or planet | Europe ~30 GB; planet ~80 GB |
 | GTFS | optional | skip initially; OSM transit stops still give `pt_osm_any` |
 | GHSCI code | `healthysustainablecities/global-indicators` | MIT; local patches documented in the pilot |

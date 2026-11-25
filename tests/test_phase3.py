@@ -349,11 +349,15 @@ class ScorerContractTests(unittest.TestCase):
         self.assertIn("0.05 + 0.90 * PERCENT_RANK()", b.PHASE3_SCORER_SQL)
         self.assertIn("THEN 0.5", b.PHASE3_SCORER_SQL)
 
-    def test_walk_rank_blends_ratio_and_segment_count(self):
+    def test_walk_rank_uses_published_score(self):
         self.assertIn("walk_values", b.PHASE3_SCORER_SQL)
-        self.assertIn("0.60 * CASE", b.PHASE3_SCORER_SQL)
-        self.assertIn("0.40 * CASE", b.PHASE3_SCORER_SQL)
+        self.assertNotIn("0.60 * CASE", b.PHASE3_SCORER_SQL)
         self.assertIn("pedestrian_segments_2km", b.PHASE3_SCORER_SQL)
+        self.assertIn("'walkability_score', w.walkability_score_100", b.PHASE3_SCORER_SQL)
+        self.assertIn("walkability_score_100 AS score_value", b.PHASE3_SCORER_SQL)
+        self.assertIn("CASE WHEN p.restaurant_count > 0", b.PHASE3_SCORER_SQL)
+        self.assertIn("CASE WHEN b.total_tests >= 10", b.PHASE3_SCORER_SQL)
+        self.assertIn("excluded_for_no_evidence", b.PHASE3_SCORER_SQL)
 
 
 if __name__ == "__main__":

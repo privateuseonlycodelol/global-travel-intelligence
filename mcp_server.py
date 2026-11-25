@@ -164,7 +164,7 @@ DO UPDATE SET
 
 RANK_SQL = """
 SELECT destination_id, name, country_iso2, population, iata_codes,
-       final_score, data_completeness, metrics, provenance
+       excluded_for_no_evidence, final_score, data_completeness, metrics, provenance
 FROM rank_destinations_v3(
     %s::INT[], %s::DOUBLE PRECISION, %s::DOUBLE PRECISION,
     %s::DOUBLE PRECISION, %s::INT, %s::TEXT[], %s::BOOLEAN,
@@ -214,8 +214,9 @@ mcp = FastMCP(
         "read docs/DATA_SOURCES.md for source, licence and coverage. Missing data "
         "is NULL and must be reported as unavailable; a neutral 0.5 score component "
         "is ranking arithmetic, not an observed value. Tourism pressure is EU NUTS 2 "
-        "only; a published 0-100 walkability score covers 662 large cities, while the "
-        "pedestrian-network share and transit evidence depend on the Overture load."
+        "only; the 0-100 How Walkable score covers 662 large cities and is used by "
+        "ranking where present, while transit evidence depends on the Overture load. "
+        "Missing walkability is neutral, not a measured zero."
     ),
 )
 
@@ -795,6 +796,58 @@ def _apply_stage2_rescore(
     return candidates
 
 
+def _dedupe_metro_rows(rows: list[dict[str, Any]]) -> tuple[list[dict[str, Any]], int]:
+    """Keep one row per GHS urban centre, annotating the shared-group size.
+
+    Rows without a street-network match are kept individually. The highest
+    already-sorted row for each centre wins.
+    """
+    if len(rows) < 2:
+        return rows, 0
+    ids = [str(row.get("destination_id")) for row in rows if row.get("destination_id")]
+    try:
+        with _get_pool().connection() as conn:
+            with conn.cursor() as cur:
+                cur.execute("SELECT to_regclass('street_network_metrics') IS NOT NULL AS present")
+                if not cur.fetchone()["present"]:
+                    return rows, 0
+                cur.execute(
+                    """
+                    SELECT destination_id, urban_centre_id, urban_centre_name
+                    FROM street_network_metrics
+                    WHERE destination_id = ANY(%s)
+                    """,
+                    (ids,),
+                )
+                groups = {
+                    str(r["destination_id"]): (r["urban_centre_id"], r["urban_centre_name"])
+                    for r in cur.fetchall()
+                }
+    except Exception:
+        return rows, 0
+    if not groups:
+        return rows, 0
+    counts: dict[Any, int] = {}
+    for centre, _name in groups.values():
+        counts[centre] = counts.get(centre, 0) + 1
+    kept: list[dict[str, Any]] = []
+    seen: set[Any] = set()
+    for row in rows:
+        dest = str(row.get("destination_id"))
+        centre, name = groups.get(dest, (None, None))
+        if centre is not None:
+            if centre in seen:
+                continue
+            seen.add(centre)
+            row["metro_group"] = {
+                "urban_centre_id": centre,
+                "urban_centre_name": name,
+                "destinations_in_result": counts.get(centre, 1),
+            }
+        kept.append(row)
+    return kept, len(rows) - len(kept)
+
+
 @mcp.tool
 def rank_destinations(
     start_month: int | None = None,
@@ -825,8 +878,13 @@ def rank_destinations(
     w_flight_time: float = 0.15,
     live_candidate_pool: int = 8,
     limit: int = 10,
+    dedupe_metro: bool = True,
 ) -> dict[str, Any]:
-    """Rank destinations by static evidence and, when available, live trip cost."""
+    """Rank destinations by static evidence and, when available, live trip cost.
+
+    Walkability uses the published How Walkable 0-100 score where present.
+    ``dedupe_metro`` keeps one row per GHS urban centre.
+    """
     if (start_date is None) != (end_date is None):
         raise ValueError("Provide both start_date and end_date, or neither.")
 
@@ -901,19 +959,32 @@ def rank_destinations(
         # Never spend SerpApi credits on more than 15 finalists.
         stage1_limit = min(15, max(clamped_limit, min(15, max(1, pool_size))))
     else:
-        stage1_limit = clamped_limit
+        stage1_limit = min(75, clamped_limit * 3) if dedupe_metro else clamped_limit
 
-    norm_countries = (
-        [
-            str(country).strip().upper()
-            for country in countries
-            if str(country).strip()
-        ]
-        if countries
-        else None
-    )
-    if norm_countries == []:
-        norm_countries = None
+    norm_countries: list[str] | None = None
+    if countries:
+        with _get_pool().connection() as conn:
+            with conn.cursor() as cur:
+                available = set()
+                cur.execute("SELECT to_regclass('country_facts') IS NOT NULL AS present")
+                if cur.fetchone()["present"]:
+                    available = {"country_facts"}
+                requested, unknown = [], []
+                for country in countries:
+                    text = str(country).strip()
+                    if not text:
+                        continue
+                    code = place_profiles._normalize_country(cur, text, available)
+                    if code:
+                        requested.append(code)
+                    else:
+                        unknown.append(text)
+        if unknown:
+            raise ValueError(
+                "Unrecognized country filter(s): " + ", ".join(sorted(unknown))
+                + ". Use an ISO2 code (GB) or a country name (United Kingdom)."
+            )
+        norm_countries = sorted(set(requested)) or None
     eff_require_airport = bool(require_airport or run_stage2)
     eff_min_population = max(
         40000,
@@ -946,6 +1017,12 @@ def rank_destinations(
         with conn.cursor() as cur:
             cur.execute(RANK_SQL, args)
             rows = [dict(row) for row in cur.fetchall()]
+
+    metro_dropped = 0
+    if not run_stage2:
+        if dedupe_metro:
+            rows, metro_dropped = _dedupe_metro_rows(rows)
+        rows = rows[:clamped_limit]
 
     if run_stage2 and rows and quote_start is not None and quote_end is not None:
         quotes_by_id: dict[str, dict[str, Any]] = {}
@@ -983,6 +1060,9 @@ def rank_destinations(
             max_total_trip_usd=max_total_trip_usd,
             max_flight_duration_min=max_flight_duration_min,
         )
+        metro_dropped = 0
+        if dedupe_metro:
+            rows, metro_dropped = _dedupe_metro_rows(rows)
         rows = rows[:clamped_limit]
 
     if run_stage2:
@@ -996,12 +1076,24 @@ def rank_destinations(
     else:
         live_pricing_status = "disabled"
 
+    excluded_for_no_evidence = None
+    if rows:
+        excluded_for_no_evidence = rows[0].pop("excluded_for_no_evidence", None)
+
     ignored_constraints: list[str] = []
     if not run_stage2:
         if max_total_trip_usd is not None:
             ignored_constraints.append("max_total_trip_usd")
         if max_flight_duration_min is not None:
             ignored_constraints.append("max_flight_duration_min")
+
+    zero_result_reason = None
+    if not rows:
+        zero_result_reason = (
+            "No city matched the filters and at least one active weight had "
+            "usable evidence. For walkability, How Walkable covers 662 cities "
+            "of 300k+; a smaller city can return zero."
+        )
 
     payload = {
         "query_context": {
@@ -1015,12 +1107,26 @@ def rank_destinations(
             "normalized_static_weights": dict(
                 zip(STATIC_WEIGHT_KEYS, normalized_weights)
             ),
+            "excluded_for_no_evidence": excluded_for_no_evidence,
+            "metro_dedupe": {
+                "enabled": bool(dedupe_metro),
+                "dropped": metro_dropped,
+            },
+            "zero_result_reason": zero_result_reason,
+            "walkability_basis": (
+                "walkability_score is How Walkable 0-100 (5 km area average) for "
+                "662 large cities; cities without it are neutral (0.5), and "
+                "excluded_for_no_evidence reports rows dropped for having no "
+                "active evidence. It is not a global score for every city."
+            ),
             "coverage_notes": [
                 "tourism_pressure is Eurostat NUTS 2 only (EU/EFTA); not global city-level",
-                "walkability/rail may be absent if Overture Transportation was not loaded; "
-                "walkability_scores covers 662 large cities (How Walkable, 2026)",
+                "walkability_score covers 662 cities of 300k+ (How Walkable, 0-100); "
+                "cities without it are neutral, so do not read this as global walkability",
+                "pedestrian_ratio_2km is a separate Overture 8-country context field, not the score",
                 "transit_stops_5km is an Overture Places facility count, not service frequency",
                 "housing_monthly, when present, is in local currency (no FX conversion)",
+                "climate is WorldClim 2.1 (1970-2000 averages; recent years are typically warmer)",
                 "missing dimensions are NULL; see docs/DATA_SOURCES.md",
             ],
         },
@@ -1038,7 +1144,7 @@ def inspect_destination(
     city_name: str | None = None,
     country_iso2: str | None = None,
 ) -> dict[str, Any]:
-    """Return a destination's full climate, POI, mobility, broadband, housing and crowding evidence."""
+    """Return a destination's full climate, POI, mobility, walkability, broadband, housing and crowding evidence."""
     if not destination_id and not city_name:
         raise ValueError("Provide destination_id or city_name.")
 
@@ -1142,6 +1248,20 @@ def inspect_destination(
             )
             tourism_pressure = cur.fetchone()
 
+            walkability_scores = None
+            cur.execute("SELECT to_regclass('walkability_scores') IS NOT NULL AS present")
+            if cur.fetchone()["present"]:
+                cur.execute(
+                    """
+                    SELECT score, centre_score, rank_position, ranked_cities,
+                           city_label, source, observed_period, url
+                    FROM walkability_scores
+                    WHERE destination_id = %s
+                    """,
+                    (resolved_id,),
+                )
+                walkability_scores = cur.fetchone()
+
     payload = {
         "destination": destination,
         "name_resolution": resolution,
@@ -1151,6 +1271,7 @@ def inspect_destination(
         "broadband_metrics": broadband_metrics,
         "housing_monthly": housing_monthly,
         "tourism_pressure": tourism_pressure,
+        "walkability_scores": walkability_scores,
         "data_sources_documentation": DATA_SOURCES_DOC,
     }
     return _jsonable(payload)

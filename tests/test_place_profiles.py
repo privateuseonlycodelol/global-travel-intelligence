@@ -110,7 +110,9 @@ class QualifierTests(unittest.TestCase):
         self.assertIsNotNone(pp.choice_reason({"match": "prefix"}, [], None))
         self.assertIsNotNone(pp.choice_reason({"match": "prefix"}, [{"match": "prefix"}], None))
         self.assertIsNotNone(pp.choice_reason(exact, [{"match": "exact", "weight": 600}], None))
-        self.assertIsNone(pp.choice_reason(exact, [{"match": "exact", "weight": 100}], None))
+        # A same-country namesake at 10% of the chosen city's size does ask.
+        self.assertIsNotNone(pp.choice_reason(exact, [{"match": "exact", "weight": 100}], None))
+        self.assertIsNone(pp.choice_reason(exact, [{"match": "exact", "weight": 10}], None))
 
     def test_split_qualifier(self):
         self.assertEqual(pp.split_qualifier("Porto, Portugal"), ("Porto", "Portugal"))
@@ -159,6 +161,11 @@ class MetricSqlTests(unittest.TestCase):
     def test_local_currency_has_no_global_percentile(self):
         sql = pp.build_metric_sql(set(pp.TABLES.values()))
         self.assertIn("NULL::double precision AS short_let_monthly_local__pct_global", sql)
+
+    def test_walkability_centre_and_attribution_are_exposed(self):
+        sql = pp.build_metric_sql(set(pp.TABLES.values()))
+        self.assertIn("AS walkability_centre_score__pct_global", sql)
+        self.assertIn("AS walkability_score__url", sql)
 
 
 class MetricEntryTests(unittest.TestCase):
@@ -228,6 +235,17 @@ class MetricEntryTests(unittest.TestCase):
                          "larger than >99% of the other 13,100 cities with data")
         self.assertEqual(pp.percentile_reading(0.4, "lower", 202, "countries", "price_level_vs_usd"),
                          "cheaper than <1% of the other 201 countries with data")
+
+    def test_walkability_entry_carries_cohort_and_url(self):
+        metric = next(m for m in pp.METRICS if m.key == "walkability_score")
+        entry = pp.metric_entry(metric, {
+            "walkability_score": 90, "walkability_score__pct_global": 0.95,
+            "walkability_score__n_global": 662, "walkability_score__source": "How Walkable",
+            "walkability_score__period": "2026-10-22",
+            "walkability_score__url": "https://howwalkable.com/cities/germany/berlin",
+        })
+        self.assertEqual(entry["cohort"], "scored cities (300k+, 95 countries)")
+        self.assertEqual(entry["source_url"], "https://howwalkable.com/cities/germany/berlin")
 
     def test_zero_poi_count_is_none_listed_not_ranked(self):
         entry = pp.metric_entry(self.metric, {
@@ -375,11 +393,11 @@ class LiveDatabaseTests(unittest.TestCase):
         with self.conn.cursor() as cur:
             for query in ("Lisbn", "Paris, TX", "Naples, FL", "Portland, UK", "Bath",
                           "Barca", "Springfield", "Richmond, CA", "Aspen", "Bali",
-                          "London, Scotland", "Belgrade, SE"):
+                          "Portland", "London, Scotland", "Belgrade, SE"):
                 self.assertTrue(pp.resolve_place(cur, query)["needs_choice"], query)
             self.assertTrue(pp.resolve_place(cur, "Salem, IN", country_iso2="US")["needs_choice"])
             self.assertEqual(pp.resolve_place(cur, "Cancun")["resolved"]["country_iso2"], "MX")
-            for query in ("Lisbon", "Paris", "Portland", "London", "Porto", "Madrid", "Taipei"):
+            for query in ("Lisbon", "Paris", "London", "Porto", "Madrid", "Taipei"):
                 self.assertFalse(pp.resolve_place(cur, query)["needs_choice"], query)
 
     def test_region_name_offers_cities_in_region(self):
