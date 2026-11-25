@@ -254,8 +254,6 @@ METRIC_GROUP_LABELS = {
 }
 
 NOT_IN_DATABASE = [
-    "Long-term rent outside the ~1,250 HUD/ONS/Eurostat cities (no global "
-    "city-level open source loaded)",
     "City-level crime rates (national advisories and the homicide rate are "
     "country-scoped)",
     "Neighbourhood-level walkability, sidewalk quality and crossing safety "
