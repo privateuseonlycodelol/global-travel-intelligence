@@ -332,7 +332,7 @@ exists; cities without it are neutral (0.5) and are reported via
 | Dataset | Daily 2 m max/min temperature and corrected precipitation, 2015-2024, sampled at each city |
 | URL | https://power.larc.nasa.gov/docs/services/api/temporal/daily/ |
 | Licence | NASA open data; attribution requested (confirm current terms) |
-| Coverage | Loaded for the cities processed by `bootstrap_climate_recent.py`; 118 Italian cities in the first run |
+| Coverage | Loaded in batches by `bootstrap_climate_recent.py`; 1,679+ cities at the last snapshot, continuing |
 | Granularity | City point; monthly normals |
 | Used by | `bootstrap_climate_recent.py` → `climate_recent`; `place_profile.recent_climate` |
 | Status | **Implemented loader; not yet global.** |
@@ -548,6 +548,9 @@ means without labelling the approximation.
 | `destinations` | GeoNames | No | n/a |
 | `destinations.iata_codes` | OurAirports + PostGIS | Yes (spatial match) | n/a |
 | `climate_monthly` | WorldClim 2.1 | No (sampled) | `WorldClim 2.1 (5m)` |
+| `climate_recent` | NASA POWER daily temperature/precipitation | Yes (monthly normals) | `NASA POWER (MERRA-2)` |
+| `air_quality_annual` | SatPM V6.GL.03 annual PM2.5 | No (sampled) | `SatPM V6.GL.03 (CNN PM2.5, 0.1 degree annual)` |
+| `air_quality_monthly` | SatPM V6.GL.03 monthly PM2.5 | No (sampled) | `SatPM V6.GL.03 monthly (CNN PM2.5, 0.1 degree)` |
 | `poi_metrics` | Overture Places | Yes (counts/entropy) | `Overture Maps Places ...` |
 | `broadband_metrics` | Ookla | Yes (weighted median) | `Ookla Open Data (fixed)` |
 | `mobility_metrics` (walk/rail) | Overture Transportation | Yes (counts/ratio) | `Overture Maps Transportation` |
