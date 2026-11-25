@@ -11,6 +11,14 @@ import place_profiles as pp  # noqa: E402
 
 
 class OfflineTests(unittest.TestCase):
+    def test_work_overlap_uses_utc_offsets(self):
+        lisbon = pp.work_overlap("Europe/Lisbon")
+        eastern = {z["zone"]: z for z in lisbon["zones"]}["US Eastern"]
+        self.assertEqual(eastern["overlap_hours_january"], 3.0)
+        singapore = pp.work_overlap("Asia/Singapore")
+        utc = {z["zone"]: z for z in singapore["zones"]}["UTC"]
+        self.assertEqual(utc["overlap_hours_january"], 0.0)
+
     def test_daylight_at_equator_is_twelve_hours(self):
         for month in (1, 6, 12):
             self.assertAlmostEqual(pp.daylight_hours(0.0, month), 12.0, delta=0.1)

@@ -860,6 +860,58 @@ def fetch_geography(cur: Any, destination_ids: list[str]) -> dict[str, dict[str,
     return out
 
 
+WORK_REFERENCE_ZONES = (
+    ("UTC", "UTC"),
+    ("US Eastern", "America/New_York"),
+    ("Central European", "Europe/Berlin"),
+    ("India", "Asia/Kolkata"),
+    ("Singapore", "Asia/Singapore"),
+)
+
+
+def _utc_offset_hours(timezone_name: str, month: int) -> float | None:
+    from datetime import datetime
+    from zoneinfo import ZoneInfo
+
+    try:
+        zone = ZoneInfo(timezone_name)
+        moment = datetime(2026, month, 15, 12, 0, tzinfo=zone)
+        offset = moment.utcoffset()
+        return offset.total_seconds() / 3600 if offset is not None else None
+    except Exception:
+        return None
+
+
+def work_overlap(timezone_name: str | None) -> dict[str, Any]:
+    """Overlap of a 09:00-17:00 local working day with reference zones."""
+    if not timezone_name:
+        return {"status": "not_measured"}
+    rows = []
+    for label, reference in WORK_REFERENCE_ZONES:
+        item = {"zone": label, "reference_timezone": reference}
+        for month, key in ((1, "january"), (7, "july")):
+            local = _utc_offset_hours(timezone_name, month)
+            ref = _utc_offset_hours(reference, month)
+            if local is None or ref is None:
+                item[f"overlap_hours_{key}"] = None
+                continue
+            start = max(9.0 - local, 9.0 - ref)
+            end = min(17.0 - local, 17.0 - ref)
+            item[f"overlap_hours_{key}"] = round(max(0.0, end - start), 1)
+        rows.append(item)
+    return {
+        "status": "loaded",
+        "timezone": timezone_name,
+        "working_hours": "09:00-17:00 local",
+        "zones": rows,
+        "note": (
+            "Deterministic overlap of a standard local working day with each "
+            "reference zone, using January and July UTC offsets. It ignores "
+            "lunch, flexible hours and personal schedules."
+        ),
+    }
+
+
 def daylight_hours(latitude: float, month: int) -> float:
     """Geometric daylight at the 15th of a month, without refraction."""
     day_of_year = [15, 46, 74, 105, 135, 166, 196, 227, 258, 288, 319, 349][month - 1]
@@ -1773,6 +1825,7 @@ def build_profile(cur: Any, destination_id: str) -> dict[str, Any]:
         },
         "housing": rent_summary(rents),
         "geography": geography_summary(geography, basics["lat"]),
+        "work_overlap": work_overlap(basics.get("timezone")),
         "facilities": facility_summary(facilities),
         "airport_access": airport_summary(airports),
         "tourism_seasonality": tourism_seasonality(tourism_monthly),
@@ -1897,6 +1950,9 @@ def build_comparison(cur: Any, destination_ids: list[str]) -> dict[str, Any]:
         "housing": {i: rent_summary(rents.get(i, [])) for i in ids},
         "geography": {
             i: geography_summary(geography.get(i), basics[i]["lat"]) for i in ids
+        },
+        "work_overlap": {
+            i: work_overlap(basics[i].get("timezone")) for i in ids
         },
         "facilities": {i: facility_summary(facilities.get(i)) for i in ids},
         "airport_access": {i: airport_summary(airports.get(i)) for i in ids},
