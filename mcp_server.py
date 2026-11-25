@@ -1262,6 +1262,29 @@ def inspect_destination(
                 )
                 walkability_scores = cur.fetchone()
 
+            ghsci_indicators = None
+            cur.execute("SELECT to_regclass('ghsci_city_indicators') IS NOT NULL AS present")
+            if cur.fetchone()["present"]:
+                cur.execute(
+                    """
+                    SELECT urban_centre_id, urban_centre_name, match_kind,
+                           area_km2, population, sample_points,
+                           pct_fresh_food_500m, pct_convenience_500m,
+                           pct_transit_500m, pct_open_space_500m,
+                           pct_large_open_space_500m,
+                           local_nh_population_density,
+                           local_nh_intersection_density, local_daily_living,
+                           ghsci_walkability_index, low_confidence,
+                           source, source_url, observed_period, ghsci_commit,
+                           osm_extract_date, ghsl_epoch, ucdb_release,
+                           sample_interval_m
+                    FROM ghsci_city_indicators
+                    WHERE destination_id = %s
+                    """,
+                    (resolved_id,),
+                )
+                ghsci_indicators = cur.fetchone()
+
     payload = {
         "destination": destination,
         "name_resolution": resolution,
@@ -1272,6 +1295,7 @@ def inspect_destination(
         "housing_monthly": housing_monthly,
         "tourism_pressure": tourism_pressure,
         "walkability_scores": walkability_scores,
+        "ghsci_city_indicators": ghsci_indicators,
         "data_sources_documentation": DATA_SOURCES_DOC,
     }
     return _jsonable(payload)
