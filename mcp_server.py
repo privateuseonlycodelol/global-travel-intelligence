@@ -1274,16 +1274,23 @@ def inspect_destination(
             )
             tourism_pressure = cur.fetchone()
 
-            def optional_rows(sql: str, params: tuple = ()) -> list[dict[str, Any]]:
-                table = sql.split("FROM ", 1)[1].split()[0]
-                cur.execute("SELECT to_regclass(%s) IS NOT NULL AS present", (table,))
-                if not cur.fetchone()["present"]:
-                    return []
+            def optional_rows(
+                sql: str, params: tuple = (), tables: tuple[str, ...] | None = None
+            ) -> list[dict[str, Any]]:
+                names = tables or (sql.split("FROM ", 1)[1].split()[0],)
+                for table in names:
+                    cur.execute(
+                        "SELECT to_regclass(%s) IS NOT NULL AS present", (table,)
+                    )
+                    if not cur.fetchone()["present"]:
+                        return []
                 cur.execute(sql, params)
                 return [dict(row) for row in cur.fetchall()]
 
-            def optional_row(sql: str, params: tuple = ()) -> dict[str, Any] | None:
-                rows = optional_rows(sql, params)
+            def optional_row(
+                sql: str, params: tuple = (), tables: tuple[str, ...] | None = None
+            ) -> dict[str, Any] | None:
+                rows = optional_rows(sql, params, tables)
                 return rows[0] if rows else None
 
             recent_climate = optional_rows(
@@ -1379,6 +1386,7 @@ def inspect_destination(
                 WHERE m.destination_id = %s
                 """,
                 (resolved_id,),
+                ("destination_metro", "urban_centre_hazard"),
             )
             health_access = optional_row(
                 """
@@ -1395,6 +1403,7 @@ def inspect_destination(
                 WHERE m.destination_id = %s
                 """,
                 (resolved_id,),
+                ("destination_metro", "urban_centre_health"),
             )
 
             walkability_scores = None
