@@ -17,6 +17,7 @@ calls:
 | Broadband | Ookla Open Data (S3 Parquet) | one DuckDB scan + grid hash join |
 | Walkability/transit | Overture Maps Transportation + Mobility Database GTFS | one transport scan + one CSV join |
 | Walkability score (global) | How Walkable city ranking (Overture/OSM) | one CSV, name/alias match |
+| Air quality (global) | SatPM V6.GL.03 annual PM2.5 (0.1°) | one NetCDF, point sample |
 | Housing (optional) | Inside Airbnb city dumps | local CSV scan |
 | Tourism pressure (optional) | Eurostat NUTS 2 tourism + population | one API + GISCO boundary join |
 
@@ -788,6 +789,7 @@ Implemented third-party sources:
 | POIs | Overture Maps Places | CDLA-Permissive 2.0 (some source datasets Apache 2.0/CC0) | global |
 | Walkability/rail | Overture Maps Transportation | **ODbL; © OpenStreetMap contributors; share-alike for derived databases** | partial: 1,131 cities across DE/GB/TR/ES/FR/PT/SE/LU |
 | Walkability score (0-100) | How Walkable city ranking (Overture Maps + OpenStreetMap) | CC BY 4.0; attribution and link required | 690 cities ranked, 662 matched to loaded destinations |
+| Annual PM2.5 | SatPM V6.GL.03 (CNN) | CC BY 4.0; attribution required | 13,101 cities, 0.1° city-point sample |
 | Broadband | Ookla Open Data | **CC BY-NC-SA 4.0; non-commercial; attribution required** | global tiles |
 | GTFS coverage | Mobility Database | catalog metadata CC0 1.0; individual feeds retain provider licences | global catalog |
 | Public transport stops | Overture Places transit facilities | CDLA-Permissive 2.0 / per-provider terms | global where Overture Places has facilities |

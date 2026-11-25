@@ -96,6 +96,7 @@ TABLES = {
     "h": "housing_monthly",
     "v": "walkability_scores",
     "g": "ghsci_city_indicators",
+    "a": "air_quality_annual",
 }
 
 METRICS: tuple[Metric, ...] = (
@@ -193,6 +194,13 @@ METRICS: tuple[Metric, ...] = (
            "walkability_ghsci", "g.source", "g.observed_period",
            note="Sum of access to fresh food, convenience and public transport; one of the index inputs.",
            cohort="cities with a GHSCI run", source_url_expr="g.source_url"),
+    Metric("pm25_annual_ugm3", "a", "pm25_ugm3",
+           "Annual PM2.5 concentration", "µg/m³", "lower", "environment",
+           "a.source", "a.observed_period",
+           note=("SatPM V6.GL.03 0.1° (~11 km) satellite/model/monitor-fused annual "
+                 "estimate for 2024. City-point sample; not a monitor or a "
+                 "neighbourhood map."),
+           cohort="cities in the air-quality sample", source_url_expr="a.source_url"),
     Metric("transit_stations_5km", "m", "transit_stops_5km",
            "Bus, rail and metro stations within 5 km", "stations", "higher",
            "getting_around", "m.transit_stops_source", "m.transit_stops_period",
@@ -242,6 +250,7 @@ METRIC_GROUP_LABELS = {
     "crowding": "Tourist crowding",
     "cost": "Cost",
     "walkability_ghsci": "Walkability (GHSCI)",
+    "environment": "Air and environment",
 }
 
 NOT_IN_DATABASE = [

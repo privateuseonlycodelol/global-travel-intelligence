@@ -22,6 +22,8 @@ final production numbers.
 | `mobility_metrics` with walk/rail | 1,131 | Overture Transportation loaded for DE, GB, TR, ES, FR, PT, SE and LU |
 | `walkability_scores` | 662 | How Walkable 2026: 690 ranked cities, 662 matched by name/alias |
 | `ghsci_city_indicators` | 25 | GHSCI: Trento pilot + 24 of the published 25-city study |
+| `air_quality_annual` | 13,101 | SatPM V6.GL.03 annual PM2.5, 2024, 0.1° point sample |
+| `climate_recent` | 20,148 | 1,679 cities x 12 months, NASA POWER 2015-2024 |
 | `mobility_metrics` with GTFS > 0 | 4,000 | Mobility Database |
 | `mobility_metrics` with transit stops | 9,008 | Overture Places transit facilities within 5 km |
 | `tourism_pressure` | 1,405 | Eurostat NUTS 2 2024; EU/EFTA only |

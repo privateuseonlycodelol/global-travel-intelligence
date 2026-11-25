@@ -338,6 +338,21 @@ exists; cities without it are neutral (0.5) and are reported via
 | Status | **Implemented loader; not yet global.** |
 | Notes | Separate from WorldClim 1970-2000. Adds rainy days, days >=30 C, warm nights and recent precipitation. A city-point sample; not a neighbourhood climatology. |
 
+### 3.17 Annual city PM2.5
+
+| Field | Value |
+| --- | --- |
+| Party | Third-party |
+| Publisher | Atmospheric Composition Analysis Group / Washington University in St. Louis (SatPM) |
+| Dataset | V6.GL.03 CNN annual PM2.5, 0.1 degree, 2024 |
+| URL | https://www.satpm.org/ ; S3 `satpmdata` |
+| Licence | CC BY 4.0; attribution required |
+| Coverage | Global land between 60 S and 70 N; 13,101 loaded cities sampled in 2026 |
+| Granularity | 0.1 degree grid (~11 km); city-point sample |
+| Used by | `bootstrap_air_quality.py` → `air_quality_annual`; `place_profile` |
+| Status | **Implemented; 13,101 cities** |
+| Notes | Satellite/model/monitor-fused annual estimate, not a monitor reading; it cannot resolve near-road or neighbourhood differences. Kept separate from the country-level World Bank PM2.5 indicator. |
+
 ## 4. Missing dimensions and verified candidate sources
 
 These sources were checked but are **not** loaded. They are listed so a
