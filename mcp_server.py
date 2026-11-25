@@ -1157,7 +1157,7 @@ def rank_destinations(
                 "rent_monthly holds official local-currency rents for about 1,250 cities; it is not a rank input",
                 "facility counts, hazard exposure, health access, geography and airport access are profile context, not scored",
                 "scheduled GTFS headways are profile context; the rank transit score still uses availability proxies",
-                "the vegetation-only and full green scores are profile context, not nature quality, and are not in final_score",
+                "the vegetation-only and all-encompassing green scores are profile context, not nature quality, and are not in final_score",
                 "housing_monthly is empty unless Inside Airbnb has been loaded",
                 "climate is WorldClim 2.1 (1970-2000 averages); recent monthly normals are a separate NASA POWER layer for a growing subset",
                 "missing dimensions are NULL; see docs/DATA_SOURCES.md",
@@ -1480,15 +1480,16 @@ def inspect_destination(
                 (resolved_id,),
                 ("destination_green_score",),
             )
-            green_score_full = optional_row(
+            green_score_all = optional_row(
                 """
-                SELECT green_score_full_0_100, vegetation_score, park_score,
-                       air_score, water_score, parks_per_100k, pm25_ugm3,
-                       water_distance_km, weights, source, observed_period
-                FROM destination_green_score_full WHERE destination_id = %s
+                SELECT green_score_all_0_100, vegetation_score, park_score,
+                       air_score, water_score, park_count_5km, pm25_ugm3,
+                       coast_distance_km, lake_distance_km, lake_area_km2,
+                       weights, source, observed_period
+                FROM destination_green_score_all WHERE destination_id = %s
                 """,
                 (resolved_id,),
-                ("destination_green_score_full",),
+                ("destination_green_score_all",),
             )
             climate_class = optional_row(
                 """
@@ -1575,7 +1576,7 @@ def inspect_destination(
         "inland_water": inland_water,
         "climate_class": climate_class,
         "green_score": green_score,
-        "green_score_full": green_score_full,
+        "green_score_all": green_score_all,
         "gtfs_feeds": gtfs_feeds,
         "transit_service": transit_service,
         "poi_metrics": poi_metrics,

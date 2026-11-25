@@ -99,7 +99,7 @@ TABLES = {
     "a": "air_quality_annual",
     "s": "transit_city_weekday_peak",
     "n": "destination_green_score",
-    "f": "destination_green_score_full",
+    "f": "destination_green_score_all",
 }
 
 METRICS: tuple[Metric, ...] = (
@@ -197,17 +197,17 @@ METRICS: tuple[Metric, ...] = (
            "walkability_ghsci", "g.source", "g.observed_period",
            note="Sum of access to fresh food, convenience and public transport; one of the index inputs.",
            cohort="cities with a GHSCI run", source_url_expr="g.source_url"),
-    Metric("green_score_full", "f", "green_score_full_0_100",
-           "Full green score (vegetation, parks, air and water)",
+    Metric("green_score_all", "f", "green_score_all_0_100",
+           "All-encompassing green score (vegetation, parks, air and water)",
            "score 0-100", "higher", "environment",
-           "'First-party composite from ESA WorldCover, Overture Places, SatPM, HydroLAKES/Natural Earth'",
+           "'First-party: ESA WorldCover 2021, Overture Places, SatPM 2024, HydroLAKES/Natural Earth'",
            "'2021-2024'",
-           note=("40% vegetation cover, 25% mapped parks per 100k residents, "
-                 "25% annual PM2.5 percentile (lower is better), 10% distance "
-                 "to the nearer coast or lake (linear decay to zero at 50 km). "
-                 "A first-party composite, not an observation. Requires all "
-                 "four components; no value is imputed. Park counts are "
-                 "mapped amenities, and a zero is none listed."),
+           note=("40% vegetation cover, 20% mapped park count, 20% annual "
+                 "PM2.5 on a fixed 5-25 µg/m³ scale (lower is better), 20% "
+                 "water access (coast or a lake of at least 10 km², distance "
+                 "decay to 50 km). A first-party composite, not an "
+                 "observation. Requires all four components; no value is "
+                 "imputed. A zero park count is none listed."),
            cohort="cities with all four green-score components"),
     Metric("green_score", "n", "green_score_0_100",
            "Vegetation-cover score (tree, shrub and grass only)",
@@ -593,16 +593,16 @@ def fetch_nature(cur: Any, destination_ids: list[str]) -> dict[str, dict[str, An
         for row in cur.fetchall():
             row = dict(row)
             out.setdefault(str(row.pop("destination_id")), {})["landscape"] = row
-    if "destination_green_score_full" in _existing_tables(
-        cur, ["destination_green_score_full"]
+    if "destination_green_score_all" in _existing_tables(
+        cur, ["destination_green_score_all"]
     ):
         cur.execute(
             """
-            SELECT destination_id, green_score_full_0_100, vegetation_score,
-                   park_score, air_score, water_score, parks_per_100k,
-                   pm25_ugm3, water_distance_km, weights, source,
-                   observed_period
-            FROM destination_green_score_full
+            SELECT destination_id, green_score_all_0_100, vegetation_score,
+                   park_score, air_score, water_score, park_count_5km,
+                   pm25_ugm3, coast_distance_km, lake_distance_km,
+                   lake_area_km2, weights, source, observed_period
+            FROM destination_green_score_all
             WHERE destination_id = ANY(%s)
             """,
             (destination_ids,),
@@ -610,7 +610,7 @@ def fetch_nature(cur: Any, destination_ids: list[str]) -> dict[str, dict[str, An
         for row in cur.fetchall():
             row = dict(row)
             out.setdefault(str(row.pop("destination_id")), {})[
-                "full_green_score"
+                "all_green_score"
             ] = row
     if "destination_climate_class" in _existing_tables(cur, ["destination_climate_class"]):
         cur.execute(
@@ -731,25 +731,25 @@ def _green_score_block(rows: list[dict[str, Any]]) -> dict[str, Any] | None:
         "tree_fraction", "shrub_fraction", "grassland_fraction"
     ))
     hinterland = sum(float(fifteen.get(field) or 0) for field in (
-        "tree_fraction", "shrub_fraction", "grassland_fraction"
+        "tree_fraction", "shrub_fraction"
     ))
     return {
-        "score_0_100": round(100 * (0.65 * local + 0.35 * hinterland), 1),
+        "score_0_100": round(100 * (0.50 * local + 0.50 * hinterland), 1),
         "local_green_pct": round(local * 100, 1),
-        "hinterland_green_pct": round(hinterland * 100, 1),
+        "hinterland_tree_shrub_pct": round(hinterland * 100, 1),
         "local_tree_pct": round(float(one.get("tree_fraction") or 0) * 100, 1),
         "local_shrub_pct": round(float(one.get("shrub_fraction") or 0) * 100, 1),
         "local_grass_pct": round(float(one.get("grassland_fraction") or 0) * 100, 1),
         "local_cropland_pct": round(float(one.get("cropland_fraction") or 0) * 100, 1),
         "local_built_up_pct": round(float(one.get("built_up_fraction") or 0) * 100, 1),
         "hinterland_tree_pct": round(float(fifteen.get("tree_fraction") or 0) * 100, 1),
+        "hinterland_grass_pct": round(float(fifteen.get("grassland_fraction") or 0) * 100, 1),
         "hinterland_cropland_pct": round(float(fifteen.get("cropland_fraction") or 0) * 100, 1),
         "hinterland_built_up_pct": round(float(fifteen.get("built_up_fraction") or 0) * 100, 1),
         "note": (
-            "Optional vegetation-cover score: 0.65 × 1 km + 0.35 × 15 km share "
-            "of tree, shrub and grass. Cropland, built-up and water are "
-            "excluded. This is not nature quality; deserts, steppes and high "
-            "mountains score low by definition."
+            "Vegetation-cover score: 0.50 × 1 km tree+shrub+grass + 0.50 × "
+            "15 km tree+shrub. Grass is local only; cropland, built-up and "
+            "water are excluded. This is not nature quality."
         ),
     }
 
@@ -782,28 +782,31 @@ def nature_summary(row: dict[str, Any] | None) -> dict[str, Any]:
         ),
         "land_cover": _land_cover_block(row.get("land_cover") or []),
         "green_score": _green_score_block(row.get("land_cover") or []),
-        "full_green_score": (
+        "all_green_score": (
             {
-                "score_0_100": row["full_green_score"].get("green_score_full_0_100"),
+                "score_0_100": row["all_green_score"].get("green_score_all_0_100"),
                 "components_0_100": {
-                    "vegetation": row["full_green_score"].get("vegetation_score"),
-                    "parks": row["full_green_score"].get("park_score"),
-                    "air": row["full_green_score"].get("air_score"),
-                    "water": row["full_green_score"].get("water_score"),
+                    "vegetation": row["all_green_score"].get("vegetation_score"),
+                    "parks": row["all_green_score"].get("park_score"),
+                    "air": row["all_green_score"].get("air_score"),
+                    "water": row["all_green_score"].get("water_score"),
                 },
-                "parks_per_100k": row["full_green_score"].get("parks_per_100k"),
-                "pm25_ugm3": row["full_green_score"].get("pm25_ugm3"),
-                "water_distance_km": row["full_green_score"].get("water_distance_km"),
-                "weights": row["full_green_score"].get("weights"),
-                "source": row["full_green_score"].get("source"),
-                "observed_period": row["full_green_score"].get("observed_period"),
+                "park_count_5km": row["all_green_score"].get("park_count_5km"),
+                "pm25_ugm3": row["all_green_score"].get("pm25_ugm3"),
+                "coast_distance_km": row["all_green_score"].get("coast_distance_km"),
+                "lake_distance_km": row["all_green_score"].get("lake_distance_km"),
+                "lake_area_km2": row["all_green_score"].get("lake_area_km2"),
+                "weights": row["all_green_score"].get("weights"),
+                "source": row["all_green_score"].get("source"),
+                "observed_period": row["all_green_score"].get("observed_period"),
                 "note": (
-                    "Optional composite: vegetation, mapped park access, air "
-                    "quality and water access. It is environmental context, "
-                    "not an observation or a nature-quality judgment."
+                    "All-encompassing first-party composite: vegetation, "
+                    "mapped parks, air quality and water access. It is "
+                    "environmental context, not an observation; the components "
+                    "show what is driving the number."
                 ),
             }
-            if row.get("full_green_score") else None
+            if row.get("all_green_score") else None
         ),
         "inland_water": (
             {

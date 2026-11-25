@@ -103,44 +103,64 @@ separate lines.
 - Source: ESA WorldCover 2021 v200, CC BY 4.0,
   https://esa-worldcover.org/en/data-access
 
-### Optional full green score
+### All-encompassing green score
 
-The full composite combines four components:
+One optional number that includes all four data families:
 
 ```
-full_green_score = 0.40 × vegetation
-                 + 0.25 × park access
-                 + 0.25 × air quality
-                 + 0.10 × water access
+all_green_score = 0.40 × vegetation
+                + 0.20 × parks
+                + 0.20 × air
+                + 0.20 × water
 ```
 
-- **Vegetation** — the 1 km/15 km tree, shrub and grass score above.
-- **Park access** — Overture mapped parks per 100,000 residents, converted to
-  a percentile among scored cities.
-- **Air quality** — annual PM2.5 percentile, lower is better.
-- **Water access** — straight-line distance to the nearer of the coast and a
-  HydroLAKES lake/reservoir, linear decay to zero at 50 km.
+- **Vegetation** — `100 × (0.50 × 1 km tree+shrub+grass + 0.50 × 15 km tree+shrub)`.
+  Grass is kept in the local walk but not in the hinterland, so steppe does not
+  read as forest.
+- **Parks** — `100 × ln(1 + park_count) / ln(101)`, capped at 100. This uses the
+  mapped park count directly, not parks per resident and not a percentile. A
+  zero is `none_listed`, not a measured zero.
+- **Air** — fixed scale: 100 at ≤5 µg/m³, 0 at ≥25 µg/m³ annual PM2.5. This
+  does not move when the city cohort changes.
+- **Water** — coast distance, or a lake of at least 10 km², with distance decay
+  to 50 km and a lake-size factor. Small ponds do not earn full water credit.
+  Rivers are still missing.
 
-It is stored in `destination_green_score_full`. A city gets a full score only
-when all four components exist; **4,040 cities** currently qualify. A zero park
-count is `none_listed`, not evidence of no parks, so those cities stay
-unmeasured. The score is a first-party composite, not an observation, and it is
-not in `final_score`.
+It is stored in `destination_green_score_all`. A city gets the score only when
+all four components exist; **4,040 cities** currently qualify. The components
+are always shown. It is a first-party environmental composite, not an
+observation and not a nature-quality judgment, and it is not in `final_score`.
 
-Trento scores **63.5** (vegetation 48.4, parks 65.3, air 76.2, water 88.1);
-Paris **47.7** (12.7, 57.5, 83.5, 73.8); Innsbruck **57.5**; Dubai **16.1**
-(vegetation 3.3, parks 2.7, air 27.0, water 74.2). The component breakdown is
-always shown, so a low-vegetation city cannot hide behind clean air.
+Examples:
+
+| City | All score | Vegetation | Parks | Air | Water |
+|---|---:|---:|---:|---:|---:|
+| Montréal | **72.8** | 44.4 | 100.0 | 80.7 | 94.4 |
+| New York City | **60.9** | 10.1 | 100.0 | 86.0 | 98.6 |
+| London | **50.1** | 20.2 | 100.0 | 82.1 | 28.0 |
+| Trento | **47.9** | 49.3 | 74.4 | 62.3 | 4.5 |
+| Paris | **41.9** | 14.1 | 100.0 | 72.1 | 9.2 |
+| Zunyi | **31.6** | 67.9 | 15.0 | 0.0 | 7.3 |
+| Ordos | **25.9** | 25.8 | 23.8 | 6.9 | 47.1 |
+
+The council reviews found the earlier 40/25/25/10 version was really an
+air-and-park index: air carried about 41% of the variance, park coverage
+excluded 960 cities including 72 over 1 million, and ponds counted as water.
+This version keeps one all-encompassing score but corrects those components:
+vegetation is balanced across the local and hinterland rings, parks are no
+longer divided by GeoNames population, air uses a fixed scale, and water no
+longer rewards tiny ponds. The score still depends on mapped parks, so the
+960 zero-park cities remain unmeasured rather than being given a false zero.
 
 ### Optional vegetation-only green score
 
 If you want one number, there is an **optional vegetation-cover score**:
 
 ```
-green_score = 100 × (0.65 × local_green + 0.35 × hinterland_green)
+green_score = 100 × (0.50 × local_green + 0.50 × hinterland_trees)
 
-local_green      = tree + shrub + grass in the 1 km disc
-hinterland_green = tree + shrub + grass in the 15 km disc
+local_green       = tree + shrub + grass in the 1 km disc
+hinterland_trees  = tree + shrub in the 15 km disc
 ```
 
 It is stored in `destination_green_score` and shown in the profile as both the
@@ -151,11 +171,11 @@ score and its two components. It is **not** a nature-quality score:
 - only cities with WorldCover land cover are scored, and nothing is imputed;
 - the weights are explicit so you can reweight the two components yourself.
 
-Trento scores **48.4** (25.7% local vegetation, 90.5% hinterland), Paris **12.7**
-(5.2% / 26.5%), Innsbruck **38.6** (14.8% / 82.7%) and Dubai **3.3**
-(3.4% / 3.0%). That reads as “how much vegetation is around the city”, not
-“how good its nature is”. This vegetation-only score remains available
-alongside the full composite.
+Trento scores **49.3** (25.7% local vegetation, 72.9% hinterland tree+shrub),
+Paris **14.1** (5.2% / 22.9%), Innsbruck **37.2** (14.8% / 59.6%) and Dubai
+**2.8** (3.4% / 2.2%). That reads as “how much tree, shrub and grass cover is
+around the city”, not “how good its nature is”. This vegetation-only score
+remains available alongside the all-encompassing composite.
 
 ## Council decision and current trade-offs
 

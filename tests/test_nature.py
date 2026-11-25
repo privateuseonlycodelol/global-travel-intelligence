@@ -110,30 +110,30 @@ class LiveNatureTests(unittest.TestCase):
             paris["nature"]["green_score"]["score_0_100"],
         )
 
-    def test_full_green_score(self):
+    def test_all_encompassing_green_score(self):
         with self.conn.cursor() as cur:
             cur.execute(
-                "SELECT count(*) n, count(green_score_full_0_100) scored "
-                "FROM destination_green_score_full"
+                "SELECT count(*) n, count(green_score_all_0_100) scored "
+                "FROM destination_green_score_all"
             )
             row = cur.fetchone()
             if row["n"] == 0:
-                self.skipTest("full green score not built")
+                self.skipTest("all-encompassing green score not built")
             self.assertGreaterEqual(row["scored"], 3_000)
             trento = pp.build_profile(cur, "gn-3165243")
             paris = pp.build_profile(cur, "gn-2988507")
-        full = trento["nature"]["full_green_score"]
+        full = trento["nature"]["all_green_score"]
         self.assertGreater(full["score_0_100"], 0)
         self.assertLessEqual(full["score_0_100"], 100)
         self.assertEqual(set(full["components_0_100"]),
                          {"vegetation", "parks", "air", "water"})
         self.assertGreater(
-            trento["nature"]["full_green_score"]["score_0_100"],
-            paris["nature"]["full_green_score"]["score_0_100"],
+            trento["nature"]["all_green_score"]["score_0_100"],
+            paris["nature"]["all_green_score"]["score_0_100"],
         )
         self.assertGreater(
-            paris["nature"]["full_green_score"]["components_0_100"]["air"],
-            trento["nature"]["full_green_score"]["components_0_100"]["air"],
+            paris["nature"]["all_green_score"]["components_0_100"]["air"],
+            trento["nature"]["all_green_score"]["components_0_100"]["air"],
         )
 
     def test_inland_water(self):

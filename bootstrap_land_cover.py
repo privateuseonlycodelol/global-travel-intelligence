@@ -107,7 +107,7 @@ WITH one AS (
 fifteen AS (
     SELECT destination_id,
            COALESCE(tree_fraction, 0) + COALESCE(shrub_fraction, 0)
-             + COALESCE(grassland_fraction, 0) AS hinterland_green_fraction,
+             AS hinterland_green_fraction,
            tree_fraction AS hinterland_tree_fraction,
            shrub_fraction AS hinterland_shrub_fraction,
            grassland_fraction AS hinterland_grass_fraction,
@@ -123,8 +123,8 @@ SELECT one.destination_id,
        fifteen.hinterland_green_fraction,
        CASE WHEN one.local_valid_pixels > 0 AND fifteen.hinterland_valid_pixels > 0
             THEN 100.0 * (
-                0.65 * one.local_green_fraction
-                + 0.35 * fifteen.hinterland_green_fraction
+                0.50 * one.local_green_fraction
+                + 0.50 * fifteen.hinterland_green_fraction
             )
        END AS green_score_0_100,
        one.local_tree_fraction, one.local_shrub_fraction,
@@ -133,8 +133,9 @@ SELECT one.destination_id,
        fifteen.hinterland_tree_fraction, fifteen.hinterland_shrub_fraction,
        fifteen.hinterland_grass_fraction, fifteen.hinterland_cropland_fraction,
        fifteen.hinterland_built_up_fraction, fifteen.hinterland_water_fraction,
-       one.local_valid_pixels, one.source, one.observed_period
-FROM one JOIN fifteen USING (destination_id);
+       one.local_valid_pixels, fifteen.hinterland_valid_pixels,
+       one.source, one.observed_period
+FROM one JOIN fifteen USING (destination_id)
 """
 
 
