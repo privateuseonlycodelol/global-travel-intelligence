@@ -1495,6 +1495,39 @@ def inspect_destination(
                 (resolved_id,),
                 ("destination_greenery_score",),
             )
+            urban_greenery = optional_row(
+                """
+                SELECT urban_centre_id, area_km2, urban_tree_score_0_100,
+                       urban_green_score_0_100, urban_tree_share,
+                       urban_green_share, tree_fraction, shrub_fraction,
+                       grassland_fraction, built_up_fraction, water_fraction,
+                       valid_pixel_count, source, observed_period
+                FROM destination_urban_greenery WHERE destination_id = %s
+                """,
+                (resolved_id,),
+                ("destination_urban_greenery",),
+            )
+            surrounding_nature = optional_row(
+                """
+                SELECT surrounding_nature_score_0_100, annulus_tree_share,
+                       annulus_tree_shrub_share, annulus_green_share,
+                       tree_fraction, shrub_fraction, grassland_fraction,
+                       water_fraction, weights, source, observed_period
+                FROM destination_surrounding_nature WHERE destination_id = %s
+                """,
+                (resolved_id,),
+                ("destination_surrounding_nature",),
+            )
+            combined_score = optional_row(
+                """
+                SELECT combined_score_0_100, greenery_score_0_100,
+                       environment_score_0_100, weights, source,
+                       observed_period
+                FROM destination_combined_score WHERE destination_id = %s
+                """,
+                (resolved_id,),
+                ("destination_combined_score",),
+            )
             environment_score = optional_row(
                 """
                 SELECT environment_score_0_100, greenery_score_0_100,
@@ -1608,6 +1641,9 @@ def inspect_destination(
         "green_score": green_score,
         "greenery_score": greenery_score,
         "environment_score": environment_score,
+        "combined_score": combined_score,
+        "urban_greenery": urban_greenery,
+        "surrounding_nature": surrounding_nature,
         "gtfs_feeds": gtfs_feeds,
         "transit_service": transit_service,
         "poi_metrics": poi_metrics,

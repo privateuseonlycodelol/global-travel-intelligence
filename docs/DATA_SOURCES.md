@@ -518,6 +518,21 @@ exists; cities without it are neutral (0.5) and are reported via
 | Status | **Implemented; initial 5,000-city batch loaded (10,000 rows)** |
 | Notes | Tree, shrub, grass, crop, built-up, bare, snow, water, wetland, mangrove and moss stay separate. Cropland and built-up remain visible so a farming region is not called forest. The 15 km disc is sampled at about 200 m from COG overviews. No global 100 GB download; city windows are read remotely. |
 
+### 3.29 Urban-area land cover (WorldCover masked to GHSL)
+
+| Field | Value |
+| --- | --- |
+| Party | Third-party datasets, first-party zonal calculation |
+| Publisher | ESA WorldCover; European Commission JRC GHSL UCDB |
+| Dataset | WorldCover 2021 v200 masked to GHSL UCDB R2024A urban-centre polygons |
+| URL | https://esa-worldcover.org/en/data-access ; https://ghsl.jrc.ec.europa.eu/ |
+| Licence | CC BY 4.0 for both; derived fractions only |
+| Coverage | 482 urban centres with population >= 1M and a principal city greenery score |
+| Granularity | Class fractions inside the GHSL polygon, ~100 m target resolution |
+| Used by | `bootstrap_urban_land_cover.py` → `destination_urban_land_cover`; views `destination_urban_greenery`, `destination_surrounding_nature` |
+| Status | **Implemented; 482 centres, 469 pass the 20% built-up filter** |
+| Notes | The polygon is the GHSL urban centre, not a municipal boundary. It can include low-density suburbs; the built-up share is stored so low-density centres can be flagged. The 1–15 km annulus for surrounding nature is derived from the existing 1 km and 15 km point discs. |
+
 ## 4. Missing dimensions and verified candidate sources
 
 These sources were checked but are **not** loaded. They are listed so a
@@ -674,6 +689,10 @@ means without labelling the approximation.
 | `destination_green_score` (view) | `destination_land_cover` | Yes (land-only 0.50 × 1 km tree/shrub/grass + 0.50 × 15 km tree/shrub) | `ESA WorldCover 2021 v200 (10 m)` |
 | `destination_greenery_score` (view) | vegetation + mapped parks | Yes (25/15/45/15 composite) | `First-party: ESA WorldCover 2021 + Overture Places` |
 | `destination_environment_score` (view) | greenery + PM2.5 + water access | Yes (50/35/15 composite) | `First-party: ESA WorldCover 2021, Overture Places, SatPM 2024, HydroLAKES, HydroRIVERS, Natural Earth` |
+| `destination_combined_score` (view) | greenery + environment | Yes (50/50 blend; effective 75/17.5/7.5) | `First-party: physical greenery + environmental quality` |
+| `destination_urban_land_cover` | WorldCover masked to GHSL polygons | Yes (class fractions) | `ESA WorldCover 2021 v200; GHSL UCDB R2024A` |
+| `destination_urban_greenery` (view) | urban land cover | Yes (tree/green shares) | `First-party: WorldCover inside GHSL polygon` |
+| `destination_surrounding_nature` (view) | 1 km + 15 km land cover | Yes (annulus shares) | `First-party: WorldCover 1–15 km annulus` |
 | `flight_quote_cache` | SerpApi Google Flights | No (cached response) | `SerpApi Google Flights` |
 | `hotel_quote_cache` | SerpApi Google Hotels | No (cached response) | `SerpApi Google Hotels` |
 | `destination_aliases` | GeoNames alternatenames | Yes (normalized) | n/a |

@@ -51,6 +51,10 @@ final production numbers.
 | `destination_green_score` (view) | 5,000 | Optional land-only vegetation-cover score for cities with 1 km and 15 km land cover |
 | `destination_greenery_score` (view) | 4,038 scored | Physical greenery: 25% local tree, 15% local other, 45% hinterland, 15% parks |
 | `destination_environment_score` (view) | 4,038 scored | Environmental quality: 50% greenery, 35% air, 15% water access |
+| `destination_combined_score` (view) | 4,038 scored | Combined: 50% greenery + 50% environment (effective 75/17.5/7.5) |
+| `destination_urban_land_cover` | 482 | WorldCover fractions inside the GHSL urban-centre polygon |
+| `destination_urban_greenery` (view) | 482 | Urban tree/green scores inside the GHSL polygon |
+| `destination_surrounding_nature` (view) | 5,000 | 1–15 km annulus tree+shrub shares |
 | `flight_quote_cache` / `hotel_quote_cache` | 0 | Populated only by MCP stage 2 with SerpApi key |
 | `destination_aliases` | 188,403 | GeoNames names/alternatenames for all 13,101 cities (`bootstrap_places.py`) |
 | `country_facts` | 252 | GeoNames countryInfo; every destination has a country row |

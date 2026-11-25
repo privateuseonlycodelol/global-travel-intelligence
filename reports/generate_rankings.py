@@ -45,7 +45,8 @@ SELECT g.destination_id, d.name, d.country_iso2, d.population,
        g.local_tree_share, g.local_shrub_share, g.local_grass_share,
        g.hinterland_tree_share, g.hinterland_shrub_share,
        g.local_water_fraction, g.hinterland_water_fraction,
-       e.environment_score_0_100, e.air_score, e.pm25_ugm3,
+       e.environment_score_0_100, c.combined_score_0_100,
+       e.air_score, e.pm25_ugm3,
        e.worst_month_pm25, e.water_score, e.water_feature,
        e.water_distance_km, e.coast_distance_km, e.large_lake_name,
        e.large_lake_area_km2, e.large_lake_distance_km, e.river_order,
@@ -54,6 +55,7 @@ FROM destination_greenery_score g
 JOIN destinations d USING (destination_id)
 LEFT JOIN destination_metro m USING (destination_id)
 LEFT JOIN destination_environment_score e USING (destination_id)
+LEFT JOIN destination_combined_score c USING (destination_id)
 WHERE g.greenery_score_0_100 IS NOT NULL AND d.population >= 1000000
 """
 
@@ -101,6 +103,7 @@ def rank(rows: list[dict[str, Any]], key: str) -> list[dict[str, Any]]:
 FIELDS = [
     ("rank_greenery", lambda r: r.get("_rank_greenery")),
     ("rank_environment", lambda r: r.get("_rank_environment")),
+    ("rank_combined", lambda r: r.get("_rank_combined")),
     ("city", lambda r: r["name"]),
     ("country", lambda r: r["country_iso2"]),
     ("city_population", lambda r: r["population"]),
@@ -121,6 +124,7 @@ FIELDS = [
     ("local_water_pct", lambda r: round(r["local_water_fraction"] * 100, 2)),
     ("hinterland_water_pct", lambda r: round(r["hinterland_water_fraction"] * 100, 2)),
     ("environment_score_0_100", lambda r: round(r["environment_score_0_100"], 2)),
+    ("combined_score_0_100", lambda r: round(r["combined_score_0_100"], 2)),
     ("air_score", lambda r: round(r["air_score"], 2)),
     ("pm25_ugm3", lambda r: round(r["pm25_ugm3"], 2)),
     ("worst_month_pm25", lambda r: round(r["worst_month_pm25"], 2)),
@@ -139,7 +143,7 @@ FIELDS = [
 
 def write_csv(path: Path, rows: list[dict[str, Any]]) -> None:
     with path.open("w", newline="", encoding="utf-8") as handle:
-        writer = csv.writer(handle)
+        writer = csv.writer(handle, lineterminator="\n")
         writer.writerow([name for name, _ in FIELDS])
         for row in rows:
             writer.writerow([fn(row) for _, fn in FIELDS])
@@ -159,6 +163,19 @@ def markdown(rows: list[dict[str, Any]], kind: str, limit: int = 100) -> str:
                 f"{row['hinterland_tree_shrub_score']:.1f} | "
                 f"{row['park_score']:.1f} | {row['population']:,} | "
                 f"{row['urban_centre_name']} |"
+            )
+    elif kind == "combined":
+        lines = [
+            "| # | City | Country | Combined | Physical greenery | Environmental quality | Population | GHSL centre |",
+            "|---:|---|---:|---:|---:|---:|---:|---|",
+        ]
+        for i, row in enumerate(rows[:limit], 1):
+            lines.append(
+                f"| {i} | {row['name']} | {row['country_iso2']} | "
+                f"{row['combined_score_0_100']:.1f} | "
+                f"{row['greenery_score_0_100']:.1f} | "
+                f"{row['environment_score_0_100']:.1f} | "
+                f"{row['population']:,} | {row['urban_centre_name']} |"
             )
     else:
         lines = [
@@ -184,10 +201,13 @@ def main() -> int:
     rows = principal_cities(fetch(args.db_url))
     greenery = rank(rows, "greenery_score_0_100")
     environment = rank(rows, "environment_score_0_100")
+    combined = rank(rows, "combined_score_0_100")
     for i, row in enumerate(greenery, 1):
         row["_rank_greenery"] = i
     for i, row in enumerate(environment, 1):
         row["_rank_environment"] = i
+    for i, row in enumerate(combined, 1):
+        row["_rank_combined"] = i
 
     write_csv(OUT / "greenery_top100.csv", greenery[:100])
     write_csv(OUT / "environment_top100.csv", environment[:100])
@@ -196,6 +216,10 @@ def main() -> int:
     (OUT / "environment_top100.md").write_text(
         markdown(environment, "environment"), encoding="utf-8"
     )
+    write_csv(OUT / "combined_top100.csv", combined[:100])
+    (OUT / "combined_top100.md").write_text(
+        markdown(combined, "combined"), encoding="utf-8"
+    )
     print(
         {
             "principal_cities": len(rows),
@@ -203,6 +227,7 @@ def main() -> int:
             "environment_ranked": len(environment),
             "greenery_top": greenery[0]["name"],
             "environment_top": environment[0]["name"],
+            "combined_top": combined[0]["name"],
         }
     )
     return 0

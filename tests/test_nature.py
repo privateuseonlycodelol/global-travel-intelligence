@@ -144,6 +144,63 @@ class LiveNatureTests(unittest.TestCase):
             trento["nature"]["environment_score"]["components_0_100"]["air"],
         )
 
+    def test_combined_score(self):
+        with self.conn.cursor() as cur:
+            cur.execute(
+                "SELECT count(*) n, count(combined_score_0_100) scored "
+                "FROM destination_combined_score"
+            )
+            row = cur.fetchone()
+            if row["n"] == 0:
+                self.skipTest("combined score not built")
+            self.assertGreaterEqual(row["scored"], 3_000)
+            trento = pp.build_profile(cur, "gn-3165243")
+        combined = trento["nature"]["combined_score"]
+        self.assertAlmostEqual(
+            combined["score_0_100"],
+            0.5 * combined["components_0_100"]["physical_greenery"]
+            + 0.5 * combined["components_0_100"]["environmental_quality"],
+            places=4,
+        )
+
+    def test_urban_greenery(self):
+        with self.conn.cursor() as cur:
+            cur.execute(
+                "SELECT count(*) n, count(urban_green_score_0_100) scored "
+                "FROM destination_urban_greenery"
+            )
+            row = cur.fetchone()
+            if row["n"] == 0:
+                self.skipTest("urban greenery not built")
+            self.assertGreaterEqual(row["scored"], 400)
+            cur.execute(
+                """
+                SELECT urban_tree_score_0_100, built_up_fraction
+                FROM destination_urban_greenery
+                WHERE destination_id = 'gn-6077243'
+                """
+            )
+            montreal = cur.fetchone()
+            profile = pp.build_profile(cur, "gn-6077243")
+        self.assertIsNotNone(montreal)
+        self.assertGreater(montreal["urban_tree_score_0_100"], 20)
+        self.assertLess(montreal["urban_tree_score_0_100"], 35)
+        urban = profile["nature"]["urban_greenery"]
+        self.assertGreater(urban["score_0_100"], 0)
+
+    def test_surrounding_nature(self):
+        with self.conn.cursor() as cur:
+            cur.execute(
+                "SELECT count(*) n, count(surrounding_nature_score_0_100) scored "
+                "FROM destination_surrounding_nature"
+            )
+            row = cur.fetchone()
+            if row["n"] == 0:
+                self.skipTest("surrounding nature not built")
+            self.assertGreaterEqual(row["scored"], 4_000)
+            profile = pp.build_profile(cur, "gn-6077243")
+        self.assertIsNotNone(profile["nature"]["surrounding_nature"])
+
     def test_land_only_vegetation(self):
         with self.conn.cursor() as cur:
             cur.execute(

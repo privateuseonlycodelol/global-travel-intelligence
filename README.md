@@ -51,7 +51,8 @@ calls:
 | `bootstrap_gtfs.py` | global GTFS scheduled headways and service span |
 | `bootstrap_nature.py` | ecoregion landscape, Köppen class and 10 km terrain |
 | `bootstrap_land_cover.py` | ESA WorldCover land-cover fractions at 1 km and 15 km |
-| `bootstrap_green_score.py` | optional physical-greenery and environmental-quality scores |
+| `bootstrap_green_score.py` | optional physical-greenery, environmental-quality and combined scores |
+| `bootstrap_urban_land_cover.py` | WorldCover masked to the GHSL urban-centre polygon |
 | `bootstrap_inland_water.py` | nearest HydroLAKES lake/reservoir and nearest lake ≥10 km² per city |
 | `bootstrap_rivers.py` | nearest HydroRIVERS major river per city |
 | `bootstrap_ucdb_themes.py` | GHSL urban-centre hazard and health-access themes |
@@ -66,7 +67,9 @@ calls:
 | `docs/COVERAGE_REPORT.md` | measured coverage snapshot for the global run |
 | `docs/PUBLIC_TRANSPORT.md` | GTFS scheduled-service method, coverage, limits and commands |
 | `docs/NATURE.md` | nature typology, sources, what is loaded and what is rejected |
-| `docs/METHODOLOGY_AUDIT.md` | green-score audit, formulas, two rankings, sensitivity and limits |
+| `docs/METHODOLOGY_AUDIT.md` | green-score audit, formulas, rankings, sensitivity and limits |
+| `docs/COMBINED_RANKING.md` | combined physical-greenery + environmental-quality top 100 |
+| `docs/URBAN_AREA_AUDIT.md` | urban-area greenery and surrounding-nature audit, two rankings |
 | `reports/generate_rankings.py` | reproducible million-plus greenery and environment rankings |
 | `sql/rank_examples.sql` | Phase 1/v2 scorer examples |
 | `sql/rank_examples_v3.sql` | Phase 3/v3 scorer examples |
@@ -415,9 +418,11 @@ this implementation:
   They do not say whether there is a sandy beach, a trailhead or a park you can
   enter. There are three optional scores: a land-only vegetation-cover score,
   a physical-greenery score (tree canopy, other vegetation, hinterland and
-  mapped parks) and an overall environmental-quality score (greenery, air and
-  water access). They show their components, none is a nature-quality
-  judgment, and none is in `final_score`. The audit and rankings are in
+  mapped parks), an overall environmental-quality score (greenery, air and
+  water access), a 50/50 combined score, and separate urban-area and
+  surrounding-nature measures. They show their components, none is a
+  nature-quality judgment, and none is in `final_score`. The urban-area audit
+  is in [docs/URBAN_AREA_AUDIT.md](docs/URBAN_AREA_AUDIT.md). The audit and rankings are in
   [docs/METHODOLOGY_AUDIT.md](docs/METHODOLOGY_AUDIT.md).
 - **WorldClim 2.1 is a 1970–2000 climatology**, not recent daily ERA5. The
   `median_temp_max_c` / `median_temp_min_c` columns are monthly **means of daily

@@ -150,8 +150,25 @@ Water is the nearest of the coast, a lake of at least 10 km², or a river with
 Strahler order ≥4, with linear decay to zero at 50 km. It is **access, not
 water quality**.
 
-Both are first-party composites, not observations. Components are always
-shown. Neither is in `final_score`.
+A third view, `destination_combined_score`, is the literal 50/50 blend:
+`0.50 × greenery + 0.50 × environment`. Because the environment score already
+contains greenery, its effective weights are 75% greenery, 17.5% air and 7.5%
+water. The top 100 is in [COMBINED_RANKING.md](COMBINED_RANKING.md).
+
+All three are first-party composites, not observations. Components are always
+shown. None is in `final_score`.
+
+### Urban area and surrounding nature
+
+The 1 km disc is a point sample, not citywide canopy. A separate zonal measure
+masks WorldCover to the **GHSL urban-centre polygon** at ~100 m and computes
+land-only tree/green shares inside the polygon. 482 centres with population
+≥1M are loaded; the urban-greenery ranking keeps 469 with ≥20% built-up. The
+surrounding-nature measure uses the **1–15 km annulus**, so the 1 km disc is
+not counted twice.
+
+The audit, named-city comparisons and two rankings are in
+[URBAN_AREA_AUDIT.md](URBAN_AREA_AUDIT.md).
 
 Examples:
 
@@ -245,8 +262,11 @@ python bootstrap_land_cover.py
 python bootstrap_inland_water.py
 python bootstrap_rivers.py
 python bootstrap_green_score.py
+python bootstrap_urban_land_cover.py
 python bootstrap_nature.py --report
 python reports/generate_rankings.py \
+  --db-url "postgresql:///travel_global?host=/var/run/postgresql&port=5432"
+python reports/generate_urban_rankings.py \
   --db-url "postgresql:///travel_global?host=/var/run/postgresql&port=5432"
 ```
 

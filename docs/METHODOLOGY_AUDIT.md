@@ -167,6 +167,12 @@ $$
 
 The score exists only when all three exist. Components are exposed.
 
+A **combined physical + environmental** score is also available: `50% greenery
++ 50% environment`. Because environment already includes greenery, its
+effective weights are 75% greenery, 17.5% air and 7.5% water. The full top 100
+is in [COMBINED_RANKING.md](COMBINED_RANKING.md); Oslo, Stockholm and Hong
+Kong lead it, and Montréal is 16th.
+
 ### 3.6 Ranking universe
 
 1. City population ≥ 1,000,000 (GeoNames).
@@ -224,6 +230,13 @@ canopy in winter and summer is not separated. The 15 km ring is sampled from
 overviews at about 200 m, so it is a landscape fraction, not a 10 m census.
 Tropical evergreen, temperate deciduous, steppe grass and desert are all
 counted by class, not by ecological quality.
+
+**Post-audit update.** The 1 km point sample is not citywide canopy. Masking
+WorldCover to the GHSL urban-centre polygon gives Montréal 28.5% tree
+(published 23–26%), Oslo 55.7% (point 15.5%), and Philadelphia 40.9% (city
+proper ~20%, but the GHSL centre is 654 km² versus 369 km²). The full
+comparison, formulas and two new rankings are in
+[URBAN_AREA_AUDIT.md](URBAN_AREA_AUDIT.md).
 
 ### 4.2 Parks
 
@@ -384,8 +397,9 @@ because it is access, not quality.
 | No water 60/40/0 | Stockholm, Oslo, Brisbane, Sydney, Jacksonville |
 
 Montréal ranks 30th on balanced greenery, 1st on point-heavy greenery, 4th
-with no parks, and 8th on balanced environment (9th–12th under the environment
-variants). Its first place is not robust.
+with no parks, 8th on balanced environment (9th–12th under the environment
+variants), and 16th on the 50/50 combined score. Its first place is not
+robust.
 **Correlations and double counting.** Among the 407 ranked cities,
 greenery–air correlation is 0.49, greenery–water 0.20, air–water 0.24.
 Parks correlate only weakly with local tree cover (0.17 in the earlier

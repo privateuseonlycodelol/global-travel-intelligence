@@ -45,6 +45,7 @@ import psycopg
 from psycopg.rows import dict_row
 
 SCHEMA_SQL = """
+DROP VIEW IF EXISTS destination_combined_score CASCADE;
 DROP VIEW IF EXISTS destination_environment_score CASCADE;
 DROP VIEW IF EXISTS destination_greenery_score CASCADE;
 DROP VIEW IF EXISTS destination_green_score_all CASCADE;
@@ -213,6 +214,22 @@ SELECT destination_id,
        '2021/2024/2026/2026'::text AS observed_period,
        NOW() AS computed_at
 FROM scored;
+
+CREATE VIEW destination_combined_score AS
+SELECT g.destination_id,
+       g.greenery_score_0_100,
+       e.environment_score_0_100,
+       0.50 * g.greenery_score_0_100
+         + 0.50 * e.environment_score_0_100 AS combined_score_0_100,
+       '50% physical greenery, 50% environmental quality (effective 75% greenery, 17.5% air, 7.5% water)'::text
+           AS weights,
+       'First-party: physical greenery + environmental quality'::text AS source,
+       '2021/2024/2026'::text AS observed_period,
+       NOW() AS computed_at
+FROM destination_greenery_score g
+JOIN destination_environment_score e USING (destination_id)
+WHERE g.greenery_score_0_100 IS NOT NULL
+  AND e.environment_score_0_100 IS NOT NULL;
 """
 
 

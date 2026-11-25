@@ -101,6 +101,9 @@ TABLES = {
     "n": "destination_green_score",
     "q": "destination_greenery_score",
     "f": "destination_environment_score",
+    "c": "destination_combined_score",
+    "u": "destination_urban_greenery",
+    "sn": "destination_surrounding_nature",
 }
 
 METRICS: tuple[Metric, ...] = (
@@ -210,6 +213,18 @@ METRICS: tuple[Metric, ...] = (
                  "composite, not an observation. A zero park count is none "
                  "listed, so the park-inclusive score is null."),
            cohort="cities with land cover and at least one mapped park"),
+    Metric("combined_score", "c", "combined_score_0_100",
+           "Combined physical greenery and environmental quality",
+           "score 0-100", "higher", "environment",
+           "'First-party: physical greenery + environmental quality'",
+           "'2021/2024/2026'",
+           note=("50% physical greenery score + 50% environmental quality "
+                 "score. Because environmental quality already includes "
+                 "greenery, the effective component weights are 75% "
+                 "greenery, 17.5% air and 7.5% water. The components are "
+                 "exposed; this is a combined context index, not an "
+                 "observation."),
+           cohort="cities with both greenery and environment scores"),
     Metric("environment_score", "f", "environment_score_0_100",
            "Overall urban environmental quality (greenery, air and water access)",
            "score 0-100", "higher", "environment",
@@ -221,6 +236,26 @@ METRICS: tuple[Metric, ...] = (
                  "Water is proximity, not water quality. A first-party "
                  "composite, not an observation; components are exposed."),
            cohort="cities with greenery, air and water components"),
+    Metric("urban_green_score", "u", "urban_green_score_0_100",
+           "Urban-area green cover (tree+shrub+grass inside the GHSL centre)",
+           "score 0-100", "higher", "environment",
+           "'First-party: ESA WorldCover 2021 masked to GHSL urban centre'",
+           "'2021'",
+           note=("Tree+shrub+grass as a share of land inside the GHSL "
+                 "urban-centre polygon. This is a centre-wide land-cover "
+                 "share, not street-tree canopy. Built-up share is exposed; "
+                 "the ranking uses centres with >=20% built-up."),
+           cohort="urban centres >=1M with >=20% built-up"),
+    Metric("surrounding_nature_score", "sn", "surrounding_nature_score_0_100",
+           "Surrounding tree+shrub cover (1-15 km annulus)",
+           "score 0-100", "higher", "environment",
+           "'First-party: ESA WorldCover 2021, 1-15 km annulus'",
+           "'2021'",
+           note=("Tree+shrub share of land in the 1-15 km annulus around the "
+                 "city point. It is a landscape proxy for surrounding "
+                 "nature, not trail or park access. The annulus removes the "
+                 "1 km disc used by the local score."),
+           cohort="cities with 1 km and 15 km land cover"),
     Metric("green_score", "n", "green_score_0_100",
            "Vegetation-cover score (tree, shrub and grass only)",
            "score 0-100", "higher", "environment",
@@ -651,6 +686,64 @@ def fetch_nature(cur: Any, destination_ids: list[str]) -> dict[str, dict[str, An
             out.setdefault(str(row.pop("destination_id")), {})[
                 "environment_score"
             ] = row
+    if "destination_combined_score" in _existing_tables(
+        cur, ["destination_combined_score"]
+    ):
+        cur.execute(
+            """
+            SELECT destination_id, combined_score_0_100,
+                   greenery_score_0_100, environment_score_0_100, weights,
+                   source, observed_period
+            FROM destination_combined_score
+            WHERE destination_id = ANY(%s)
+            """,
+            (destination_ids,),
+        )
+        for row in cur.fetchall():
+            row = dict(row)
+            out.setdefault(str(row.pop("destination_id")), {})[
+                "combined_score"
+            ] = row
+    if "destination_urban_greenery" in _existing_tables(
+        cur, ["destination_urban_greenery"]
+    ):
+        cur.execute(
+            """
+            SELECT destination_id, urban_centre_id, area_km2,
+                   urban_tree_score_0_100, urban_green_score_0_100,
+                   urban_tree_share, urban_green_share, tree_fraction,
+                   shrub_fraction, grassland_fraction, built_up_fraction,
+                   water_fraction, valid_pixel_count, source, observed_period
+            FROM destination_urban_greenery
+            WHERE destination_id = ANY(%s)
+            """,
+            (destination_ids,),
+        )
+        for row in cur.fetchall():
+            row = dict(row)
+            out.setdefault(str(row.pop("destination_id")), {})[
+                "urban_greenery"
+            ] = row
+    if "destination_surrounding_nature" in _existing_tables(
+        cur, ["destination_surrounding_nature"]
+    ):
+        cur.execute(
+            """
+            SELECT destination_id, surrounding_nature_score_0_100,
+                   annulus_tree_share, annulus_tree_shrub_share,
+                   annulus_green_share, tree_fraction, shrub_fraction,
+                   grassland_fraction, water_fraction, weights, source,
+                   observed_period
+            FROM destination_surrounding_nature
+            WHERE destination_id = ANY(%s)
+            """,
+            (destination_ids,),
+        )
+        for row in cur.fetchall():
+            row = dict(row)
+            out.setdefault(str(row.pop("destination_id")), {})[
+                "surrounding_nature"
+            ] = row
     if "destination_river_access" in _existing_tables(
         cur, ["destination_river_access"]
     ):
@@ -901,6 +994,63 @@ def nature_summary(row: dict[str, Any] | None) -> dict[str, Any]:
                 ),
             }
             if row.get("environment_score") else None
+        ),
+        "urban_greenery": (
+            {
+                "score_0_100": row["urban_greenery"].get("urban_green_score_0_100"),
+                "tree_score_0_100": row["urban_greenery"].get("urban_tree_score_0_100"),
+                "tree_pct": round(float(row["urban_greenery"].get("tree_fraction") or 0) * 100, 1),
+                "shrub_pct": round(float(row["urban_greenery"].get("shrub_fraction") or 0) * 100, 1),
+                "grass_pct": round(float(row["urban_greenery"].get("grassland_fraction") or 0) * 100, 1),
+                "built_up_pct": round(float(row["urban_greenery"].get("built_up_fraction") or 0) * 100, 1),
+                "water_pct": round(float(row["urban_greenery"].get("water_fraction") or 0) * 100, 1),
+                "area_km2": row["urban_greenery"].get("area_km2"),
+                "source": row["urban_greenery"].get("source"),
+                "observed_period": row["urban_greenery"].get("observed_period"),
+                "note": (
+                    "Green cover inside the GHSL urban-centre polygon. It is "
+                    "a centre-wide land-cover share, not street-tree canopy. "
+                    "The ranking uses centres with at least 20% built-up."
+                ),
+            }
+            if row.get("urban_greenery") else None
+        ),
+        "surrounding_nature": (
+            {
+                "score_0_100": row["surrounding_nature"].get("surrounding_nature_score_0_100"),
+                "tree_pct": round(float(row["surrounding_nature"].get("annulus_tree_share") or 0) * 100, 1),
+                "tree_shrub_pct": round(float(row["surrounding_nature"].get("annulus_tree_shrub_share") or 0) * 100, 1),
+                "green_pct": round(float(row["surrounding_nature"].get("annulus_green_share") or 0) * 100, 1),
+                "water_pct": round(float(row["surrounding_nature"].get("water_fraction") or 0) * 100, 1),
+                "weights": row["surrounding_nature"].get("weights"),
+                "source": row["surrounding_nature"].get("source"),
+                "observed_period": row["surrounding_nature"].get("observed_period"),
+                "note": (
+                    "Tree+shrub cover in the 1-15 km annulus around the city "
+                    "point. It is a landscape proxy for surrounding nature, "
+                    "not trail or park access."
+                ),
+            }
+            if row.get("surrounding_nature") else None
+        ),
+        "combined_score": (
+            {
+                "score_0_100": row["combined_score"].get("combined_score_0_100"),
+                "components_0_100": {
+                    "physical_greenery": row["combined_score"].get("greenery_score_0_100"),
+                    "environmental_quality": row["combined_score"].get("environment_score_0_100"),
+                },
+                "weights": row["combined_score"].get("weights"),
+                "source": row["combined_score"].get("source"),
+                "observed_period": row["combined_score"].get("observed_period"),
+                "note": (
+                    "50% physical greenery + 50% environmental quality. "
+                    "Effective component weights are 75% greenery, 17.5% "
+                    "air and 7.5% water because environmental quality "
+                    "already includes greenery."
+                ),
+            }
+            if row.get("combined_score") else None
         ),
         "inland_water": (
             {
