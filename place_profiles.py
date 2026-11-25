@@ -1162,7 +1162,10 @@ def build_profile(cur: Any, destination_id: str) -> dict[str, Any]:
     groups: dict[str, list[dict[str, Any]]] = {}
     not_measured: list[str] = []
     not_loaded: list[str] = []
+    has_ghsci = metric_row.get("ghsci_walkability_index") is not None
     for metric in METRICS:
+        if metric.group == "walkability_ghsci" and not has_ghsci:
+            continue
         entry = metric_entry(metric, metric_row)
         groups.setdefault(metric.group, []).append(entry)
         if entry["status"] == "not_loaded":
@@ -1200,6 +1203,10 @@ def build_comparison(cur: Any, destination_ids: list[str]) -> dict[str, Any]:
     metrics_out: list[dict[str, Any]] = []
     not_loaded: list[str] = []
     for metric in METRICS:
+        if metric.group == "walkability_ghsci" and not any(
+            metric_rows.get(i, {}).get(metric.key) is not None for i in ids
+        ):
+            continue
         values: dict[str, Any] = {}
         comparable: dict[str, float] = {}
         for i in ids:
