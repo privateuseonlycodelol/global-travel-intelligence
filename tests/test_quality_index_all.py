@@ -485,22 +485,17 @@ class ScoreRowsTests(unittest.TestCase):
         rows = bq.score_rows([connected, remote])
         self.assertAlmostEqual(
             rows[0]["connectivity_score"],
-            0.70 * rows[0]["broadband_score"]
-            + 0.30 * rows[0]["airport_access_score"],
+            0.70 * rows[0]["broadband_score"] + 0.30 * 100.0,
         )
         self.assertIsNone(rows[1]["broadband_score"])
-        self.assertEqual(
-            rows[1]["connectivity_score"], rows[1]["airport_access_score"]
-        )
+        self.assertEqual(rows[1]["connectivity_score"], 0.0)
         self.assertIn("ookla_missing", rows[1]["uncertainty_flags"])
         self.assertEqual(rows[1]["uncertainty_tier"], "medium")
 
     def test_low_sample_ookla_is_flagged_and_excluded(self):
         row = bq.score_rows([core_row(broadband_total_tests=4)])[0]
         self.assertIsNone(row["broadband_score"])
-        self.assertEqual(
-            row["connectivity_score"], row["airport_access_score"]
-        )
+        self.assertEqual(row["connectivity_score"], 50.0)
         self.assertIn("ookla_low_sample", row["uncertainty_flags"])
         self.assertEqual(row["uncertainty_tier"], "medium")
 
@@ -512,9 +507,7 @@ class ScoreRowsTests(unittest.TestCase):
         rows = bq.score_rows([valid, low_sample])
         self.assertIsNotNone(rows[0]["broadband_score"])
         self.assertIsNone(rows[1]["broadband_score"])
-        self.assertEqual(
-            rows[1]["connectivity_score"], rows[1]["airport_access_score"]
-        )
+        self.assertEqual(rows[1]["connectivity_score"], 50.0)
 
     def test_missing_homicide_flag_and_tier(self):
         row = bq.score_rows([core_row(homicide_per_100k=None)])[0]

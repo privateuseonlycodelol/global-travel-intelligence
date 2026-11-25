@@ -94,7 +94,7 @@ All 13,101 destinations join to `country_facts` (252 country rows). Six continen
 - **3,045 (90.3%) are below 100k.** Only three are >=1M: **Dubai AE 3.79M** (6.18 km from the centre edge), **Budta PH 1.27M** (6.71 km) and **Xinxiang CN 1.05M** (6.85 km). All three sit just outside the 5 km nearby buffer.
 - **Six destinations are in countries with no GHSL centre label at all:** Antigua and Barbuda, Guadeloupe, Guam, Kiribati, Northern Mariana Islands and U.S. Virgin Islands.
 - For unmatched cities, the nearest same-country centre is: **0 within 5 km, 442 at 5-10 km, 1,011 at 10-25 km, 826 at 25-50 km, 671 at 50-100 km, and 421 none within 100 km**; median distance **25.4 km**.
-- Any-country distances are only slightly better: **23 within 5 km** and **465 within 10 km** (437 of those same-country). Country guards exclude cross-border matches.
+- Any-country distances are only slightly better: **23 within 5 km** and **467 within 10 km** (439 of those same-country, 28 cross-border; lifting coverage to 10,197/13,101 = 77.83%). Country guards exclude cross-border matches.
 - A 400-city random sample gives a longer distribution: **3 <=5 km, 52 <=10 km, 91 <=15 km, 167 <=25 km, 270 <=50 km**; median **31.2 km**, p90 **103.1 km**. Most unmatched cities genuinely need a point or disc measure, not a larger match radius.
 - Principal-city no-centre share by population bracket: **<100k 50.7%, 100k-300k 10.0%, 300k-1M 3.6%, 1M+ 0.6%**. By continent: **OC 47.0%, SA 42.6%, EU 41.9%, NA 41.3%, AS 26.6%, AF 25.0%**. The bias is a size bias, not a single-continent defect.
 
@@ -603,7 +603,7 @@ The **CQI completeness** row is the most important planning number: adding envir
 7. **WorldClim licence:** replace WorldClim for commercial deployment or obtain permission? This affects the Core label for `climate_monthly`.
 8. **Greenery method for 3,371 unmatched cities:** 5 km 10 m disc (~28 min), existing 1 km/15 km discs (49 min), or no greenery for unmatched? Nearest-centre assignment is not defensible (median 31.2 km, p90 103.1 km).
 9. **GHSL GREENNESS role:** use as the Supplementary NDVI/canopy trend and validation (r=0.818 with WorldCover tree share), not as the primary 11-class metric. Confirm the `GR_SQM_*`/`GR_SHB_*` units before any absolute-area use.
-10. **Metro radius:** raise the fallback from 5 km to 10 km with a `nearby` flag (adds ~465 destinations, including Dubai) or keep 5 km strict?
+10. **Metro radius:** raise the fallback from 5 km to 10 km with a `nearby` flag (adds 467 destinations, 439 same-country, including Dubai) or keep 5 km strict?
 11. **CQI weights:** confirm the four-dimension Core weights (environment 45.5%, safety 27.3%, affordability 18.2%, climate 9.1%) or the five-dimension variant with connectivity (41.7/25.0/16.7/8.3/8.3).
 12. **Taiwan:** add national statistics (MOI/DGBAS) or exclude/flag Taiwan? The current renormalization produces 8 cities below 0.50 completeness scoring >=80.
 13. **Homicide methodology:** accept WHO/UNODC modelled estimates, keep the World Bank reported series and flag Africa, or publish both?

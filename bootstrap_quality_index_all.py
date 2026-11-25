@@ -99,6 +99,7 @@ GREENNESS_NDVI_MEAN_CANDIDATES = (
     "ndvi",
 )
 CLIMATE_HEAT_CANDIDATES = (
+    "utci_over_32_days",
     "heat_stress_days",
     "utci_heat_stress_days",
     "utci_gt32_days",
@@ -799,6 +800,9 @@ def score_rows(rows: list[dict[str, Any]]) -> list[dict[str, Any]]:
                 for row in rows
             ]
         ),
+        "airport": percentile_map(
+            [row.get("airport_access_score") for row in rows]
+        ),
         "transit": percentile_map([row.get("transit_log") for row in rows]),
     }
 
@@ -859,10 +863,11 @@ def score_rows(rows: list[dict[str, Any]]) -> list[dict[str, Any]]:
                 ),
             ]
         )
+        airport_pct = pct(row, "airport", "airport_access_score")
         row["connectivity_score"] = weighted_available(
             [
                 (row["broadband_score"], 0.70),
-                (row["airport_access_score"], 0.30),
+                (airport_pct, 0.30),
             ]
         )
 
