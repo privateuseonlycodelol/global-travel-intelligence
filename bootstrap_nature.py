@@ -44,11 +44,8 @@ from typing import Any
 from urllib.parse import urlparse
 
 import psycopg
-import numpy as np
 import rasterio
 import requests
-from rasterio.enums import Resampling
-from rasterio.windows import from_bounds
 from psycopg.conninfo import conninfo_to_dict
 from psycopg.rows import dict_row
 
@@ -62,21 +59,6 @@ RASTER_URLS = {
     "tri_10KMmd_GMTEDmd.tif": "https://hs.pangaea.de/model/GMTED/tri/tri_10KMmd_GMTEDmd.tif",
     "tpi_10KMmd_GMTEDmd.tif": "https://hs.pangaea.de/model/GMTED/tpi/tpi_10KMmd_GMTEDmd.tif",
 }
-LANDCOVER_DIR = CACHE / "landcover"
-LANDCOVER_RECORD = "https://zenodo.org/api/records/3939050"
-LANDCOVER_PATTERNS = {
-    "tree": "Tree-CoverFraction",
-    "shrub": "Shrub-CoverFraction",
-    "grass": "Grass-CoverFraction",
-    "crop": "Crops-CoverFraction",
-    "bare": "Bare-CoverFraction",
-    "built": "BuiltUp-CoverFraction",
-    "permanent_water": "PermanentWater-CoverFraction",
-    "seasonal_water": "SeasonalWater-CoverFraction",
-    "snow": "Snow-CoverFraction",
-    "moss": "MossLichen-CoverFraction",
-}
-LANDCOVER_SOURCE = "Copernicus Global Land Service LC100 v3.0.1 (2019)"
 ECOREGION_SOURCE = "RESOLVE Ecoregions 2017 (CC BY 4.0)"
 TERRAIN_SOURCE = "Amatulli et al. 2018 GMTED 10 km (CC BY 3.0)"
 SOURCE_URL = "https://ecoregions2017.appspot.com/"
@@ -95,30 +77,6 @@ CREATE TABLE IF NOT EXISTS destination_landscape (
     source_url      TEXT NOT NULL,
     observed_period TEXT NOT NULL,
     updated_at      TIMESTAMPTZ NOT NULL DEFAULT NOW()
-);
-
-CREATE TABLE IF NOT EXISTS destination_land_cover (
-    destination_id          TEXT NOT NULL REFERENCES destinations(destination_id) ON DELETE CASCADE,
-    radius_m                INTEGER NOT NULL CHECK (radius_m IN (1000, 15000)),
-    tree_fraction           DOUBLE PRECISION,
-    shrub_fraction          DOUBLE PRECISION,
-    grassland_fraction      DOUBLE PRECISION,
-    cropland_fraction       DOUBLE PRECISION,
-    built_up_fraction       DOUBLE PRECISION,
-    bare_fraction           DOUBLE PRECISION,
-    snow_fraction           DOUBLE PRECISION,
-    permanent_water_fraction DOUBLE PRECISION,
-    seasonal_water_fraction DOUBLE PRECISION,
-    water_fraction          DOUBLE PRECISION,
-    wetland_fraction        DOUBLE PRECISION,
-    mangrove_fraction       DOUBLE PRECISION,
-    moss_fraction           DOUBLE PRECISION,
-    valid_pixel_count       INTEGER,
-    source                  TEXT NOT NULL,
-    source_url              TEXT NOT NULL,
-    observed_period         TEXT NOT NULL,
-    updated_at              TIMESTAMPTZ NOT NULL DEFAULT NOW(),
-    PRIMARY KEY (destination_id, radius_m)
 );
 
 CREATE TABLE IF NOT EXISTS destination_terrain (
@@ -185,147 +143,6 @@ def ensure_rasters() -> dict[str, Path]:
     for name, url in RASTER_URLS.items():
         paths[name] = download(url, CACHE / name)
     return paths
-
-
-def ensure_landcover() -> dict[str, Path]:
-    LANDCOVER_DIR.mkdir(parents=True, exist_ok=True)
-    response = requests.get(LANDCOVER_RECORD, timeout=120)
-    response.raise_for_status()
-    files = response.json().get("files", [])
-    paths: dict[str, Path] = {}
-    for name, pattern in LANDCOVER_PATTERNS.items():
-        match = next(
-            (item for item in files if pattern in item.get("key", "") and item["key"].endswith(".tif")),
-            None,
-        )
-        if match is None:
-            raise RuntimeError(f"land-cover layer not found in Zenodo record: {pattern}")
-        path = LANDCOVER_DIR / match["key"]
-        if not path.exists() or path.stat().st_size != match["size"]:
-            if path.with_suffix(path.suffix + ".part").exists():
-                raise RuntimeError(f"{path.name} is still downloading; rerun when complete")
-            log(f"downloading {match['key']}")
-            with requests.get(match["links"]["self"], stream=True, timeout=300) as download:
-                download.raise_for_status()
-                tmp = path.with_suffix(path.suffix + ".part")
-                with tmp.open("wb") as handle:
-                    for chunk in download.iter_content(1 << 20):
-                        handle.write(chunk)
-                tmp.replace(path)
-        paths[name] = path
-    return paths
-
-
-def _circle_mask(
-    dataset: rasterio.DatasetReader, window, out_shape: tuple[int, int],
-    lat: float, lon: float, radius_m: float,
-) -> np.ndarray:
-    transform = rasterio.windows.transform(window, dataset.transform)
-    cols, rows = np.meshgrid(
-        np.arange(out_shape[1]) + 0.5, np.arange(out_shape[0]) + 0.5
-    )
-    xs, ys = transform * (cols, rows)
-    # haversine in metres
-    p1 = np.radians(lat)
-    p2 = np.radians(ys)
-    dphi = p2 - p1
-    dlambda = np.radians(xs - lon)
-    a = np.sin(dphi / 2) ** 2 + np.cos(p1) * np.cos(p2) * np.sin(dlambda / 2) ** 2
-    distance = 2 * 6371008.8 * np.arcsin(np.minimum(1.0, np.sqrt(a)))
-    return distance <= radius_m
-
-
-def _sample_layer(
-    dataset: rasterio.DatasetReader, lat: float, lon: float,
-    radius_m: float, out_shape: tuple[int, int],
-) -> np.ndarray | None:
-    if lon <= -179.5 or lon >= 179.5:
-        return None
-    dlat = radius_m / 111320.0
-    dlon = radius_m / (111320.0 * max(0.05, abs(np.cos(np.radians(lat)))))
-    left, right = lon - dlon, lon + dlon
-    bottom, top = lat - dlat, lat + dlat
-    left = max(left, dataset.bounds.left)
-    right = min(right, dataset.bounds.right)
-    bottom = max(bottom, dataset.bounds.bottom)
-    top = min(top, dataset.bounds.top)
-    if right <= left or top <= bottom:
-        return None
-    window = from_bounds(left, bottom, right, top, dataset.transform)
-    window = window.round_offsets().round_lengths()
-    if window.width <= 0 or window.height <= 0:
-        return None
-    data = dataset.read(
-        1, window=window, out_shape=out_shape,
-        resampling=Resampling.average,
-    ).astype("float64")
-    mask = _circle_mask(dataset, window, out_shape, lat, lon, radius_m)
-    nodata = dataset.nodata
-    valid = mask.copy()
-    if nodata is not None:
-        valid &= data != float(nodata)
-    valid &= data >= 0
-    valid &= data <= 100
-    return data[valid]
-
-
-def load_land_cover(conn: psycopg.Connection, paths: dict[str, Path]) -> int:
-    datasets = {name: rasterio.open(path) for name, path in paths.items()}
-    with conn.cursor() as cur:
-        cur.execute("SELECT destination_id, lat, lon FROM destinations")
-        cities = cur.fetchall()
-        cur.execute("DELETE FROM destination_land_cover")
-        rows = []
-        try:
-            for index, city in enumerate(cities, 1):
-                lat, lon = float(city["lat"]), float(city["lon"])
-                for radius in (1000, 15000):
-                    shape = (20, 20) if radius == 1000 else (100, 100)
-                    values = {}
-                    valid_count = 0
-                    for name, dataset in datasets.items():
-                        sampled = _sample_layer(dataset, lat, lon, radius, shape)
-                        values[name] = (
-                            float(np.mean(sampled)) / 100.0
-                            if sampled is not None and sampled.size else None
-                        )
-                        if name == "tree" and sampled is not None:
-                            valid_count = int(sampled.size)
-                    permanent = values.get("permanent_water")
-                    seasonal = values.get("seasonal_water")
-                    water = (
-                        (permanent or 0.0) + (seasonal or 0.0)
-                        if permanent is not None or seasonal is not None else None
-                    )
-                    rows.append((
-                        city["destination_id"], radius,
-                        values.get("tree"), values.get("shrub"),
-                        values.get("grass"), values.get("crop"),
-                        values.get("built"), values.get("bare"),
-                        values.get("snow"), permanent, seasonal, water,
-                        None, None, values.get("moss"), valid_count,
-                        LANDCOVER_SOURCE,
-                        "https://zenodo.org/records/3939050", "2019",
-                    ))
-                if index % 500 == 0:
-                    log(f"  land cover {index:,}/{len(cities):,} cities")
-        finally:
-            for dataset in datasets.values():
-                dataset.close()
-        cur.executemany(
-            """
-            INSERT INTO destination_land_cover (
-                destination_id, radius_m, tree_fraction, shrub_fraction,
-                grassland_fraction, cropland_fraction, built_up_fraction,
-                bare_fraction, snow_fraction, permanent_water_fraction,
-                seasonal_water_fraction, water_fraction, wetland_fraction,
-                mangrove_fraction, moss_fraction, valid_pixel_count,
-                source, source_url, observed_period
-            ) VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s)
-            """,
-            rows,
-        )
-        return len(rows)
 
 
 def load_landscape(conn: psycopg.Connection) -> int:
@@ -427,7 +244,7 @@ def load_terrain(conn: psycopg.Connection, rasters: dict[str, Path]) -> int:
         return len(rows)
 
 
-def load(database_url: str, skip_landcover: bool = False) -> dict[str, Any]:
+def load(database_url: str) -> dict[str, Any]:
     with psycopg.connect(database_url, row_factory=dict_row) as conn:
         with conn.cursor() as cur:
             cur.execute(SCHEMA_SQL)
@@ -438,12 +255,7 @@ def load(database_url: str, skip_landcover: bool = False) -> dict[str, Any]:
         rasters = ensure_rasters()
         terrain = load_terrain(conn, rasters)
         conn.commit()
-        land_cover = 0
-        if not skip_landcover:
-            paths = ensure_landcover()
-            land_cover = load_land_cover(conn, paths)
-            conn.commit()
-    return {"landscape": landscape, "terrain": terrain, "land_cover": land_cover}
+    return {"landscape": landscape, "terrain": terrain}
 
 
 def report(database_url: str) -> None:
@@ -453,8 +265,6 @@ def report(database_url: str) -> None:
             print({"landscape": cur.fetchone()["n"]})
             cur.execute("SELECT count(*) n FROM destination_terrain")
             print({"terrain": cur.fetchone()["n"]})
-            cur.execute("SELECT count(*) n FROM destination_land_cover")
-            print({"land_cover": cur.fetchone()["n"]})
             cur.execute(
                 """
                 SELECT d.name, l.biome_name, l.ecoregion_name,
@@ -475,14 +285,13 @@ def main() -> int:
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--db-url", default=os.environ.get("SUPABASE_DB_URL"))
     parser.add_argument("--report", action="store_true")
-    parser.add_argument("--skip-landcover", action="store_true")
     args = parser.parse_args()
     if not args.db_url:
         parser.error("set --db-url or SUPABASE_DB_URL")
     if args.report:
         report(args.db_url)
         return 0
-    print(load(args.db_url, skip_landcover=args.skip_landcover))
+    print(load(args.db_url))
     return 0
 
 
