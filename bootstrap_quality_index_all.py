@@ -1,68 +1,63 @@
 #!/usr/bin/env python3
 """
-Globally consistent City Quality Index for every destination.
+Intrinsic City Quality Index (IQI) — Council Phase 1 implementation.
 
-The index has three deliberately separated layers. Only the **Core** layer
-contributes to ``quality_score`` and ``data_completeness``.
+Measures intrinsic urban quality regardless of cost, following the consolidated
+two-round Grok 4.7 High council methodology:
 
-Core (weights sum to 1.00)
---------------------------
-* **Environment (0.30)** - 60% annual PM2.5 on a fixed log scale (100 at
-  5 ug/m3, 0 at 75) + 40% water proximity (coast, large lake >= 10 km2 or
-  Strahler >= 4 river, 100 at 0 km falling to 0 at 50 km). The exact formulas
-  from ``bootstrap_green_score.py`` are reused.
-* **Climate (0.20)** - 70% mean monthly thermal comfort over 12 WorldClim
-  months + 30% annual precipitation comfort. Thermal comfort penalises both
-  cold (max < 18 C or min < 5 C) and extreme heat (max > 28 C or min > 22 C).
-  Precipitation comfort peaks at 500-1400 mm and penalises both hyper-aridity
-  (< 300 mm, the Atacama bug) and extreme monsoon/wetness (> 2200 mm).
-* **Safety & health (0.25)** - country homicide (0.35, lower better), road
-  deaths (0.25, lower better), life expectancy (0.25), physicians (0.15),
-  percentile ranks within the global cohort.
-* **Affordability (0.15)** - country price level vs USD (0.70, lower better)
-  and out-of-pocket health spending (0.30, lower better), percentiles.
-* **Connectivity (0.10)** - 70% Ookla broadband (down 50%, up 20%, latency 30%
-  lower better) + 30% airport access (nearest airport <= 25 km scores 100,
-  decaying to 0 at 250 km, blended with the log of weighted large/medium
-  airports within 100 km). The broadband side is renormalised away when
-  Ookla is missing or has fewer than 10 tests, so the airport component keeps
-  ``connectivity_score`` available for the whole cohort.
+* **Strict cost / travel / GDP-clone exclusions (weight 0%):**
+  affordability, price level, out-of-pocket health spending, airport access,
+  life expectancy, physicians per 1,000, road traffic deaths, and WorldClim
+  precipitation-as-comfort are excluded from the intrinsic score.
+* **Three-board, absolute-anchor, no-imputation cohort architecture:**
+  Every active indicator uses fixed 0–100 physical or epidemiological anchors
+  (no cohort percentiles in the score, no median imputation, no silent
+  renormalization across missing dimensions).
 
-The active Core weights are renormalised when a dimension is missing.
-``data_completeness`` is the sum of the available Core weights (0-1) and
-``missing_dimensions`` lists the absent Core dimensions.
+Reference intrinsic vector (100% total):
+  Board 1 — Biophysical (55%):
+    - Air quality (15%): SatPM PM2.5 log scale (100 at <=5 ug/m3, 0 at >=75).
+    - Thermal safety (12%): UTCI heat/cold/severe tails. Phase 1 publishes
+      GHSL UTCI > 32 C heat-stress days (100 at 0 days, 0 at >=120 days) as
+      the heat term (`thermal_heat_score`); full thermal safety stays NULL
+      until daily cold and severe tails are loaded.
+    - Urban greenery (14%): WorldCover 10 m polygon (tree + shrub, crop/bare
+      excluded) * canopy-height multiplier (0.85 + 0.15 * min(1, canopy_m/8)).
+      GHSL NDVI (`ghsl_ndvi_score`) is published as a diagnostic column only
+      and never mixed into WorldCover polygon ranks.
+    - Waterfront & hinterland (7%): 1–15 km short-range shore proximity to
+      coast, lake >= 10 km2, or Strahler >= 5 river (retiring the saturated
+      50 km decay).
+    - Urban form (7%): named hole (NULL) until GHS-POP 100 m + pre-registered
+      validation.
+  Board 2 — Country-Labelled Institutional (15%, never reorders within country):
+    - Personal safety / violence prior (9%): UNODC/WHO national homicide
+      piecewise anchor (100 <=1, 80 @3, 50 @10, 20 @25, 0 >=50 per 100k).
+    - Water & sanitation / WASH prior (6%): mean of WHO/UNICEF JMP safely
+      managed water & sanitation ONLY when BOTH are present (no basic-water
+      fallback).
+  Board 3 — City Care, Hazards & Gated Services (30%):
+    - Healthcare access (7%): named hole (NULL) until Weiss friction raster.
+    - Natural hazards, non-heat (6%): named hole (NULL) until flood + seismic
+      + cyclone rasters (2015 MYRIAD counts kept as context only).
+    - Public transport (6%): named hole (NULL) until road-gated guideway /
+      coach-excluded local GTFS headway.
+    - Cultural heritage (6%): named hole (NULL) until UNESCO core polygon
+      intersection.
+    - Digital connectivity (5%): Ookla fixed broadband absolute blend
+      (50% down [10–150 Mbps], 20% up [5–50 Mbps], 30% latency [80–10 ms]),
+      requiring >=10 tests AND >=2 tiles; 10–49 tests capped at Tier B.
 
-Supplementary (never changes the Core score)
---------------------------------------------
-GHSL UCDB R2024A matching and themes: ``urban_centre_id``,
-``ghsl_match_status``, Sentinel-2 NDVI score, UTCI > 32 C heat-stress days and
-2015 hazard-event counts. The optional GHSL tables are detected with
-``to_regclass`` at runtime, so this script works before or after their
-loaders run. ``ghsl_enhanced_score`` is 40% NDVI + 36% air + 24% water for
-matched cities with NDVI, and NULL otherwise.
-
-Experimental (never changes the Core score)
--------------------------------------------
-How Walkable walkability, Overture culture/food/parks/transit, and the
-WorldCover 10 m GHSL physical greenery. These are published separately because
-their coverage or regional bias is not compatible with a global headline
-index. Explicit observation statuses preserve the zero-vs-missing distinction:
-a zero Overture count is ``none_listed``/``unobserved_or_unmapped``, not proof
-of absence.
-
-Uncertainty & provenance
-------------------------
-``uncertainty_tier`` is ``low`` only when completeness >= 0.95, Ookla has at
-least 10 tests, and all four safety sub-indicators are present; ``medium`` at
-completeness >= 0.90; otherwise ``high``. ``uncertainty_flags`` records
-country-level proxies, missing/low-sample Ookla, missing homicide and missing
-GHSL polygons. ``provenance_summary`` names the Core, Supplementary and
-Experimental sources.
+Settlement classification & satellite suppression:
+  - `ghsl_centre`: matched to a GHSL UCDB R2024A urban centre polygon.
+  - `satellite_suppressed`: unmatched locality within 15 km of any GHSL centre.
+  - `unmatched_town`: unmatched locality >15 km from any GHSL centre (published
+    in a separate town file, never pooled with GHSL urban centres).
 
 Usage
 -----
-    python bootstrap_quality_index_all.py
-    python bootstrap_quality_index_all.py --report
+    python bootstrap_quality_index_all.py --db-url "$DATABASE_URL"
+    python bootstrap_quality_index_all.py --db-url "$DATABASE_URL" --report
 """
 
 from __future__ import annotations
@@ -70,71 +65,81 @@ from __future__ import annotations
 import argparse
 import math
 import os
-from bisect import bisect_left, bisect_right
-from collections.abc import Iterable, Sequence
-from typing import Any
+from typing import Any, Sequence
 
 import psycopg
 from psycopg.rows import dict_row
 
-CORE_WEIGHTS = {
-    "environment": 0.30,
-    "climate": 0.20,
-    "safety_health": 0.25,
-    "affordability": 0.15,
-    "connectivity": 0.10,
+# Full 100% normative reference vector (used to compute true construct_coverage).
+REFERENCE_WEIGHTS = {
+    "air": 0.15,
+    "thermal_safety": 0.12,
+    "urban_greenery": 0.14,
+    "waterfront": 0.07,
+    "urban_form": 0.07,
+    "safety_prior": 0.09,
+    "wash_prior": 0.06,
+    "care_access": 0.07,
+    "hazards": 0.06,
+    "transit": 0.06,
+    "heritage": 0.06,
+    "broadband": 0.05,
 }
 
-# Optional GHSL UCDB tables. The loaders that create these tables may run
-# before or after this one, so every reference is guarded by to_regclass().
-GREENNESS_NDVI_SCORE_CANDIDATES = (
-    "ndvi_score_0_100",
-    "ndvi_score_100",
-    "ndvi_score",
+# Phase 1 currently observable cohort pillars (42% of the 100% reference vector:
+# air 15 + waterfront 7 + safety_prior 9 + wash_prior 6 + broadband 5 = 0.42).
+# Thermal heat days are published as a diagnostic column, NOT ranked without
+# the cold and severe UTCI tails (prevents sub-Arctic cities winning on zero heat).
+PHASE1_BIOPHYSICAL_WEIGHTS = {
+    "air": 0.15,
+    "waterfront": 0.07,
+}
+PHASE1_INSTITUTIONAL_WEIGHTS = {
+    "safety_prior": 0.09,
+    "wash_prior": 0.06,
+}
+PHASE1_SERVICES_WEIGHTS = {
+    "broadband": 0.05,
+}
+PHASE1_COHORT_WEIGHTS = {
+    **PHASE1_BIOPHYSICAL_WEIGHTS,
+    **PHASE1_INSTITUTIONAL_WEIGHTS,
+    **PHASE1_SERVICES_WEIGHTS,
+}
+PHASE1_COHORT_WEIGHT_SUM = round(sum(PHASE1_COHORT_WEIGHTS.values()), 6)  # 0.42
+
+HOMICIDE_ANCHORS: tuple[tuple[float, float], ...] = (
+    (1.0, 100.0),
+    (3.0, 80.0),
+    (10.0, 50.0),
+    (25.0, 20.0),
+    (50.0, 0.0),
 )
-GREENNESS_NDVI_MEAN_CANDIDATES = (
-    "ndvi_mean",
-    "mean_ndvi",
-    "ndvi_2025",
-    "ndvi",
-)
+
+BROADBAND_MIN_TESTS = 10
+BROADBAND_TIER_A_TESTS = 50
+BROADBAND_MIN_TILES = 2
+
+GREENNESS_NDVI_SCORE_CANDIDATES = ("ndvi_score_0_100", "ghsl_ndvi_score")
+GREENNESS_CANOPY_CANDIDATES = ("canopy_height_m", "gr_cth_avg_2020")
 CLIMATE_HEAT_CANDIDATES = (
     "utci_over_32_days",
     "heat_stress_days",
     "utci_heat_stress_days",
     "utci_gt32_days",
-    "heat_stress_days_utci32",
-    "utci_days_gt32",
-    "heat_stress_days_gt32",
-    "utci_heat_stress_days_gt32",
 )
 
-SOURCE = "First-party composite: Core + Supplementary GHSL + Experimental layers"
-OBSERVED_PERIOD = "1970-2026"
+SOURCE = "Council Phase 1 IQI: SatPM, Natural Earth/HydroLAKES/HydroRIVERS, GHSL UCDB R2024A, UNODC/WHO, WHO/UNICEF JMP, Ookla"
+OBSERVED_PERIOD = "2020-2026"
 PROVENANCE_SUMMARY = (
-    "Core: SatPM 2024 annual PM2.5; Natural Earth / HydroLAKES / HydroRIVERS "
-    "water proximity; WorldClim 2.1 monthly climate; World Bank country "
-    "indicators; Ookla 2026 broadband + OurAirports 2026 airport access. "
-    "Supplementary: GHSL UCDB R2024A greenness/climate/hazard themes. "
-    "Experimental: How Walkable, Overture POIs/transit/parks, ESA WorldCover "
-    "2021 10 m physical greenery."
+    "Biophysical (34% active / 55% ref): SatPM 2024 PM2.5 (point), 1-15 km "
+    "coast/lake/Strahler>=5 shore, GHSL UCDB 2020 UTCI>32 heat days (cold/severe "
+    "NULL), WorldCover 10m polygon greenery (516 centres; GHSL NDVI diagnostic). "
+    "Institutional (15% country-labelled): UNODC/WHO homicide, WHO/UNICEF JMP "
+    "safely managed WASH. Services (5% active / 30% ref): Ookla fixed broadband "
+    "(>=10 tests, >=2 tiles). Named holes (46%): cold/severe UTCI, full WorldCover, "
+    "urban form, care friction, non-heat hazards, gated transit, UNESCO heritage."
 )
-
-# Piecewise-linear precipitation comfort points: (annual mm, score).
-PRECIP_COMFORT_POINTS = (
-    (0.0, 0.0),
-    (300.0, 20.0),
-    (500.0, 100.0),
-    (1400.0, 100.0),
-    (2200.0, 40.0),
-    (3500.0, 0.0),
-)
-
-# Weighted airport count (large * 2 + medium) that reaches a full breadth
-# score. 20 weighted airports within 100 km is already exceptional.
-AIRPORT_BREADTH_CAP = 20.0
-AIRPORT_DISTANCE_FULL_KM = 25.0
-AIRPORT_DISTANCE_ZERO_KM = 250.0
 
 SCHEMA_SQL = """
 DROP TABLE IF EXISTS city_quality_index_all;
@@ -143,303 +148,162 @@ CREATE TABLE city_quality_index_all (
     destination_id              TEXT PRIMARY KEY,
     name                        TEXT NOT NULL,
     country_iso2                CHAR(2) NOT NULL,
+    urban_centre_id             BIGINT,
+    settlement_class            TEXT NOT NULL,
     centre_population           BIGINT,
+    gdp_per_capita_ppp          DOUBLE PRECISION,
 
-    -- Core raw components
+    -- Board 1: Biophysical (absolute 0-100 anchors)
+    pm25_ugm3                   DOUBLE PRECISION,
     air_score                   DOUBLE PRECISION,
-    water_score                 DOUBLE PRECISION,
-    climate_avg_high_c          DOUBLE PRECISION,
-    climate_annual_precip_mm    DOUBLE PRECISION,
-    climate_rainy_days          DOUBLE PRECISION,
+    water_distance_km           DOUBLE PRECISION,
+    waterfront_score            DOUBLE PRECISION,
+    ghsl_heat_stress_days       DOUBLE PRECISION,
+    thermal_heat_score          DOUBLE PRECISION,
+    thermal_safety_score        DOUBLE PRECISION,
+    worldcover_green_score      DOUBLE PRECISION,
+    green_method                TEXT NOT NULL,
+    ghsl_ndvi_score             DOUBLE PRECISION,
+    ghsl_canopy_m               DOUBLE PRECISION,
+    urban_form_score            DOUBLE PRECISION,
+    biophysical_board_score     DOUBLE PRECISION,
+
+    -- Board 2: Country-labelled Institutional (never reorders within country)
     homicide_per_100k           DOUBLE PRECISION,
-    road_deaths_per_100k        DOUBLE PRECISION,
-    life_expectancy_years       DOUBLE PRECISION,
-    physicians_per_1000         DOUBLE PRECISION,
-    price_level_vs_usd          DOUBLE PRECISION,
-    out_of_pocket_pct           DOUBLE PRECISION,
+    safety_prior_score          DOUBLE PRECISION,
+    safely_managed_water_pct    DOUBLE PRECISION,
+    safely_managed_sanit_pct    DOUBLE PRECISION,
+    wash_prior_score            DOUBLE PRECISION,
+    institutional_board_score   DOUBLE PRECISION,
+
+    -- Board 3: City Care, Hazards & Gated Services
+    care_access_score           DOUBLE PRECISION,
+    hazard_score                DOUBLE PRECISION,
+    ghsl_hazard_events          INT,
+    transit_score               DOUBLE PRECISION,
+    heritage_score              DOUBLE PRECISION,
     median_down_mbps            DOUBLE PRECISION,
     median_up_mbps              DOUBLE PRECISION,
     latency_ms                  DOUBLE PRECISION,
     broadband_total_tests       BIGINT,
-    airport_nearest_distance_km DOUBLE PRECISION,
-    airport_large_100km         INT,
-    airport_medium_100km        INT,
-
-    -- Core dimension scores
-    environment_score           DOUBLE PRECISION,
-    climate_score               DOUBLE PRECISION,
-    safety_health_score         DOUBLE PRECISION,
-    affordability_score         DOUBLE PRECISION,
+    broadband_tile_count        INT,
     broadband_score             DOUBLE PRECISION,
-    airport_access_score        DOUBLE PRECISION,
-    connectivity_score          DOUBLE PRECISION,
+    services_board_score        DOUBLE PRECISION,
+
+    -- Cohort composite & explicit construct coverage / tiers (NO silent renormalization)
     quality_score               DOUBLE PRECISION,
-    data_completeness           DOUBLE PRECISION,
+    cohort_name                 TEXT NOT NULL,
+    construct_coverage          DOUBLE PRECISION NOT NULL,
+    data_completeness           DOUBLE PRECISION NOT NULL,
+    tier                        TEXT NOT NULL,
+    uncertainty_tier            TEXT NOT NULL,
+    uncertainty_flags           TEXT,
     missing_dimensions          TEXT,
 
-    -- Supplementary GHSL layer (never changes quality_score)
-    urban_centre_id             BIGINT,
-    ghsl_match_status           TEXT,
-    ghsl_ndvi_score             DOUBLE PRECISION,
-    ghsl_heat_stress_days       DOUBLE PRECISION,
-    ghsl_hazard_events          INT,
-    ghsl_enhanced_score         DOUBLE PRECISION,
-
-    -- Experimental layer (never changes quality_score)
+    -- Experimental & Travel-context columns (weight 0%; exported separately)
     walkability_score           DOUBLE PRECISION,
-    public_transport_score      DOUBLE PRECISION,
     transit_stops_5km           INT,
-    culture_food_score          DOUBLE PRECISION,
+    transit_observation_status  TEXT NOT NULL,
     museum_culture_count        INT,
     restaurant_count            INT,
     cuisine_entropy             DOUBLE PRECISION,
-    park_score                  DOUBLE PRECISION,
+    poi_observation_status      TEXT NOT NULL,
     park_count_5km              INT,
-    physical_green_score        DOUBLE PRECISION,
-    poi_observation_status      TEXT,
-    transit_observation_status  TEXT,
-    park_observation_status     TEXT,
+    park_observation_status     TEXT NOT NULL,
+    price_level_vs_usd          DOUBLE PRECISION,
+    out_of_pocket_pct           DOUBLE PRECISION,
+    airport_nearest_km          DOUBLE PRECISION,
 
-    -- Uncertainty & provenance
-    uncertainty_tier            TEXT,
-    uncertainty_flags           TEXT,
-    provenance_summary          TEXT,
+    provenance_summary          TEXT NOT NULL,
     source                      TEXT NOT NULL,
     observed_period             TEXT NOT NULL,
     computed_at                 TIMESTAMPTZ NOT NULL DEFAULT NOW()
 );
 """
 
-QUERY = """
-WITH country AS (
-    SELECT country_iso2,
-           max(value) FILTER (WHERE indicator = 'price_level_vs_usd')
-               AS price_level_vs_usd,
-           max(value) FILTER (WHERE indicator = 'out_of_pocket_health_pct')
-               AS out_of_pocket_pct,
-           max(value) FILTER (WHERE indicator = 'homicide_per_100k')
-               AS homicide_per_100k,
-           max(value) FILTER (WHERE indicator = 'road_traffic_deaths_per_100k')
-               AS road_deaths_per_100k,
-           max(value) FILTER (WHERE indicator = 'life_expectancy_years')
-               AS life_expectancy_years,
-           max(value) FILTER (WHERE indicator = 'physicians_per_1000')
-               AS physicians_per_1000
-    FROM country_indicators
-    GROUP BY country_iso2
-),
-recent AS (
-    SELECT destination_id,
-           avg(avg_high_c) AS recent_avg_high,
-           avg(rainy_days) AS recent_rainy_days
-    FROM climate_recent
-    GROUP BY destination_id
-),
-monthly AS (
-    SELECT destination_id,
-           jsonb_agg(
-               jsonb_build_object(
-                   'month', month,
-                   'median_temp_max_c', median_temp_max_c,
-                   'median_temp_min_c', median_temp_min_c,
-                   'precip_mm', precip_mm
-               ) ORDER BY month
-           ) FILTER (
-               WHERE median_temp_max_c IS NOT NULL
-                 AND median_temp_min_c IS NOT NULL
-                 AND precip_mm IS NOT NULL
-           ) AS climate_months
-    FROM climate_monthly
-    GROUP BY destination_id
+BASE_QUERY = """
+WITH satellite AS (
+    SELECT d.destination_id,
+           EXISTS (
+               SELECT 1
+               FROM ghsl_urban_centres uc
+               WHERE uc.geom && ST_Expand(ST_SetSRID(ST_MakePoint(d.lon, d.lat), 4326), 0.3)
+                 AND ST_DWithin(
+                     ST_SetSRID(ST_MakePoint(d.lon, d.lat), 4326)::geography,
+                     uc.geom::geography,
+                     15000
+                 )
+           ) AS within_15km_centre
+    FROM destinations d
+    LEFT JOIN destination_metro m ON m.destination_id = d.destination_id
+    WHERE m.urban_centre_id IS NULL
 )
 SELECT d.destination_id,
        d.name,
        d.country_iso2,
-       COALESCE(m.centre_population, d.population) AS centre_population,
        m.urban_centre_id,
-       g.physical_green_score,
+       COALESCE(s.within_15km_centre, FALSE) AS within_15km_centre,
+       COALESCE(m.centre_population, d.population) AS centre_population,
        a.pm25_ugm3,
        ge.coast_distance_km,
        iw.large_lake_distance_km,
-       r.distance_km AS river_distance_km,
-       p.museum_culture_count,
-       p.restaurant_count,
-       p.cuisine_entropy,
-       fm.park_count_5km,
-       w.score AS walkability_score,
-       mm.transit_stops_5km,
+       CASE WHEN r.river_order >= 5 THEN r.distance_km END AS major_river_distance_km,
+       ulc.tree_fraction AS wc_tree_fraction,
+       ulc.shrub_fraction AS wc_shrub_fraction,
+       ulc.water_fraction AS wc_water_fraction,
+       hz.events_2015 AS ghsl_hazard_events,
+       c.homicide_per_100k,
+       c.safely_managed_water_pct,
+       c.safely_managed_sanitation_pct,
+       c.gdp_per_capita_ppp,
+       c.price_level_vs_usd,
+       c.out_of_pocket_health_pct,
        bb.median_down_mbps,
        bb.median_up_mbps,
        bb.avg_latency_ms AS latency_ms,
        bb.total_tests AS broadband_total_tests,
-       ap.nearest_distance_km AS airport_nearest_distance_km,
-       ap.large_airports_100km AS airport_large_100km,
-       ap.medium_airports_100km AS airport_medium_100km,
-       c.price_level_vs_usd,
-       c.out_of_pocket_pct,
-       c.homicide_per_100k,
-       c.road_deaths_per_100k,
-       c.life_expectancy_years,
-       c.physicians_per_1000,
-       rc.recent_avg_high,
-       rc.recent_rainy_days,
-       mo.climate_months
+       bb.tile_count AS broadband_tile_count,
+       w.score AS walkability_score,
+       mm.transit_stops_5km,
+       p.museum_culture_count,
+       p.restaurant_count,
+       p.cuisine_entropy,
+       fm.park_count_5km,
+       ap.nearest_distance_km AS airport_nearest_km
 FROM destinations d
 LEFT JOIN destination_metro m ON m.destination_id = d.destination_id
-LEFT JOIN destination_ghsl_greenery g ON g.destination_id = d.destination_id
+LEFT JOIN satellite s ON s.destination_id = d.destination_id
 LEFT JOIN air_quality_annual a ON a.destination_id = d.destination_id
 LEFT JOIN destination_geography ge ON ge.destination_id = d.destination_id
 LEFT JOIN destination_inland_water iw ON iw.destination_id = d.destination_id
 LEFT JOIN destination_river_access r ON r.destination_id = d.destination_id
-LEFT JOIN poi_metrics p ON p.destination_id = d.destination_id
-LEFT JOIN facility_metrics fm ON fm.destination_id = d.destination_id
+LEFT JOIN destination_urban_land_cover ulc ON ulc.destination_id = d.destination_id
+LEFT JOIN urban_centre_hazard hz ON hz.urban_centre_id = m.urban_centre_id
+LEFT JOIN broadband_metrics bb ON bb.destination_id = d.destination_id
 LEFT JOIN walkability_scores w ON w.destination_id = d.destination_id
 LEFT JOIN mobility_metrics mm ON mm.destination_id = d.destination_id
-LEFT JOIN broadband_metrics bb ON bb.destination_id = d.destination_id
+LEFT JOIN poi_metrics p ON p.destination_id = d.destination_id
+LEFT JOIN facility_metrics fm ON fm.destination_id = d.destination_id
 LEFT JOIN airport_access ap ON ap.destination_id = d.destination_id
-LEFT JOIN country c ON c.country_iso2 = d.country_iso2
-LEFT JOIN recent rc ON rc.destination_id = d.destination_id
-LEFT JOIN monthly mo ON mo.destination_id = d.destination_id
+LEFT JOIN (
+    SELECT country_iso2,
+           max(value) FILTER (WHERE indicator = 'homicide_per_100k') AS homicide_per_100k,
+           max(value) FILTER (WHERE indicator = 'safely_managed_water_pct') AS safely_managed_water_pct,
+           max(value) FILTER (WHERE indicator = 'safely_managed_sanitation_pct') AS safely_managed_sanitation_pct,
+           max(value) FILTER (WHERE indicator = 'gdp_per_capita_ppp') AS gdp_per_capita_ppp,
+           max(value) FILTER (WHERE indicator = 'price_level_vs_usd') AS price_level_vs_usd,
+           max(value) FILTER (WHERE indicator = 'out_of_pocket_health_pct') AS out_of_pocket_health_pct
+    FROM country_indicators
+    GROUP BY country_iso2
+) c ON c.country_iso2 = d.country_iso2
 """
 
-INSERT_COLUMNS = (
-    "destination_id",
-    "name",
-    "country_iso2",
-    "centre_population",
-    "air_score",
-    "water_score",
-    "climate_avg_high_c",
-    "climate_annual_precip_mm",
-    "climate_rainy_days",
-    "homicide_per_100k",
-    "road_deaths_per_100k",
-    "life_expectancy_years",
-    "physicians_per_1000",
-    "price_level_vs_usd",
-    "out_of_pocket_pct",
-    "median_down_mbps",
-    "median_up_mbps",
-    "latency_ms",
-    "broadband_total_tests",
-    "airport_nearest_distance_km",
-    "airport_large_100km",
-    "airport_medium_100km",
-    "environment_score",
-    "climate_score",
-    "safety_health_score",
-    "affordability_score",
-    "broadband_score",
-    "airport_access_score",
-    "connectivity_score",
-    "quality_score",
-    "data_completeness",
-    "missing_dimensions",
-    "urban_centre_id",
-    "ghsl_match_status",
-    "ghsl_ndvi_score",
-    "ghsl_heat_stress_days",
-    "ghsl_hazard_events",
-    "ghsl_enhanced_score",
-    "walkability_score",
-    "public_transport_score",
-    "transit_stops_5km",
-    "culture_food_score",
-    "museum_culture_count",
-    "restaurant_count",
-    "cuisine_entropy",
-    "park_score",
-    "park_count_5km",
-    "physical_green_score",
-    "poi_observation_status",
-    "transit_observation_status",
-    "park_observation_status",
-    "uncertainty_tier",
-    "uncertainty_flags",
-    "provenance_summary",
-    "source",
-    "observed_period",
-)
 
-INSERT_SQL = (
-    "INSERT INTO city_quality_index_all ("
-    + ", ".join(INSERT_COLUMNS)
-    + ") VALUES ("
-    + ", ".join(["%s"] * len(INSERT_COLUMNS))
-    + ")"
-)
+def _clamp(value: float, lo: float = 0.0, hi: float = 100.0) -> float:
+    return max(lo, min(hi, value))
 
 
-def percentile_map(values: list[float | None]) -> dict[float, float]:
-    clean = sorted(value for value in values if value is not None)
-    n = len(clean)
-    if n <= 1:
-        return {value: 50.0 for value in clean}
-    result = {}
-    for value in clean:
-        lo = bisect_left(clean, value)
-        hi = bisect_right(clean, value)
-        result[value] = 100.0 * ((lo + hi - 1) / 2.0) / (n - 1)
-    return result
-
-
-def weighted_available(pairs: Sequence[tuple[float | None, float]]) -> float | None:
-    active = [(value, weight) for value, weight in pairs if value is not None]
-    if not active:
-        return None
-    return sum(value * weight for value, weight in active) / sum(
-        weight for _, weight in active
-    )
-
-
-def compute_air_score(pm25_ugm3: float | None) -> float | None:
-    """Annual PM2.5 on the fixed log scale used by bootstrap_green_score."""
-    if pm25_ugm3 is None:
-        return None
-    if pm25_ugm3 <= 5.0:
-        return 100.0
-    if pm25_ugm3 >= 75.0:
-        return 0.0
-    return 100.0 * (math.log(75.0) - math.log(pm25_ugm3)) / (
-        math.log(75.0) - math.log(5.0)
-    )
-
-
-def compute_water_score(
-    coast_distance_km: float | None,
-    large_lake_distance_km: float | None,
-    river_distance_km: float | None,
-) -> float | None:
-    """Water proximity: 100 at 0 km, linear to 0 at 50 km, nearest feature."""
-    distances = [
-        distance
-        for distance in (
-            coast_distance_km,
-            large_lake_distance_km,
-            river_distance_km,
-        )
-        if distance is not None
-    ]
-    if not distances:
-        return None
-    return 100.0 * max(0.0, 1.0 - min(distances) / 50.0)
-
-
-def _monthly_thermal_comfort(
-    median_temp_max_c: float, median_temp_min_c: float
-) -> float:
-    """0-100 comfort for one month, penalising cold and extreme heat."""
-    heat_penalty = max(0.0, median_temp_max_c - 28.0) + max(
-        0.0, median_temp_min_c - 22.0
-    )
-    cold_penalty = max(0.0, 18.0 - median_temp_max_c) + max(
-        0.0, 5.0 - median_temp_min_c
-    )
-    penalty = heat_penalty + cold_penalty
-    return max(0.0, 100.0 * (1.0 - penalty / 20.0))
-
-
-def _interpolate(points: Sequence[tuple[float, float]], value: float) -> float:
+def _piecewise(points: Sequence[tuple[float, float]], value: float) -> float:
     if value <= points[0][0]:
         return points[0][1]
     if value >= points[-1][0]:
@@ -452,533 +316,480 @@ def _interpolate(points: Sequence[tuple[float, float]], value: float) -> float:
     return points[-1][1]
 
 
-def compute_precip_comfort(annual_precip_mm: float | None) -> float | None:
-    """0-100 annual precipitation comfort, penalising arid and monsoon ends."""
-    if annual_precip_mm is None:
+def compute_air_score(pm25_ugm3: float | None) -> float | None:
+    """Fixed log scale: 100 at <=5 ug/m3, 0 at >=75 ug/m3."""
+    if pm25_ugm3 is None:
         return None
-    return _interpolate(PRECIP_COMFORT_POINTS, annual_precip_mm)
+    val = float(pm25_ugm3)
+    if val <= 5.0:
+        return 100.0
+    if val >= 75.0:
+        return 0.0
+    return 100.0 * (math.log(75.0) - math.log(val)) / (math.log(75.0) - math.log(5.0))
 
 
-def compute_climate_score(months: Sequence[dict[str, Any]] | None) -> float | None:
-    """Climate score from 12 WorldClim monthly rows.
+def compute_waterfront_score(
+    coast_km: float | None,
+    large_lake_km: float | None,
+    major_river_km: float | None,
+) -> tuple[float | None, float | None]:
+    """Short-range 1-15 km shore proximity (coast, lake >=10 km2, Strahler >=5).
 
-    Requires all 12 months with max/min temperature and precipitation, so a
-    partial year cannot be mistaken for a full climatology.
+    Retires the saturated 50 km decay (which gave >56% of cities >=90).
+    Returns (waterfront_score, nearest_distance_km).
     """
-    if not months or len(months) != 12:
-        return None
-    thermal = 0.0
-    annual_precip = 0.0
-    for month in months:
-        tmax = month.get("median_temp_max_c")
-        tmin = month.get("median_temp_min_c")
-        precip = month.get("precip_mm")
-        if tmax is None or tmin is None or precip is None:
-            return None
-        thermal += _monthly_thermal_comfort(float(tmax), float(tmin))
-        annual_precip += float(precip)
-    thermal /= 12.0
-    precip_comfort = compute_precip_comfort(annual_precip)
-    if precip_comfort is None:
-        return None
-    return 0.70 * thermal + 0.30 * precip_comfort
+    dists = [float(d) for d in (coast_km, large_lake_km, major_river_km) if d is not None]
+    if not dists:
+        return None, None
+    nearest = min(dists)
+    if nearest <= 1.0:
+        return 100.0, nearest
+    if nearest >= 15.0:
+        return 0.0, nearest
+    return 100.0 * (15.0 - nearest) / 14.0, nearest
 
 
-def compute_airport_score(
-    nearest_distance_km: float | None,
-    large_airports_100km: int | None,
-    medium_airports_100km: int | None,
+def compute_thermal_heat_score(utci_over_32_days: float | None) -> float | None:
+    """Council UTCI heat term: 100 at 0 days, 0 at >=120 days/year."""
+    if utci_over_32_days is None:
+        return None
+    return _clamp(100.0 * (1.0 - float(utci_over_32_days) / 120.0))
+
+
+def compute_worldcover_green_score(
+    tree_fraction: float | None,
+    shrub_fraction: float | None,
+    water_fraction: float | None,
+    canopy_m: float | None = None,
 ) -> float | None:
-    """Airport access: 75% nearest-airport distance + 25% airport breadth."""
-    if nearest_distance_km is not None:
-        if nearest_distance_km <= AIRPORT_DISTANCE_FULL_KM:
-            distance_score: float | None = 100.0
-        elif nearest_distance_km >= AIRPORT_DISTANCE_ZERO_KM:
-            distance_score = 0.0
-        else:
-            distance_score = 100.0 * (
-                (AIRPORT_DISTANCE_ZERO_KM - nearest_distance_km)
-                / (AIRPORT_DISTANCE_ZERO_KM - AIRPORT_DISTANCE_FULL_KM)
-            )
-    else:
-        distance_score = None
+    """Council WorldCover 10 m polygon greenery with canopy-height multiplier.
 
-    if large_airports_100km is None and medium_airports_100km is None:
-        breadth_score: float | None = None
-    else:
-        weighted = 2 * (large_airports_100km or 0) + (
-            medium_airports_100km or 0
-        )
-        breadth_score = min(
-            100.0,
-            100.0 * math.log1p(weighted) / math.log1p(AIRPORT_BREADTH_CAP),
-        )
-    return weighted_available([(distance_score, 0.75), (breadth_score, 0.25)])
-
-
-def classify_uncertainty(
-    data_completeness: float | None,
-    *,
-    broadband_present: bool = False,
-    broadband_total_tests: int | None = None,
-    safety_subindicators_present: bool = False,
-) -> str:
-    """Return the explicit uncertainty tier for one city."""
-    completeness = data_completeness if data_completeness is not None else 0.0
-    broadband_ok = (
-        broadband_present
-        and broadband_total_tests is not None
-        and broadband_total_tests >= 10
-    )
-    if completeness >= 0.95 and broadband_ok and safety_subindicators_present:
-        return "low"
-    if completeness >= 0.90:
-        return "medium"
-    return "high"
-
-
-def uncertainty_flags(row: dict[str, Any]) -> str:
-    """Comma-separated machine-readable uncertainty flags."""
-    flags: list[str] = []
-    if any(
-        row.get(key) is not None
-        for key in (
-            "homicide_per_100k",
-            "road_deaths_per_100k",
-            "life_expectancy_years",
-            "physicians_per_1000",
-        )
-    ):
-        flags.append("country_level_safety")
-    if (
-        row.get("price_level_vs_usd") is not None
-        or row.get("out_of_pocket_pct") is not None
-    ):
-        flags.append("country_level_affordability")
-    total_tests = row.get("broadband_total_tests")
-    if total_tests is None:
-        flags.append("ookla_missing")
-    elif total_tests < 10:
-        flags.append("ookla_low_sample")
-    elif row.get("broadband_score") is None:
-        flags.append("ookla_missing")
-    if row.get("homicide_per_100k") is None:
-        flags.append("homicide_missing")
-    if row.get("urban_centre_id") is None:
-        flags.append("no_ghsl_polygon")
-    return ",".join(flags)
-
-
-def compute_ndvi_score(ndvi: float | None) -> float | None:
-    """Map raw NDVI to the 0-100 scale used by the i1 greenness loader."""
-    if ndvi is None:
+    Numerator is tree + shrub (crop, grass, and bare excluded); water is
+    excluded from the denominator.
+    """
+    if tree_fraction is None or shrub_fraction is None or water_fraction is None:
         return None
-    return round(100.0 * min(1.0, max(0.0, (float(ndvi) - 0.05) / 0.55)), 2)
+    land = 1.0 - float(water_fraction)
+    if land < 0.2:
+        return None
+    veg_share = (float(tree_fraction) + float(shrub_fraction)) / land
+    base = 100.0 * min(1.0, max(0.0, veg_share) / 0.40)
+    if canopy_m is not None:
+        mult = 0.85 + 0.15 * min(1.0, max(0.0, float(canopy_m)) / 8.0)
+    else:
+        mult = 1.0
+    return base * mult
 
 
-def pick_column(
-    available: Iterable[str], candidates: Sequence[str]
-) -> str | None:
-    """Case-insensitive first match from a list of candidate column names."""
-    lookup = {column.lower(): column for column in available}
-    for candidate in candidates:
-        match = lookup.get(candidate.lower())
-        if match is not None:
-            return match
-    return None
+def compute_homicide_score(homicide_per_100k: float | None) -> float | None:
+    """Piecewise absolute anchor: 100 <=1, 80 @3, 50 @10, 20 @25, 0 >=50."""
+    if homicide_per_100k is None:
+        return None
+    return _piecewise(HOMICIDE_ANCHORS, float(homicide_per_100k))
 
 
-def _table_columns(cur: psycopg.Cursor, table: str) -> set[str]:
-    """Columns of an optional public table, empty when it does not exist."""
-    cur.execute("SELECT to_regclass(%s) AS name", (f"public.{table}",))
-    row = cur.fetchone()
-    if not row or row["name"] is None:
-        return set()
+def compute_wash_score(
+    safely_managed_water_pct: float | None,
+    safely_managed_sanitation_pct: float | None,
+) -> float | None:
+    """Mean of JMP safely managed water & sanitation ONLY when both exist."""
+    if safely_managed_water_pct is None or safely_managed_sanitation_pct is None:
+        return None
+    return _clamp(
+        0.5 * (float(safely_managed_water_pct) + float(safely_managed_sanitation_pct))
+    )
+
+
+def compute_broadband_score(
+    down_mbps: float | None,
+    up_mbps: float | None,
+    latency_ms: float | None,
+    total_tests: int | None,
+    tile_count: int | None,
+) -> float | None:
+    """Absolute broadband blend: 50% down [10-150], 20% up [5-50], 30% lat [80-10].
+
+    Requires >=10 tests AND >=2 tiles; otherwise NULL.
+    """
+    if (
+        total_tests is None
+        or int(total_tests) < BROADBAND_MIN_TESTS
+        or tile_count is None
+        or int(tile_count) < BROADBAND_MIN_TILES
+    ):
+        return None
+    if down_mbps is None or up_mbps is None or latency_ms is None:
+        return None
+    d = float(down_mbps)
+    u = float(up_mbps)
+    lat = float(latency_ms)
+    if d <= 0 or u <= 0 or lat <= 0:
+        return None
+    down_s = _clamp(100.0 * (d - 10.0) / 140.0)
+    up_s = _clamp(100.0 * (u - 5.0) / 45.0)
+    lat_s = _clamp(100.0 * (80.0 - lat) / 70.0)
+    return 0.50 * down_s + 0.20 * up_s + 0.30 * lat_s
+
+
+def _exact_cohort_weighted(
+    values: dict[str, float | None], weights: dict[str, float]
+) -> float | None:
+    """Return weighted average ONLY when every pillar in `weights` is non-NULL."""
+    if any(values.get(k) is None for k in weights):
+        return None
+    total_w = sum(weights.values())
+    return sum(float(values[k]) * w for k, w in weights.items()) / total_w
+
+
+def classify_settlement(
+    urban_centre_id: int | None, within_15km_centre: bool
+) -> str:
+    if urban_centre_id is not None:
+        return "ghsl_centre"
+    if within_15km_centre:
+        return "satellite_suppressed"
+    return "unmatched_town"
+
+
+def score_rows(rows: list[dict[str, Any]]) -> list[dict[str, Any]]:
+    """Pure offline scoring function for all rows (no DB access)."""
+    scored: list[dict[str, Any]] = []
+    for raw in rows:
+        row = dict(raw)
+        uc_id = row.get("urban_centre_id")
+        settlement_class = classify_settlement(
+            uc_id, bool(row.get("within_15km_centre"))
+        )
+        row["settlement_class"] = settlement_class
+
+        # Board 1: Biophysical
+        air_score = compute_air_score(row.get("pm25_ugm3"))
+        waterfront_score, water_dist_km = compute_waterfront_score(
+            row.get("coast_distance_km"),
+            row.get("large_lake_distance_km"),
+            row.get("major_river_distance_km"),
+        )
+        thermal_heat_score = compute_thermal_heat_score(
+            row.get("ghsl_heat_stress_days")
+        )
+        wc_green = compute_worldcover_green_score(
+            row.get("wc_tree_fraction"),
+            row.get("wc_shrub_fraction"),
+            row.get("wc_water_fraction"),
+            row.get("ghsl_canopy_m"),
+        )
+        if wc_green is not None:
+            green_method = "worldcover_10m_polygon"
+        elif row.get("ghsl_ndvi_score") is not None:
+            green_method = "ghsl_ndvi_diagnostic_only"
+        else:
+            green_method = "unobserved"
+
+        row["air_score"] = air_score
+        row["water_distance_km"] = water_dist_km
+        row["waterfront_score"] = waterfront_score
+        row["thermal_heat_score"] = thermal_heat_score
+        row["thermal_safety_score"] = None  # Named hole: awaits cold + severe UTCI
+        row["worldcover_green_score"] = wc_green
+        row["green_method"] = green_method
+        row["urban_form_score"] = None  # Named hole: awaits GHS-POP + validation
+
+        # Board 2: Country-labelled Institutional
+        safety_prior = compute_homicide_score(row.get("homicide_per_100k"))
+        wash_prior = compute_wash_score(
+            row.get("safely_managed_water_pct"),
+            row.get("safely_managed_sanitation_pct"),
+        )
+        row["safety_prior_score"] = safety_prior
+        row["safely_managed_sanit_pct"] = row.get("safely_managed_sanitation_pct")
+        row["wash_prior_score"] = wash_prior
+
+        # Board 3: Care, Hazards & Gated Services
+        row["care_access_score"] = None  # Named hole: awaits Weiss friction
+        row["hazard_score"] = None  # Named hole: awaits flood+seismic+cyclone
+        row["transit_score"] = None  # Named hole: awaits gated rail / local GTFS
+        row["heritage_score"] = None  # Named hole: awaits UNESCO core polygons
+
+        total_tests = row.get("broadband_total_tests")
+        tile_count = row.get("broadband_tile_count")
+        broadband_score = compute_broadband_score(
+            row.get("median_down_mbps"),
+            row.get("median_up_mbps"),
+            row.get("latency_ms"),
+            total_tests,
+            tile_count,
+        )
+        row["broadband_score"] = broadband_score
+
+        # Exact board aggregates (NO silent renormalization!)
+        pillar_vals = {
+            "air": air_score,
+            "waterfront": waterfront_score,
+            "safety_prior": safety_prior,
+            "wash_prior": wash_prior,
+            "broadband": broadband_score,
+        }
+        row["biophysical_board_score"] = _exact_cohort_weighted(
+            pillar_vals, PHASE1_BIOPHYSICAL_WEIGHTS
+        )
+        row["institutional_board_score"] = _exact_cohort_weighted(
+            pillar_vals, PHASE1_INSTITUTIONAL_WEIGHTS
+        )
+        row["services_board_score"] = _exact_cohort_weighted(
+            pillar_vals, PHASE1_SERVICES_WEIGHTS
+        )
+
+        # True construct coverage against the full 100% intrinsic reference vector
+        observed_ref_weight = 0.0
+        for key, w in PHASE1_COHORT_WEIGHTS.items():
+            if pillar_vals[key] is not None:
+                observed_ref_weight += w
+        if wc_green is not None:
+            observed_ref_weight += REFERENCE_WEIGHTS["urban_greenery"]
+        construct_coverage = round(observed_ref_weight, 4)
+
+        # Cohort composite ONLY when all 6 Phase 1 cohort pillars are observed
+        # AND the locality is a GHSL urban centre (never pool unmatched towns!)
+        if settlement_class == "ghsl_centre":
+            cohort_score = _exact_cohort_weighted(pillar_vals, PHASE1_COHORT_WEIGHTS)
+        else:
+            cohort_score = None
+
+        row["quality_score"] = cohort_score
+        row["construct_coverage"] = construct_coverage
+        # data_completeness = share of the Phase 1 cohort (0.54) observed
+        phase1_obs = sum(
+            w for k, w in PHASE1_COHORT_WEIGHTS.items() if pillar_vals[k] is not None
+        )
+        row["data_completeness"] = round(phase1_obs / PHASE1_COHORT_WEIGHT_SUM, 4)
+
+        # Tier A / B / C & Uncertainty flags
+        flags: list[str] = ["pm25_point_sample", "thermal_heat_only", "country_level_safety", "country_level_wash"]
+        if settlement_class != "ghsl_centre":
+            flags.append(settlement_class)
+        if safety_prior is None:
+            flags.append("homicide_missing")
+        if wash_prior is None:
+            flags.append("wash_missing")
+        if broadband_score is None:
+            if total_tests is not None and int(total_tests) > 0:
+                flags.append("ookla_below_sample_floor")
+            else:
+                flags.append("ookla_missing")
+        elif int(total_tests) < BROADBAND_TIER_A_TESTS:
+            flags.append("ookla_tier_b_sample")
+
+        if cohort_score is not None:
+            cohort_name = "phase1_intrinsic_ghsl_centre"
+            if int(total_tests) >= BROADBAND_TIER_A_TESTS:
+                tier = "A"
+                uncertainty_tier = "medium"  # Phase 1 construct_coverage is 0.54 (<1.0)
+            else:
+                tier = "B"
+                uncertainty_tier = "medium"
+        else:
+            cohort_name = (
+                "unmatched_town_series"
+                if settlement_class == "unmatched_town"
+                else (
+                    "satellite_suppressed"
+                    if settlement_class == "satellite_suppressed"
+                    else "incomplete_ghsl_centre"
+                )
+            )
+            tier = "C"
+            uncertainty_tier = "high"
+
+        row["cohort_name"] = cohort_name
+        row["tier"] = tier
+        row["uncertainty_tier"] = uncertainty_tier
+        row["uncertainty_flags"] = ",".join(flags)
+
+        missing = [k for k, v in pillar_vals.items() if v is None]
+        missing.extend(
+            ["thermal_cold_severe", "urban_form", "care_access", "hazards", "transit", "heritage"]
+        )
+        if wc_green is None:
+            missing.append("worldcover_green")
+        row["missing_dimensions"] = ",".join(missing)
+
+        # Experimental zero-vs-unobserved observation statuses
+        rest = row.get("restaurant_count")
+        mus = row.get("museum_culture_count")
+        transit = row.get("transit_stops_5km")
+        parks = row.get("park_count_5km")
+        if (rest or 0) > 0:
+            row["poi_observation_status"] = "observed"
+        elif (mus or 0) > 0:
+            row["poi_observation_status"] = "unobserved_restaurants"
+        else:
+            row["poi_observation_status"] = "unobserved"
+        row["transit_observation_status"] = (
+            "observed" if (transit or 0) > 0 else "unobserved"
+        )
+        row["park_observation_status"] = (
+            "observed" if (parks or 0) > 0 else "unobserved"
+        )
+
+        row["provenance_summary"] = PROVENANCE_SUMMARY
+        row["source"] = SOURCE
+        row["observed_period"] = OBSERVED_PERIOD
+        scored.append(row)
+    return scored
+
+
+def _table_columns(cur: psycopg.Cursor, table_name: str) -> set[str]:
     cur.execute(
         """
         SELECT column_name
         FROM information_schema.columns
         WHERE table_schema = 'public' AND table_name = %s
         """,
-        (table,),
+        (table_name,),
     )
-    return {record["column_name"] for record in cur.fetchall()}
+    return {r["column_name"] for r in cur.fetchall()}
 
 
-def load_supplementary(cur: psycopg.Cursor) -> dict[int, dict[str, Any]]:
-    """Read optional GHSL UCDB theme values keyed by urban_centre_id.
+def _pick_column(columns: set[str], candidates: Sequence[str]) -> str | None:
+    for c in candidates:
+        if c in columns:
+            return c
+    return None
 
-    Missing tables or missing candidate columns are simply skipped, so the
-    script runs before and after the i1 greenness/climate loader.
-    """
-    values: dict[int, dict[str, Any]] = {}
 
-    greenness_columns = _table_columns(cur, "urban_centre_greenness")
-    ndvi_column = pick_column(
-        greenness_columns, GREENNESS_NDVI_SCORE_CANDIDATES
-    )
-    ndvi_transform = None
-    if ndvi_column is None:
-        ndvi_column = pick_column(
-            greenness_columns, GREENNESS_NDVI_MEAN_CANDIDATES
-        )
-        ndvi_transform = compute_ndvi_score
-    if ndvi_column is not None:
+def _load_ghsl_themes(cur: psycopg.Cursor) -> dict[int, dict[str, Any]]:
+    themes: dict[int, dict[str, Any]] = {}
+    g_cols = _table_columns(cur, "urban_centre_greenness")
+    ndvi_col = _pick_column(g_cols, GREENNESS_NDVI_SCORE_CANDIDATES)
+    canopy_col = _pick_column(g_cols, GREENNESS_CANOPY_CANDIDATES)
+    if ndvi_col or canopy_col:
+        sel = ["urban_centre_id"]
+        if ndvi_col:
+            sel.append(f'"{ndvi_col}" AS ghsl_ndvi_score')
+        if canopy_col:
+            sel.append(f'"{canopy_col}" AS ghsl_canopy_m')
+        cur.execute(f"SELECT {', '.join(sel)} FROM public.urban_centre_greenness")
+        for r in cur.fetchall():
+            entry = themes.setdefault(int(r["urban_centre_id"]), {})
+            if ndvi_col:
+                entry["ghsl_ndvi_score"] = r["ghsl_ndvi_score"]
+            if canopy_col:
+                entry["ghsl_canopy_m"] = r["ghsl_canopy_m"]
+
+    c_cols = _table_columns(cur, "urban_centre_climate")
+    heat_col = _pick_column(c_cols, CLIMATE_HEAT_CANDIDATES)
+    if heat_col:
         cur.execute(
-            f'SELECT urban_centre_id, "{ndvi_column}" AS value '
-            "FROM public.urban_centre_greenness"
-        )
-        for record in cur.fetchall():
-            value = record["value"]
-            values.setdefault(int(record["urban_centre_id"]), {})[
-                "ghsl_ndvi_score"
-            ] = ndvi_transform(value) if ndvi_transform else value
-
-    climate_columns = _table_columns(cur, "urban_centre_climate")
-    heat_column = pick_column(climate_columns, CLIMATE_HEAT_CANDIDATES)
-    if heat_column is not None:
-        cur.execute(
-            f'SELECT urban_centre_id, "{heat_column}" AS value '
+            f'SELECT urban_centre_id, "{heat_col}" AS ghsl_heat_stress_days '
             "FROM public.urban_centre_climate"
         )
-        for record in cur.fetchall():
-            values.setdefault(int(record["urban_centre_id"]), {})[
+        for r in cur.fetchall():
+            themes.setdefault(int(r["urban_centre_id"]), {})[
                 "ghsl_heat_stress_days"
-            ] = record["value"]
-
-    hazard_columns = _table_columns(cur, "urban_centre_hazard")
-    if "events_2015" in hazard_columns:
-        cur.execute(
-            "SELECT urban_centre_id, events_2015 "
-            "FROM public.urban_centre_hazard"
-        )
-        for record in cur.fetchall():
-            values.setdefault(int(record["urban_centre_id"]), {})[
-                "ghsl_hazard_events"
-            ] = record["events_2015"]
-
-    return values
+            ] = r["ghsl_heat_stress_days"]
+    return themes
 
 
-def score_rows(rows: list[dict[str, Any]]) -> list[dict[str, Any]]:
-    """Compute Core, Supplementary and Experimental values in place.
-
-    Pure Python: no database or network access, so the whole scoring contract
-    can be unit-tested offline.
-    """
-    for row in rows:
-        row["air_score"] = compute_air_score(row.get("pm25_ugm3"))
-        row["water_score"] = compute_water_score(
-            row.get("coast_distance_km"),
-            row.get("large_lake_distance_km"),
-            row.get("river_distance_km"),
-        )
-        row["environment_score"] = weighted_available(
-            [
-                (row["air_score"], 0.60),
-                (row["water_score"], 0.40),
-            ]
-        )
-
-        months = row.get("climate_months")
-        row["climate_score"] = compute_climate_score(months)
-        recent_high = row.get("recent_avg_high")
-        monthly_high: float | None = None
-        annual_precip: float | None = None
-        if months and len(months) == 12:
-            highs = [month.get("median_temp_max_c") for month in months]
-            precip = [month.get("precip_mm") for month in months]
-            if all(value is not None for value in highs):
-                monthly_high = sum(float(value) for value in highs) / 12.0
-            if all(value is not None for value in precip):
-                annual_precip = sum(float(value) for value in precip)
-        row["climate_avg_high_c"] = (
-            recent_high if recent_high is not None else monthly_high
-        )
-        row["climate_annual_precip_mm"] = annual_precip
-        row["climate_rainy_days"] = row.get("recent_rainy_days")
-
-        total_tests = row.get("broadband_total_tests")
-        total_tests = int(total_tests) if total_tests is not None else None
-        row["broadband_total_tests"] = total_tests
-        broadband_row_present = total_tests is not None
-        broadband_sample_ok = broadband_row_present and total_tests >= 10
-        for key in ("median_down_mbps", "median_up_mbps", "latency_ms"):
-            value = row.get(key)
-            valid = (
-                broadband_sample_ok
-                and value is not None
-                and float(value) > 0
-            )
-            row[f"_{key}_valid"] = valid
-
-        row["airport_access_score"] = compute_airport_score(
-            row.get("airport_nearest_distance_km"),
-            row.get("airport_large_100km"),
-            row.get("airport_medium_100km"),
-        )
-
-        museum = row.get("museum_culture_count")
-        restaurant = row.get("restaurant_count")
-        transit = row.get("transit_stops_5km")
-        park_count = row.get("park_count_5km")
-        row["culture_log"] = math.log1p(museum) if museum is not None else None
-        row["restaurant_log"] = (
-            math.log1p(restaurant) if restaurant is not None else None
-        )
-        row["transit_log"] = math.log1p(transit) if transit is not None else None
-        if park_count is not None and park_count > 0:
-            row["park_score"] = min(
-                100.0, 100.0 * math.log1p(park_count) / math.log(501.0)
-            )
-        else:
-            row["park_score"] = None
-
-        row["ghsl_match_status"] = (
-            "matched" if row.get("urban_centre_id") is not None else "unmatched"
-        )
-        row["poi_observation_status"] = (
-            "observed"
-            if (restaurant or 0) > 0 or (museum or 0) > 0
-            else "none_listed_or_unmapped"
-        )
-        row["transit_observation_status"] = (
-            "observed"
-            if (transit or 0) > 0
-            else "unobserved_or_unmapped"
-        )
-        row["park_observation_status"] = (
-            "observed" if (park_count or 0) > 0 else "none_listed"
-        )
-
-        row.setdefault("source", SOURCE)
-        row.setdefault("observed_period", OBSERVED_PERIOD)
-
-    maps = {
-        "culture": percentile_map([row.get("culture_log") for row in rows]),
-        "restaurant": percentile_map(
-            [row.get("restaurant_log") for row in rows]
-        ),
-        "cuisine": percentile_map(
-            [row.get("cuisine_entropy") for row in rows]
-        ),
-        "homicide": percentile_map(
-            [row.get("homicide_per_100k") for row in rows]
-        ),
-        "road": percentile_map(
-            [row.get("road_deaths_per_100k") for row in rows]
-        ),
-        "life": percentile_map(
-            [row.get("life_expectancy_years") for row in rows]
-        ),
-        "physicians": percentile_map(
-            [row.get("physicians_per_1000") for row in rows]
-        ),
-        "price": percentile_map(
-            [row.get("price_level_vs_usd") for row in rows]
-        ),
-        "oop": percentile_map([row.get("out_of_pocket_pct") for row in rows]),
-        "down": percentile_map(
-            [
-                row.get("median_down_mbps")
-                if row.get("_median_down_mbps_valid")
-                else None
-                for row in rows
-            ]
-        ),
-        "up": percentile_map(
-            [
-                row.get("median_up_mbps")
-                if row.get("_median_up_mbps_valid")
-                else None
-                for row in rows
-            ]
-        ),
-        "latency": percentile_map(
-            [
-                row.get("latency_ms") if row.get("_latency_ms_valid") else None
-                for row in rows
-            ]
-        ),
-        "airport": percentile_map(
-            [row.get("airport_access_score") for row in rows]
-        ),
-        "transit": percentile_map([row.get("transit_log") for row in rows]),
-    }
-
-    def pct(
-        row: dict[str, Any], key: str, source: str, lower_better: bool = False
-    ) -> float | None:
-        value = row.get(source)
-        if value is None:
-            return None
-        score = maps[key].get(value)
-        if score is None:
-            return None
-        return 100.0 - score if lower_better else score
-
-    for row in rows:
-        row["culture_food_score"] = weighted_available(
-            [
-                (pct(row, "culture", "culture_log"), 0.50),
-                (pct(row, "restaurant", "restaurant_log"), 0.30),
-                (pct(row, "cuisine", "cuisine_entropy"), 0.20),
-            ]
-        )
-        row["public_transport_score"] = pct(row, "transit", "transit_log")
-
-        row["safety_health_score"] = weighted_available(
-            [
-                (pct(row, "homicide", "homicide_per_100k", True), 0.35),
-                (pct(row, "road", "road_deaths_per_100k", True), 0.25),
-                (pct(row, "life", "life_expectancy_years"), 0.25),
-                (pct(row, "physicians", "physicians_per_1000"), 0.15),
-            ]
-        )
-        row["affordability_score"] = weighted_available(
-            [
-                (pct(row, "price", "price_level_vs_usd", True), 0.70),
-                (pct(row, "oop", "out_of_pocket_pct", True), 0.30),
-            ]
-        )
-        row["broadband_score"] = weighted_available(
-            [
-                (
-                    pct(row, "down", "median_down_mbps")
-                    if row.get("_median_down_mbps_valid")
-                    else None,
-                    0.50,
-                ),
-                (
-                    pct(row, "up", "median_up_mbps")
-                    if row.get("_median_up_mbps_valid")
-                    else None,
-                    0.20,
-                ),
-                (
-                    pct(row, "latency", "latency_ms", True)
-                    if row.get("_latency_ms_valid")
-                    else None,
-                    0.30,
-                ),
-            ]
-        )
-        airport_pct = pct(row, "airport", "airport_access_score")
-        row["connectivity_score"] = weighted_available(
-            [
-                (row["broadband_score"], 0.70),
-                (airport_pct, 0.30),
-            ]
-        )
-
-        dimensions = [
-            ("environment", row["environment_score"]),
-            ("climate", row["climate_score"]),
-            ("safety_health", row["safety_health_score"]),
-            ("affordability", row["affordability_score"]),
-            ("connectivity", row["connectivity_score"]),
-        ]
-        active = [
-            (value, CORE_WEIGHTS[name])
-            for name, value in dimensions
-            if value is not None
-        ]
-        row["quality_score"] = (
-            sum(value * weight for value, weight in active)
-            / sum(weight for _, weight in active)
-            if active
-            else None
-        )
-        row["data_completeness"] = sum(weight for _, weight in active)
-        row["missing_dimensions"] = ",".join(
-            name for name, value in dimensions if value is None
-        )
-
-        if row.get("urban_centre_id") is not None and row.get(
-            "ghsl_ndvi_score"
-        ) is not None:
-            row["ghsl_enhanced_score"] = weighted_available(
-                [
-                    (row.get("ghsl_ndvi_score"), 0.40),
-                    (row["air_score"], 0.36),
-                    (row["water_score"], 0.24),
-                ]
-            )
-        else:
-            row["ghsl_enhanced_score"] = None
-        row.setdefault("ghsl_ndvi_score", None)
-        row.setdefault("ghsl_heat_stress_days", None)
-        row.setdefault("ghsl_hazard_events", None)
-
-        safety_present = all(
-            row.get(key) is not None
-            for key in (
-                "homicide_per_100k",
-                "road_deaths_per_100k",
-                "life_expectancy_years",
-                "physicians_per_1000",
-            )
-        )
-        row["uncertainty_tier"] = classify_uncertainty(
-            row["data_completeness"],
-            broadband_present=row.get("broadband_score") is not None,
-            broadband_total_tests=row.get("broadband_total_tests"),
-            safety_subindicators_present=safety_present,
-        )
-        row["uncertainty_flags"] = uncertainty_flags(row)
-        row["provenance_summary"] = PROVENANCE_SUMMARY
-
-    return rows
+INSERT_COLUMNS = [
+    "destination_id",
+    "name",
+    "country_iso2",
+    "urban_centre_id",
+    "settlement_class",
+    "centre_population",
+    "gdp_per_capita_ppp",
+    "pm25_ugm3",
+    "air_score",
+    "water_distance_km",
+    "waterfront_score",
+    "ghsl_heat_stress_days",
+    "thermal_heat_score",
+    "thermal_safety_score",
+    "worldcover_green_score",
+    "green_method",
+    "ghsl_ndvi_score",
+    "ghsl_canopy_m",
+    "urban_form_score",
+    "biophysical_board_score",
+    "homicide_per_100k",
+    "safety_prior_score",
+    "safely_managed_water_pct",
+    "safely_managed_sanit_pct",
+    "wash_prior_score",
+    "institutional_board_score",
+    "care_access_score",
+    "hazard_score",
+    "ghsl_hazard_events",
+    "transit_score",
+    "heritage_score",
+    "median_down_mbps",
+    "median_up_mbps",
+    "latency_ms",
+    "broadband_total_tests",
+    "broadband_tile_count",
+    "broadband_score",
+    "services_board_score",
+    "quality_score",
+    "cohort_name",
+    "construct_coverage",
+    "data_completeness",
+    "tier",
+    "uncertainty_tier",
+    "uncertainty_flags",
+    "missing_dimensions",
+    "walkability_score",
+    "transit_stops_5km",
+    "transit_observation_status",
+    "museum_culture_count",
+    "restaurant_count",
+    "cuisine_entropy",
+    "poi_observation_status",
+    "park_count_5km",
+    "park_observation_status",
+    "price_level_vs_usd",
+    "out_of_pocket_pct",
+    "airport_nearest_km",
+    "provenance_summary",
+    "source",
+    "observed_period",
+]
 
 
 def load(database_url: str) -> dict[str, Any]:
     with psycopg.connect(database_url, row_factory=dict_row) as conn:
         with conn.cursor() as cur:
-            cur.execute(QUERY)
-            rows = [dict(row) for row in cur.fetchall()]
-            supplementary = load_supplementary(cur)
+            themes = _load_ghsl_themes(cur)
+            cur.execute(BASE_QUERY)
+            raw_rows = [dict(r) for r in cur.fetchall()]
 
-        for row in rows:
-            centre_id = row.get("urban_centre_id")
-            if centre_id is not None:
-                extra = supplementary.get(int(centre_id), {})
-                row["ghsl_ndvi_score"] = extra.get("ghsl_ndvi_score")
-                row["ghsl_heat_stress_days"] = extra.get(
-                    "ghsl_heat_stress_days"
-                )
-                row["ghsl_hazard_events"] = extra.get("ghsl_hazard_events")
-            else:
-                row["ghsl_ndvi_score"] = None
-                row["ghsl_heat_stress_days"] = None
-                row["ghsl_hazard_events"] = None
+        for r in raw_rows:
+            uc_id = r.get("urban_centre_id")
+            if uc_id is not None and int(uc_id) in themes:
+                r.update(themes[int(uc_id)])
 
-        score_rows(rows)
+        scored = score_rows(raw_rows)
 
+        placeholders = ", ".join(["%s"] * len(INSERT_COLUMNS))
+        insert_sql = (
+            f"INSERT INTO city_quality_index_all ({', '.join(INSERT_COLUMNS)}) "
+            f"VALUES ({placeholders})"
+        )
         with conn.cursor() as cur:
             cur.execute(SCHEMA_SQL)
             cur.executemany(
-                INSERT_SQL,
-                [
-                    tuple(row.get(column) for column in INSERT_COLUMNS)
-                    for row in rows
-                ],
+                insert_sql,
+                [tuple(r.get(col) for col in INSERT_COLUMNS) for r in scored],
             )
             cur.execute(
                 """
-                SELECT count(*) AS cities,
-                       count(quality_score) AS scored,
-                       round(avg(data_completeness)::numeric, 3)
-                           AS avg_completeness,
-                       count(*) FILTER (WHERE uncertainty_tier = 'low')
-                           AS low_uncertainty,
-                       count(*) FILTER (WHERE uncertainty_tier = 'medium')
-                           AS medium_uncertainty,
-                       count(*) FILTER (WHERE uncertainty_tier = 'high')
-                           AS high_uncertainty,
-                       count(*) FILTER (WHERE ghsl_match_status = 'matched')
-                           AS ghsl_matched,
-                       count(ghsl_ndvi_score) AS ghsl_greenness,
-                       count(ghsl_heat_stress_days) AS ghsl_climate
+                SELECT count(*) AS destinations,
+                       count(*) FILTER (WHERE settlement_class = 'ghsl_centre') AS ghsl_destinations,
+                       count(*) FILTER (WHERE settlement_class = 'satellite_suppressed') AS satellite_suppressed,
+                       count(*) FILTER (WHERE settlement_class = 'unmatched_town') AS unmatched_towns,
+                       count(*) FILTER (WHERE tier = 'A') AS tier_a,
+                       count(*) FILTER (WHERE tier = 'B') AS tier_b,
+                       count(*) FILTER (WHERE tier = 'C') AS tier_c,
+                       round(avg(construct_coverage)::numeric, 3) AS avg_construct_coverage
                 FROM city_quality_index_all
                 """
             )
@@ -992,35 +803,15 @@ def report(database_url: str) -> None:
         with conn.cursor() as cur:
             cur.execute(
                 """
-                SELECT count(*) AS cities,
-                       count(quality_score) AS scored,
-                       round(avg(data_completeness)::numeric, 3)
-                           AS avg_completeness,
-                       count(*) FILTER (WHERE uncertainty_tier = 'low')
-                           AS low_uncertainty,
-                       count(*) FILTER (WHERE uncertainty_tier = 'medium')
-                           AS medium_uncertainty,
-                       count(*) FILTER (WHERE uncertainty_tier = 'high')
-                           AS high_uncertainty
-                FROM city_quality_index_all
-                """
-            )
-            print(dict(cur.fetchone()))
-            cur.execute(
-                """
-                SELECT name, country_iso2,
+                SELECT name, country_iso2, tier,
                        round(quality_score::numeric, 1) AS quality,
-                       round(environment_score::numeric, 1) AS environment,
-                       round(climate_score::numeric, 1) AS climate,
-                       round(safety_health_score::numeric, 1) AS safety_health,
-                       round(affordability_score::numeric, 1)
-                           AS affordability,
-                       round(connectivity_score::numeric, 1) AS connectivity,
-                       round(data_completeness::numeric, 2) AS completeness,
-                       uncertainty_tier
+                       round(biophysical_board_score::numeric, 1) AS biophys,
+                       round(institutional_board_score::numeric, 1) AS instit,
+                       round(broadband_score::numeric, 1) AS broadband,
+                       round(construct_coverage::numeric, 2) AS cov
                 FROM city_quality_index_all
-                ORDER BY quality_score DESC NULLS LAST,
-                         centre_population DESC NULLS LAST
+                WHERE tier = 'A'
+                ORDER BY quality_score DESC, centre_population DESC
                 LIMIT 20
                 """
             )

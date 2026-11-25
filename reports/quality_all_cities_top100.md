@@ -1,117 +1,124 @@
-# Global City Quality Index — Top 100
+# Intrinsic City Quality Index — Phase 1 Tier A Top 100
 
-Core ranking only (completeness >= 0.90). Supplementary GHSL values are shown but do not affect the rank; experimental indicators are exported separately.
+Three-board, absolute-anchor, no-imputation GHSL urban-centre cohort (cost/affordability, airports, life expectancy, physicians, road deaths, and WorldClim precipitation excluded). Phase 1 active construct coverage = **0.42** of the 100% intrinsic reference vector (58% named holes: full thermal UTCI, full WorldCover polygons, urban form, hospital care friction, non-heat hazards, gated transit, UNESCO heritage; GHSL UTCI>32 heat days are shown as a diagnostic column only). GHSL urban centres: **7,018** (Tier A: **3,910**); suppressed 15 km satellites: **865**; separate unmatched towns: **2,506**.
 
-## Continent distribution (top 100)
+## Continent distribution vs GHSL centre base rates
 
-| Continent | Cities | Share |
-|---|---:|---:|
-| Europe (EU) | 61 | 61.0% |
-| Oceania (OC) | 25 | 25.0% |
-| North America (NA) | 12 | 12.0% |
-| Asia (AS) | 2 | 2.0% |
+| Continent | Top 100 | Top 100 Share | All GHSL Centres | Base Rate |
+|---|---:|---:|---:|---:|
+| Europe (EU) | 77 | 77.0% | 1059 | 15.1% |
+| North America (NA) | 16 | 16.0% | 618 | 8.8% |
+| Oceania (OC) | 7 | 7.0% | 35 | 0.5% |
+| Asia (AS) | 0 | 0.0% | 3429 | 48.9% |
+| Africa (AF) | 0 | 0.0% | 1215 | 17.3% |
+| South America (SA) | 0 | 0.0% | 662 | 9.4% |
 
-## Top 100
+## Mandatory release diagnostics
 
-| # | City | Country | Continent | Quality | Environment | Climate | Safety/health | Affordability | Connectivity | Completeness | Uncertainty |
-|---:|---|---|---|---:|---:|---:|---:|---:|---:|---:|---|
-| 1 | Brisbane | AU | Oceania (OC) | 81.5 | 98.9 | 97.9 | 84.2 | 29.4 | 67.4 | 1.00 | low |
-| 2 | Bilbao | ES | Europe (EU) | 81.0 | 87.5 | 94.8 | 87.5 | 37.7 | 82.6 | 1.00 | low |
-| 3 | Cienfuegos | CU | North America (NA) | 80.9 | 89.5 | 91.8 | 64.7 | 74.7 | 82.9 | 1.00 | medium |
-| 4 | Maitland | AU | Oceania (OC) | 80.8 | 98.3 | 98.7 | 84.2 | 29.4 | 60.8 | 1.00 | low |
-| 5 | Geelong | AU | Oceania (OC) | 80.4 | 96.9 | 96.1 | 84.2 | 29.4 | 66.7 | 1.00 | low |
-| 6 | Funchal | PT | Europe (EU) | 80.4 | 87.9 | 100.0 | 84.9 | 34.4 | 76.3 | 1.00 | low |
-| 7 | Gold Coast | AU | Oceania (OC) | 80.3 | 98.8 | 96.1 | 84.2 | 29.4 | 60.1 | 1.00 | low |
-| 8 | Castelldefels | ES | Europe (EU) | 80.3 | 84.9 | 93.6 | 87.5 | 37.7 | 85.9 | 1.00 | low |
-| 9 | Matanzas | CU | North America (NA) | 80.3 | 86.8 | 92.7 | 64.7 | 74.7 | 82.9 | 1.00 | medium |
-| 10 | Tarragona | ES | Europe (EU) | 80.2 | 83.6 | 95.7 | 87.5 | 37.7 | 84.6 | 1.00 | low |
-| 11 | Cifuentes | CU | North America (NA) | 80.0 | 85.9 | 92.9 | 64.7 | 74.7 | 82.9 | 1.00 | medium |
-| 12 | Sydney | AU | Oceania (OC) | 80.0 | 94.5 | 99.5 | 84.2 | 29.4 | 62.6 | 1.00 | low |
-| 13 | Bundaberg | AU | Oceania (OC) | 80.0 | 99.1 | 97.2 | 84.2 | 29.4 | 53.6 | 1.00 | low |
-| 14 | Grao de Murviedro | ES | Europe (EU) | 79.7 | 88.3 | 88.6 | 87.5 | 37.7 | 80.0 | 1.00 | low |
-| 15 | A Coruña | ES | Europe (EU) | 79.7 | 86.5 | 94.8 | 87.5 | 37.7 | 72.5 | 1.00 | low |
-| 16 | Newcastle | AU | Oceania (OC) | 79.7 | 95.4 | 99.8 | 84.2 | 29.4 | 56.1 | 1.00 | low |
-| 17 | Estepona | ES | Europe (EU) | 79.6 | 84.3 | 97.5 | 87.5 | 37.7 | 73.4 | 1.00 | low |
-| 18 | Torrelavega | ES | Europe (EU) | 79.6 | 87.0 | 94.6 | 87.5 | 37.7 | 70.8 | 1.00 | low |
-| 19 | Vilanova i la Geltrú | ES | Europe (EU) | 79.6 | 84.0 | 95.4 | 87.5 | 37.7 | 78.1 | 1.00 | low |
-| 20 | Wollongong | AU | Oceania (OC) | 79.6 | 96.9 | 99.5 | 84.2 | 29.4 | 51.9 | 1.00 | low |
-| 21 | Santander | ES | Europe (EU) | 79.6 | 86.1 | 95.8 | 87.5 | 37.7 | 70.5 | 1.00 | low |
-| 22 | Tamworth | AU | Oceania (OC) | 79.4 | 99.7 | 95.0 | 84.2 | 29.4 | 50.6 | 1.00 | low |
-| 23 | Port Macquarie | AU | Oceania (OC) | 79.4 | 99.6 | 98.7 | 84.2 | 29.4 | 43.2 | 1.00 | low |
-| 24 | Hervey Bay | AU | Oceania (OC) | 79.4 | 96.8 | 97.7 | 84.2 | 29.4 | 53.4 | 1.00 | low |
-| 25 | Melbourne | AU | Oceania (OC) | 79.4 | 93.1 | 96.0 | 84.2 | 29.4 | 67.7 | 1.00 | low |
-| 26 | Setúbal | PT | Europe (EU) | 79.3 | 85.9 | 97.4 | 84.9 | 34.4 | 77.0 | 1.00 | low |
-| 27 | Sunshine Coast | AU | Oceania (OC) | 79.3 | 96.4 | 94.6 | 84.2 | 29.4 | 60.2 | 1.00 | low |
-| 28 | Rockhampton | AU | Oceania (OC) | 79.3 | 97.9 | 94.7 | 84.2 | 29.4 | 55.1 | 1.00 | low |
-| 29 | Caloundra | AU | Oceania (OC) | 79.3 | 95.2 | 95.7 | 84.2 | 29.4 | 61.1 | 1.00 | low |
-| 30 | Girona | ES | Europe (EU) | 79.2 | 84.3 | 91.7 | 87.5 | 37.7 | 80.3 | 1.00 | low |
-| 31 | Ferrol | ES | Europe (EU) | 79.2 | 85.9 | 94.4 | 87.5 | 37.7 | 70.2 | 1.00 | low |
-| 32 | Galway | IE | Europe (EU) | 79.2 | 94.5 | 81.3 | 88.6 | 37.4 | 68.0 | 1.00 | low |
-| 33 | Faro | PT | Europe (EU) | 79.1 | 84.7 | 97.9 | 84.9 | 34.4 | 77.3 | 1.00 | low |
-| 34 | Algeciras | ES | Europe (EU) | 79.1 | 80.7 | 98.0 | 87.5 | 37.7 | 77.6 | 1.00 | low |
-| 35 | Auckland | NZ | Oceania (OC) | 79.1 | 97.0 | 96.7 | 74.9 | 32.8 | 69.9 | 1.00 | low |
-| 36 | Donostia / San Sebastián | ES | Europe (EU) | 79.1 | 84.2 | 93.0 | 87.5 | 37.7 | 76.7 | 1.00 | low |
-| 37 | Launceston | AU | Oceania (OC) | 79.0 | 98.3 | 91.7 | 84.2 | 29.4 | 57.4 | 1.00 | low |
-| 38 | San José de las Lajas | CU | North America (NA) | 79.0 | 83.1 | 93.7 | 64.7 | 74.7 | 79.5 | 1.00 | medium |
-| 39 | Irun | ES | Europe (EU) | 79.0 | 86.3 | 93.6 | 87.5 | 37.7 | 68.9 | 1.00 | low |
-| 40 | Málaga | ES | Europe (EU) | 79.0 | 81.7 | 97.3 | 87.5 | 37.7 | 75.0 | 1.00 | low |
-| 41 | Sesimbra | PT | Europe (EU) | 79.0 | 86.3 | 96.9 | 84.9 | 34.4 | 73.3 | 1.00 | low |
-| 42 | San Fernando | ES | Europe (EU) | 79.0 | 80.1 | 98.1 | 87.5 | 37.7 | 78.0 | 1.00 | low |
-| 43 | La Línea de la Concepción | ES | Europe (EU) | 79.0 | 79.4 | 98.0 | 87.5 | 37.7 | 80.0 | 1.00 | low |
-| 44 | Bastia | FR | Europe (EU) | 78.9 | 88.4 | 92.5 | 77.5 | 41.4 | 83.0 | 1.00 | low |
-| 45 | Gladstone | AU | Oceania (OC) | 78.9 | 95.5 | 96.7 | 84.2 | 29.4 | 54.4 | 1.00 | low |
-| 46 | Lido di Ostia | IT | Europe (EU) | 78.9 | 82.6 | 93.9 | 87.1 | 34.0 | 84.4 | 1.00 | low |
-| 47 | Sant Boi de Llobregat | ES | Europe (EU) | 78.9 | 77.2 | 94.7 | 87.5 | 37.7 | 92.5 | 1.00 | low |
-| 48 | Dubbo | AU | Oceania (OC) | 78.9 | 99.3 | 93.8 | 84.2 | 29.4 | 48.7 | 1.00 | low |
-| 49 | Bayonne | FR | Europe (EU) | 78.8 | 87.2 | 93.5 | 77.5 | 41.4 | 84.0 | 1.00 | low |
-| 50 | Perth | AU | Oceania (OC) | 78.8 | 94.8 | 97.7 | 84.2 | 29.4 | 53.4 | 1.00 | low |
-| 51 | Amora | PT | Europe (EU) | 78.8 | 81.1 | 97.7 | 84.9 | 34.4 | 85.2 | 1.00 | low |
-| 52 | Cárdenas | CU | North America (NA) | 78.8 | 89.1 | 91.1 | 64.7 | 74.7 | 64.2 | 1.00 | medium |
-| 53 | Sagua la Grande | CU | North America (NA) | 78.7 | 91.4 | 91.8 | 64.7 | 74.7 | 55.5 | 1.00 | medium |
-| 54 | Corroios | PT | Europe (EU) | 78.7 | 80.6 | 97.7 | 84.9 | 34.4 | 85.9 | 1.00 | low |
-| 55 | Marbella | ES | Europe (EU) | 78.7 | 84.1 | 96.0 | 87.5 | 37.7 | 67.3 | 1.00 | low |
-| 56 | Trinidad | CU | North America (NA) | 78.7 | 83.1 | 90.3 | 64.7 | 74.7 | 82.9 | 1.00 | medium |
-| 57 | Mandurah | AU | Oceania (OC) | 78.7 | 96.0 | 98.8 | 84.2 | 29.4 | 46.7 | 1.00 | low |
-| 58 | Limerick | IE | Europe (EU) | 78.7 | 90.5 | 82.1 | 88.6 | 37.4 | 73.6 | 1.00 | low |
-| 59 | Lisbon | PT | Europe (EU) | 78.7 | 82.6 | 97.5 | 84.9 | 34.4 | 80.0 | 1.00 | low |
-| 60 | Blanes | ES | Europe (EU) | 78.7 | 83.7 | 93.2 | 87.5 | 37.7 | 73.7 | 1.00 | low |
-| 61 | Pamplona | ES | Europe (EU) | 78.6 | 85.6 | 85.8 | 87.5 | 37.7 | 82.8 | 1.00 | low |
-| 62 | Havana | CU | North America (NA) | 78.6 | 82.4 | 90.9 | 64.7 | 74.7 | 82.9 | 1.00 | medium |
-| 63 | Mieres | ES | Europe (EU) | 78.6 | 87.4 | 87.6 | 87.5 | 37.7 | 73.3 | 1.00 | low |
-| 64 | Sagunto | ES | Europe (EU) | 78.6 | 84.4 | 88.0 | 87.5 | 37.7 | 81.2 | 1.00 | low |
-| 65 | El Puerto de Santa María | ES | Europe (EU) | 78.5 | 77.3 | 96.7 | 87.5 | 37.7 | 84.5 | 1.00 | low |
-| 66 | Mataró | ES | Europe (EU) | 78.5 | 81.5 | 93.9 | 87.5 | 37.7 | 77.1 | 1.00 | low |
-| 67 | Martigues | FR | Europe (EU) | 78.5 | 84.7 | 91.3 | 77.5 | 41.4 | 92.1 | 1.00 | low |
-| 68 | Castelló de la Plana | ES | Europe (EU) | 78.4 | 82.5 | 90.4 | 87.5 | 37.7 | 80.4 | 1.00 | low |
-| 69 | Cork | IE | Europe (EU) | 78.4 | 91.2 | 81.5 | 88.6 | 37.4 | 69.5 | 1.00 | low |
-| 70 | Badajoz | ES | Europe (EU) | 78.4 | 86.2 | 93.1 | 87.5 | 37.7 | 63.5 | 1.00 | low |
-| 71 | Mérida | ES | Europe (EU) | 78.3 | 86.0 | 91.1 | 87.5 | 37.7 | 67.8 | 1.00 | low |
-| 72 | Kisarazu | JP | Asia (AS) | 78.3 | 81.9 | 84.1 | 91.2 | 39.6 | 81.5 | 1.00 | low |
-| 73 | Gasteiz / Vitoria | ES | Europe (EU) | 78.3 | 86.1 | 84.0 | 87.5 | 37.7 | 81.0 | 1.00 | low |
-| 74 | Logroño | ES | Europe (EU) | 78.2 | 87.6 | 81.0 | 87.5 | 37.7 | 82.0 | 1.00 | low |
-| 75 | Hobart | AU | Oceania (OC) | 78.2 | 98.7 | 89.5 | 84.2 | 29.4 | 52.3 | 1.00 | low |
-| 76 | Hamilton | NZ | Oceania (OC) | 78.2 | 94.2 | 96.0 | 74.9 | 32.8 | 70.8 | 1.00 | low |
-| 77 | Porto | PT | Europe (EU) | 78.2 | 80.4 | 95.7 | 84.9 | 34.4 | 85.2 | 1.00 | low |
-| 78 | Reus | ES | Europe (EU) | 78.2 | 76.9 | 95.5 | 87.5 | 37.7 | 85.0 | 1.00 | low |
-| 79 | Santa Clara | CU | North America (NA) | 78.1 | 79.4 | 93.1 | 64.7 | 74.7 | 82.9 | 1.00 | medium |
-| 80 | Toulon | FR | Europe (EU) | 78.1 | 85.7 | 92.7 | 77.5 | 41.4 | 82.9 | 1.00 | low |
-| 81 | Mairena del Aljarafe | ES | Europe (EU) | 78.1 | 77.7 | 93.6 | 87.5 | 37.7 | 85.5 | 1.00 | low |
-| 82 | Ceuta | ES | Europe (EU) | 78.1 | 81.0 | 98.0 | 87.5 | 37.7 | 66.8 | 1.00 | low |
-| 83 | Olbia | IT | Europe (EU) | 78.1 | 84.2 | 92.7 | 87.1 | 34.0 | 74.1 | 1.00 | low |
-| 84 | Güines | CU | North America (NA) | 78.1 | 88.4 | 92.9 | 64.7 | 74.7 | 55.6 | 1.00 | medium |
-| 85 | Sète | FR | Europe (EU) | 78.1 | 86.3 | 91.6 | 77.5 | 41.4 | 82.5 | 1.00 | low |
-| 86 | Béziers | FR | Europe (EU) | 78.0 | 85.8 | 91.8 | 77.5 | 41.4 | 83.2 | 1.00 | low |
-| 87 | Torremolinos | ES | Europe (EU) | 78.0 | 78.3 | 97.7 | 87.5 | 37.7 | 74.3 | 1.00 | low |
-| 88 | Coffs Harbour | AU | Oceania (OC) | 78.0 | 97.9 | 94.1 | 84.2 | 29.4 | 43.3 | 1.00 | low |
-| 89 | Vélez-Málaga | ES | Europe (EU) | 78.0 | 82.3 | 95.3 | 87.5 | 37.7 | 66.8 | 1.00 | low |
-| 90 | Asahi | JP | Asia (AS) | 77.9 | 81.6 | 85.2 | 91.2 | 39.6 | 76.8 | 1.00 | low |
-| 91 | Pontevedra | ES | Europe (EU) | 77.9 | 85.7 | 87.1 | 87.5 | 37.7 | 72.9 | 1.00 | low |
-| 92 | Marseille | FR | Europe (EU) | 77.9 | 82.7 | 93.2 | 77.5 | 41.4 | 88.7 | 1.00 | low |
-| 93 | Rijeka | HR | Europe (EU) | 77.9 | 82.3 | 86.2 | 81.9 | 48.9 | 81.4 | 1.00 | low |
-| 94 | Central Coast | AU | Oceania (OC) | 77.9 | 90.2 | 99.3 | 84.2 | 29.4 | 54.7 | 1.00 | low |
-| 95 | Manzanillo | CU | North America (NA) | 77.8 | 79.7 | 88.7 | 64.7 | 74.7 | 87.8 | 1.00 | medium |
-| 96 | Gijón | ES | Europe (EU) | 77.8 | 80.9 | 93.1 | 87.5 | 37.7 | 73.6 | 1.00 | low |
-| 97 | Antibes | FR | Europe (EU) | 77.7 | 85.9 | 93.2 | 77.5 | 41.4 | 77.4 | 1.00 | low |
-| 98 | Jerez de la Frontera | ES | Europe (EU) | 77.7 | 77.0 | 96.2 | 87.5 | 37.7 | 78.7 | 1.00 | low |
-| 99 | Santo Domingo | CU | North America (NA) | 77.7 | 82.8 | 91.6 | 64.7 | 74.7 | 71.7 | 1.00 | medium |
-| 100 | Genoa | IT | Europe (EU) | 77.6 | 81.4 | 91.3 | 87.1 | 34.0 | 80.4 | 1.00 | low |
+- **Log GDP/capita correlation (Tier A):** composite `r = 0.783`, biophysical `r = 0.637`, institutional (country-level) `r = 0.467`, broadband `r = 0.688`.
+- **Pathological checks:** hot cities (≥150 UTCI>32 days) with thermal_heat ≥50 = `0`; hot cities in top decile = `6`; China zero-POI rows falsely marked observed = `0`; unique GHSL centres in top 100 = `100`.
+
+## Top 100 (Tier A GHSL urban centres)
+
+| # | City | Country | Continent | Quality | Biophysical | Institutional | Broadband | Air | Shore | Heat | Construct Cov |
+|---:|---|---|---|---:|---:|---:|---:|---:|---:|---:|---:|
+| 1 | Umeå | SE | Europe (EU) | 98.9 | 99.8 | 98.1 | 97.4 | 100.0 | 99.4 | 100.0 | 0.42 |
+| 2 | Jyväskylä | FI | Europe (EU) | 98.8 | 99.3 | 98.0 | 99.5 | 100.0 | 97.8 | 99.2 | 0.42 |
+| 3 | Norrköping | SE | Europe (EU) | 98.7 | 98.9 | 98.1 | 100.0 | 98.3 | 100.0 | 99.2 | 0.42 |
+| 4 | Oulu | FI | Europe (EU) | 98.6 | 99.0 | 98.0 | 99.2 | 98.5 | 100.0 | 100.0 | 0.42 |
+| 5 | Tampere | FI | Europe (EU) | 98.0 | 97.5 | 98.0 | 100.0 | 97.1 | 98.5 | 99.2 | 0.42 |
+| 6 | Västerås | SE | Europe (EU) | 97.9 | 97.2 | 98.1 | 100.0 | 96.3 | 99.2 | 98.3 | 0.42 |
+| 7 | Trondheim | NO | Europe (EU) | 97.6 | 98.6 | 95.4 | 100.0 | 98.4 | 98.9 | 100.0 | 0.42 |
+| 8 | Södertälje | SE | Europe (EU) | 97.4 | 96.2 | 98.1 | 100.0 | 94.5 | 100.0 | 100.0 | 0.42 |
+| 9 | Tromsø | NO | Europe (EU) | 97.3 | 98.6 | 95.4 | 97.7 | 100.0 | 95.5 | 99.2 | 0.42 |
+| 10 | Stockholm | SE | Europe (EU) | 96.9 | 95.3 | 98.1 | 100.0 | 93.1 | 100.0 | 100.0 | 0.56 |
+| 11 | Jönköping | SE | Europe (EU) | 96.8 | 95.4 | 98.1 | 98.6 | 93.2 | 100.0 | 99.2 | 0.42 |
+| 12 | Auckland | NZ | Oceania (OC) | 96.7 | 97.1 | 95.0 | 100.0 | 95.8 | 100.0 | 99.2 | 0.56 |
+| 13 | Lahti | FI | Europe (EU) | 96.3 | 94.5 | 98.0 | 99.5 | 92.8 | 98.0 | 99.2 | 0.42 |
+| 14 | Nanaimo | CA | North America (NA) | 96.2 | 100.0 | 89.8 | 99.1 | 100.0 | 100.0 | 100.0 | 0.42 |
+| 15 | Halifax | CA | North America (NA) | 96.2 | 99.8 | 89.8 | 100.0 | 99.7 | 100.0 | 93.3 | 0.42 |
+| 16 | Örebro | SE | Europe (EU) | 95.6 | 92.9 | 98.1 | 99.8 | 96.1 | 85.9 | 98.3 | 0.42 |
+| 17 | Galway | IE | Europe (EU) | 95.1 | 93.9 | 95.5 | 99.0 | 91.0 | 100.0 | 98.3 | 0.42 |
+| 18 | Wellington | NZ | Oceania (OC) | 95.0 | 93.9 | 95.0 | 100.0 | 91.1 | 100.0 | 100.0 | 0.42 |
+| 19 | Maple Ridge | CA | North America (NA) | 94.9 | 97.3 | 89.8 | 99.4 | 96.1 | 100.0 | 88.3 | 0.42 |
+| 20 | Derry | GB | Europe (EU) | 94.7 | 91.6 | 98.8 | 96.2 | 87.7 | 100.0 | 100.0 | 0.42 |
+| 21 | Linköping | SE | Europe (EU) | 94.7 | 91.1 | 98.1 | 99.9 | 96.3 | 80.1 | 98.3 | 0.42 |
+| 22 | Hamilton | NZ | Oceania (OC) | 94.7 | 93.4 | 95.0 | 99.3 | 90.3 | 100.0 | 95.8 | 0.42 |
+| 23 | Bergen | NO | Europe (EU) | 94.5 | 93.1 | 95.4 | 98.5 | 91.4 | 96.5 | 100.0 | 0.42 |
+| 24 | Peterborough | CA | North America (NA) | 94.3 | 96.3 | 89.8 | 99.2 | 94.6 | 100.0 | 89.2 | 0.42 |
+| 25 | Barrie | CA | North America (NA) | 94.1 | 96.0 | 89.8 | 99.1 | 94.2 | 100.0 | 83.3 | 0.42 |
+| 26 | Helsinki | FI | Europe (EU) | 94.0 | 90.0 | 98.0 | 100.0 | 88.2 | 93.9 | 98.3 | 0.56 |
+| 27 | Aberdeen | GB | Europe (EU) | 93.8 | 89.8 | 98.8 | 96.5 | 86.8 | 96.1 | 100.0 | 0.42 |
+| 28 | Sault Ste. Marie | CA | North America (NA) | 93.8 | 96.1 | 89.8 | 95.9 | 94.8 | 98.7 | 97.5 | 0.42 |
+| 29 | Kingston | CA | North America (NA) | 93.7 | 95.0 | 89.8 | 99.7 | 92.6 | 100.0 | 86.7 | 0.42 |
+| 30 | Dundee | GB | Europe (EU) | 93.6 | 89.7 | 98.8 | 95.7 | 85.3 | 99.0 | 100.0 | 0.42 |
+| 31 | Carlisle | GB | Europe (EU) | 93.6 | 89.2 | 98.8 | 97.5 | 84.2 | 100.0 | 99.2 | 0.42 |
+| 32 | Victoria | CA | North America (NA) | 93.6 | 94.8 | 89.8 | 99.6 | 100.0 | 83.6 | 97.5 | 0.42 |
+| 33 | Palmerston North | NZ | Oceania (OC) | 93.5 | 90.9 | 95.0 | 100.0 | 89.5 | 94.0 | 97.5 | 0.42 |
+| 34 | Morecambe | GB | Europe (EU) | 93.3 | 88.6 | 98.8 | 97.8 | 83.2 | 100.0 | 100.0 | 0.42 |
+| 35 | Biel/Bienne | CH | Europe (EU) | 93.2 | 87.5 | 99.3 | 100.0 | 82.2 | 99.0 | 85.0 | 0.42 |
+| 36 | Tartu | EE | Europe (EU) | 93.1 | 90.5 | 94.7 | 100.0 | 86.1 | 100.0 | 95.0 | 0.42 |
+| 37 | Stavanger | NO | Europe (EU) | 93.1 | 90.0 | 95.4 | 100.0 | 85.9 | 98.9 | 100.0 | 0.42 |
+| 38 | Littlehampton | GB | Europe (EU) | 93.1 | 87.9 | 98.8 | 98.8 | 82.4 | 99.8 | 95.8 | 0.42 |
+| 39 | Napier | NZ | Oceania (OC) | 93.1 | 90.5 | 95.0 | 98.8 | 91.4 | 88.5 | 97.5 | 0.42 |
+| 40 | Palencia | ES | Europe (EU) | 93.0 | 88.5 | 97.5 | 99.5 | 83.1 | 99.9 | 48.3 | 0.42 |
+| 41 | Exeter | GB | Europe (EU) | 93.0 | 88.2 | 98.8 | 96.6 | 82.7 | 100.0 | 97.5 | 0.42 |
+| 42 | Lower Hutt | NZ | Oceania (OC) | 93.0 | 90.0 | 95.0 | 100.0 | 90.1 | 89.8 | 100.0 | 0.42 |
+| 43 | Helsingborg | SE | Europe (EU) | 93.0 | 87.9 | 98.1 | 100.0 | 82.2 | 100.0 | 99.2 | 0.42 |
+| 44 | Namur | BE | Europe (EU) | 93.0 | 87.9 | 98.4 | 99.1 | 82.2 | 100.0 | 90.8 | 0.42 |
+| 45 | Fredrikstad | NO | Europe (EU) | 92.9 | 89.7 | 95.4 | 100.0 | 87.6 | 94.1 | 99.2 | 0.42 |
+| 46 | Hastings | GB | Europe (EU) | 92.9 | 87.3 | 98.8 | 99.8 | 81.4 | 100.0 | 95.8 | 0.42 |
+| 47 | Tauranga | NZ | Oceania (OC) | 92.9 | 89.9 | 95.0 | 100.0 | 88.2 | 93.6 | 99.2 | 0.42 |
+| 48 | Orléans | FR | Europe (EU) | 92.9 | 89.3 | 95.9 | 100.0 | 84.2 | 100.0 | 80.0 | 0.42 |
+| 49 | Folkestone | GB | Europe (EU) | 92.9 | 87.2 | 98.8 | 100.0 | 81.3 | 100.0 | 97.5 | 0.42 |
+| 50 | Blackpool | GB | Europe (EU) | 92.9 | 87.7 | 98.8 | 97.6 | 82.0 | 100.0 | 100.0 | 0.42 |
+| 51 | Århus | DK | Europe (EU) | 92.8 | 86.5 | 99.8 | 100.0 | 80.2 | 100.0 | 98.3 | 0.42 |
+| 52 | Besançon | FR | Europe (EU) | 92.8 | 89.5 | 95.9 | 98.1 | 85.3 | 98.4 | 71.7 | 0.42 |
+| 53 | Eastbourne | GB | Europe (EU) | 92.8 | 87.1 | 98.8 | 100.0 | 81.0 | 100.0 | 95.8 | 0.42 |
+| 54 | Drammen | NO | Europe (EU) | 92.8 | 89.4 | 95.4 | 100.0 | 84.4 | 100.0 | 100.0 | 0.42 |
+| 55 | Newcastle upon Tyne | GB | Europe (EU) | 92.8 | 87.7 | 98.8 | 97.0 | 82.0 | 100.0 | 99.2 | 0.42 |
+| 56 | Swansea | GB | Europe (EU) | 92.8 | 87.4 | 98.8 | 98.2 | 81.5 | 100.0 | 97.5 | 0.42 |
+| 57 | Eugene | US | North America (NA) | 92.7 | 100.0 | 79.8 | 99.4 | 100.0 | 100.0 | 63.3 | 0.42 |
+| 58 | Bournemouth | GB | Europe (EU) | 92.7 | 87.3 | 98.8 | 98.1 | 81.4 | 100.0 | 97.5 | 0.42 |
+| 59 | St. John's | CA | North America (NA) | 92.7 | 93.7 | 89.8 | 97.0 | 93.5 | 94.1 | 100.0 | 0.42 |
+| 60 | Paignton | GB | Europe (EU) | 92.7 | 87.5 | 98.8 | 96.8 | 81.7 | 100.0 | 99.2 | 0.42 |
+| 61 | Salem | US | North America (NA) | 92.6 | 100.0 | 79.8 | 98.7 | 100.0 | 100.0 | 51.7 | 0.42 |
+| 62 | Turku | FI | Europe (EU) | 92.6 | 87.4 | 98.0 | 99.4 | 94.2 | 73.0 | 98.3 | 0.42 |
+| 63 | Tours | FR | Europe (EU) | 92.6 | 88.7 | 95.9 | 100.0 | 83.4 | 100.0 | 79.2 | 0.42 |
+| 64 | Seattle | US | North America (NA) | 92.5 | 99.4 | 79.8 | 100.0 | 99.1 | 100.0 | 87.5 | 0.56 |
+| 65 | Brighton | GB | Europe (EU) | 92.5 | 86.8 | 98.8 | 98.0 | 80.7 | 100.0 | 95.8 | 0.42 |
+| 66 | London | GB | Europe (EU) | 92.4 | 86.4 | 98.8 | 99.3 | 80.1 | 100.0 | 95.0 | 0.56 |
+| 67 | Southport | GB | Europe (EU) | 92.4 | 87.5 | 98.8 | 94.4 | 81.9 | 99.5 | 100.0 | 0.42 |
+| 68 | Southampton | GB | Europe (EU) | 92.4 | 86.4 | 98.8 | 99.1 | 80.1 | 100.0 | 95.0 | 0.42 |
+| 69 | Aalborg | DK | Europe (EU) | 92.3 | 85.6 | 99.8 | 99.5 | 79.6 | 98.6 | 98.3 | 0.42 |
+| 70 | Konstanz | DE | Europe (EU) | 92.3 | 86.1 | 99.3 | 98.6 | 79.5 | 100.0 | 84.2 | 0.42 |
+| 71 | Brantford | CA | North America (NA) | 92.3 | 92.3 | 89.8 | 100.0 | 88.6 | 100.0 | 75.8 | 0.42 |
+| 72 | Liverpool | GB | Europe (EU) | 92.3 | 86.3 | 98.8 | 99.0 | 79.9 | 100.0 | 99.2 | 0.56 |
+| 73 | Belfast | GB | Europe (EU) | 92.3 | 87.5 | 98.8 | 93.5 | 83.4 | 96.3 | 100.0 | 0.42 |
+| 74 | Albacete | ES | Europe (EU) | 92.3 | 87.2 | 97.5 | 98.7 | 82.5 | 97.3 | 15.0 | 0.42 |
+| 75 | Saarbrücken | DE | Europe (EU) | 92.2 | 87.0 | 99.3 | 94.0 | 81.0 | 100.0 | 85.0 | 0.42 |
+| 76 | Schwerin | DE | Europe (EU) | 92.2 | 86.3 | 99.3 | 97.2 | 79.9 | 100.0 | 93.3 | 0.42 |
+| 77 | Portland | US | North America (NA) | 92.2 | 99.0 | 79.8 | 99.8 | 98.5 | 100.0 | 61.7 | 0.56 |
+| 78 | Plymouth | GB | Europe (EU) | 92.2 | 86.8 | 98.8 | 95.8 | 80.7 | 100.0 | 98.3 | 0.42 |
+| 79 | Bognor Regis | GB | Europe (EU) | 92.2 | 86.2 | 98.8 | 98.7 | 79.7 | 100.0 | 95.0 | 0.42 |
+| 80 | Cambridge | CA | North America (NA) | 92.1 | 92.4 | 89.8 | 98.1 | 88.9 | 100.0 | 81.7 | 0.42 |
+| 81 | Sunderland | GB | Europe (EU) | 92.1 | 86.6 | 98.8 | 96.6 | 82.6 | 95.1 | 99.2 | 0.42 |
+| 82 | Hartlepool | GB | Europe (EU) | 92.1 | 86.5 | 98.8 | 96.1 | 81.0 | 98.4 | 99.2 | 0.42 |
+| 83 | Lowestoft | GB | Europe (EU) | 92.1 | 85.7 | 98.8 | 99.7 | 79.0 | 100.0 | 100.0 | 0.42 |
+| 84 | Reading | GB | Europe (EU) | 92.0 | 85.7 | 98.8 | 99.7 | 79.0 | 100.0 | 95.0 | 0.42 |
+| 85 | Logroño | ES | Europe (EU) | 92.0 | 86.5 | 97.5 | 99.6 | 80.3 | 100.0 | 56.7 | 0.42 |
+| 86 | Trier | DE | Europe (EU) | 92.0 | 86.8 | 99.3 | 92.9 | 80.7 | 100.0 | 89.2 | 0.42 |
+| 87 | Swords | IE | Europe (EU) | 92.0 | 87.8 | 95.5 | 99.9 | 83.9 | 96.1 | 100.0 | 0.42 |
+| 88 | Weston-super-Mare | GB | Europe (EU) | 92.0 | 86.0 | 98.8 | 97.8 | 79.4 | 100.0 | 96.7 | 0.42 |
+| 89 | Liège | BE | Europe (EU) | 91.9 | 85.8 | 98.4 | 98.9 | 79.2 | 100.0 | 90.0 | 0.42 |
+| 90 | Talavera de la Reina | ES | Europe (EU) | 91.9 | 86.2 | 97.5 | 100.0 | 79.7 | 100.0 | 20.8 | 0.42 |
+| 91 | Hereford | GB | Europe (EU) | 91.9 | 86.1 | 98.8 | 96.6 | 79.6 | 100.0 | 96.7 | 0.42 |
+| 92 | Bamberg | DE | Europe (EU) | 91.9 | 87.6 | 99.3 | 88.5 | 81.8 | 100.0 | 84.2 | 0.42 |
+| 93 | Tallinn | EE | Europe (EU) | 91.9 | 88.1 | 94.7 | 100.0 | 83.3 | 98.4 | 96.7 | 0.42 |
+| 94 | Shrewsbury | GB | Europe (EU) | 91.9 | 85.8 | 98.8 | 97.7 | 79.1 | 100.0 | 96.7 | 0.42 |
+| 95 | Basel | CH | Europe (EU) | 91.9 | 84.9 | 99.3 | 100.0 | 78.4 | 99.0 | 70.8 | 0.42 |
+| 96 | Oslo | NO | Europe (EU) | 91.8 | 87.5 | 95.4 | 100.0 | 84.9 | 93.2 | 100.0 | 0.42 |
+| 97 | Caen | FR | Europe (EU) | 91.8 | 87.3 | 95.9 | 99.4 | 81.4 | 100.0 | 91.7 | 0.42 |
+| 98 | Vancouver | CA | North America (NA) | 91.8 | 91.3 | 89.8 | 100.0 | 96.6 | 80.0 | 93.3 | 0.56 |
+| 99 | Runcorn | GB | Europe (EU) | 91.8 | 85.4 | 98.8 | 98.6 | 78.6 | 100.0 | 98.3 | 0.42 |
+| 100 | Great Yarmouth | GB | Europe (EU) | 91.8 | 85.6 | 98.8 | 97.9 | 78.8 | 100.0 | 100.0 | 0.42 |

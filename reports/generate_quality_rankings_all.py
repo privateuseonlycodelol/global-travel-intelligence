@@ -1,384 +1,350 @@
 #!/usr/bin/env python3
-"""All-city quality ranking, one principal city per GHSL urban centre.
+"""Generate Council Phase 1 Intrinsic City Quality Index rankings & diagnostics.
 
-The headline ranking uses only the Core index from
-``bootstrap_quality_index_all.py`` (environment, climate, safety/health,
-affordability and connectivity). A principal city is the largest destination
-in a GHSL urban centre; destinations without a GHSL match are their own
-principal city. Cities need ``data_completeness >= 0.90`` to receive a Core
-rank, but every principal city is exported.
-
-Supplementary GHSL values travel with the Core rows. Experimental indicators
-(walkability, Overture culture/food/parks/transit and physical greenery) are
-written to a separate file and never mixed into the headline ranking.
-
-Usage
------
-    python reports/generate_quality_rankings_all.py --db-url "$SUPABASE_DB_URL"
+Outputs:
+* reports/quality_all_cities.csv — all 7,018 GHSL urban-centre principal cities
+  (one per GHSL urban_centre_id, ordered by population DESC) with all three
+  boards, Tier A/B/C, construct_coverage, and named holes.
+* reports/quality_all_cities_top100.csv / .md — Tier A Phase 1 intrinsic cohort
+  top 100 WITH continent distribution vs base rates, log-GDP/capita correlation
+  audit, and pathological-city release gate diagnostics.
+* reports/quality_all_cities_low_completeness.csv — Tier B & C GHSL urban
+  centres outside the Tier A ordered cohort.
+* reports/quality_unmatched_towns.csv — separate series for unmatched towns
+  >15 km from any GHSL urban centre (15 km satellites are suppressed).
+* reports/quality_experimental_indicators.csv — experimental & travel-context
+  columns (walkability, Overture POIs/transit/parks with unobserved status,
+  WorldCover 516, affordability, airports) published strictly separately.
 """
 
 from __future__ import annotations
 
 import argparse
 import csv
+import math
 from collections import Counter
-from decimal import Decimal
 from pathlib import Path
-from typing import Any, Callable
+from typing import Any
 
 import psycopg
 from psycopg.rows import dict_row
 
 OUT = Path(__file__).resolve().parent
-MIN_COMPLETENESS = 0.90
 
-CONTINENT_NAMES = {
-    "AF": "Africa",
-    "AN": "Antarctica",
-    "AS": "Asia",
-    "EU": "Europe",
-    "NA": "North America",
-    "OC": "Oceania",
-    "SA": "South America",
+CONTINENT_LABELS = {
+    "AF": "Africa (AF)",
+    "AS": "Asia (AS)",
+    "EU": "Europe (EU)",
+    "NA": "North America (NA)",
+    "OC": "Oceania (OC)",
+    "SA": "South America (SA)",
 }
 
-QUERY = """
-SELECT q.destination_id,
-       q.name,
-       q.country_iso2,
-       q.centre_population,
+CENTRES_QUERY = """
+WITH ranked AS (
+    SELECT q.*,
+           d.population AS city_population,
+           m.urban_centre_name,
+           cf.continent,
+           row_number() OVER (
+               PARTITION BY q.urban_centre_id
+               ORDER BY d.population DESC NULLS LAST, q.name
+           ) AS rn
+    FROM city_quality_index_all q
+    JOIN destinations d USING (destination_id)
+    LEFT JOIN destination_metro m USING (destination_id)
+    LEFT JOIN country_facts cf ON cf.country_iso2 = q.country_iso2
+    WHERE q.settlement_class = 'ghsl_centre'
+)
+SELECT * FROM ranked WHERE rn = 1
+ORDER BY (tier = 'A') DESC,
+         quality_score DESC NULLS LAST,
+         city_population DESC NULLS LAST,
+         name
+"""
+
+UNMATCHED_TOWNS_QUERY = """
+SELECT q.*,
        d.population AS city_population,
-       q.urban_centre_id,
-       q.ghsl_match_status,
-       m.urban_centre_name AS ghsl_centre,
-       cf.continent,
-       q.quality_score,
-       q.environment_score,
-       q.climate_score,
-       q.safety_health_score,
-       q.affordability_score,
-       q.connectivity_score,
-       q.data_completeness,
-       q.uncertainty_tier,
-       q.uncertainty_flags,
-       q.missing_dimensions,
-       q.ghsl_ndvi_score,
-       q.ghsl_heat_stress_days,
-       q.ghsl_hazard_events,
-       q.ghsl_enhanced_score,
-       q.provenance_summary,
-       q.walkability_score,
-       q.public_transport_score,
-       q.transit_stops_5km,
-       q.transit_observation_status,
-       q.culture_food_score,
-       q.poi_observation_status,
-       q.park_score,
-       q.park_observation_status,
-       q.physical_green_score
+       NULL::text AS urban_centre_name,
+       cf.continent
 FROM city_quality_index_all q
 JOIN destinations d USING (destination_id)
-LEFT JOIN destination_metro m USING (destination_id)
-LEFT JOIN country_facts cf ON cf.country_iso2 = d.country_iso2
+LEFT JOIN country_facts cf ON cf.country_iso2 = q.country_iso2
+WHERE q.settlement_class = 'unmatched_town'
+ORDER BY d.population DESC NULLS LAST, q.name
+"""
+
+SATELLITE_COUNT_QUERY = """
+SELECT count(*) AS suppressed
+FROM city_quality_index_all
+WHERE settlement_class = 'satellite_suppressed'
 """
 
 
-def _round(value: Any, digits: int = 2) -> float | None:
-    if value is None:
-        return None
-    return round(float(value), digits)
+def _r(value: float | None, digits: int = 2) -> float | None:
+    return round(float(value), digits) if value is not None else None
 
 
-QUALITY_FIELDS: list[tuple[str, Callable[[dict], Any]]] = [
+CENTRE_FIELDS = [
     ("rank", lambda r: r.get("_rank")),
-    ("city", lambda r: r.get("name")),
-    ("country", lambda r: r.get("country_iso2")),
+    ("tier", lambda r: r["tier"]),
+    ("city", lambda r: r["name"]),
+    ("country", lambda r: r["country_iso2"]),
     ("continent", lambda r: r.get("continent")),
     ("city_population", lambda r: r.get("city_population")),
     ("urban_centre_id", lambda r: r.get("urban_centre_id")),
-    ("ghsl_centre", lambda r: r.get("ghsl_centre")),
+    ("ghsl_centre", lambda r: r.get("urban_centre_name")),
     ("centre_population", lambda r: r.get("centre_population")),
-    ("quality_score", lambda r: _round(r.get("quality_score"))),
-    ("environment", lambda r: _round(r.get("environment_score"))),
-    ("climate", lambda r: _round(r.get("climate_score"))),
-    ("safety_health", lambda r: _round(r.get("safety_health_score"))),
-    ("affordability", lambda r: _round(r.get("affordability_score"))),
-    ("connectivity", lambda r: _round(r.get("connectivity_score"))),
-    (
-        "data_completeness",
-        lambda r: _round(r.get("data_completeness"), 3),
-    ),
+    ("quality_score", lambda r: _r(r.get("quality_score"))),
+    ("biophysical_board", lambda r: _r(r.get("biophysical_board_score"))),
+    ("institutional_board", lambda r: _r(r.get("institutional_board_score"))),
+    ("services_board", lambda r: _r(r.get("services_board_score"))),
+    ("air_score", lambda r: _r(r.get("air_score"))),
+    ("waterfront_score", lambda r: _r(r.get("waterfront_score"))),
+    ("thermal_heat_score", lambda r: _r(r.get("thermal_heat_score"))),
+    ("ghsl_heat_stress_days", lambda r: _r(r.get("ghsl_heat_stress_days"), 1)),
+    ("worldcover_green_score", lambda r: _r(r.get("worldcover_green_score"))),
+    ("green_method", lambda r: r.get("green_method")),
+    ("ghsl_ndvi_score", lambda r: _r(r.get("ghsl_ndvi_score"))),
+    ("safety_prior_score", lambda r: _r(r.get("safety_prior_score"))),
+    ("wash_prior_score", lambda r: _r(r.get("wash_prior_score"))),
+    ("broadband_score", lambda r: _r(r.get("broadband_score"))),
+    ("construct_coverage", lambda r: _r(r.get("construct_coverage"))),
+    ("data_completeness", lambda r: _r(r.get("data_completeness"))),
     ("uncertainty_tier", lambda r: r.get("uncertainty_tier")),
     ("uncertainty_flags", lambda r: r.get("uncertainty_flags")),
     ("missing_dimensions", lambda r: r.get("missing_dimensions")),
-    ("ghsl_ndvi_score", lambda r: _round(r.get("ghsl_ndvi_score"))),
-    (
-        "ghsl_heat_stress_days",
-        lambda r: _round(r.get("ghsl_heat_stress_days")),
-    ),
-    ("ghsl_hazard_events", lambda r: r.get("ghsl_hazard_events")),
-    (
-        "ghsl_enhanced_score",
-        lambda r: _round(r.get("ghsl_enhanced_score")),
-    ),
     ("provenance_summary", lambda r: r.get("provenance_summary")),
 ]
 
-EXPERIMENTAL_FIELDS: list[tuple[str, Callable[[dict], Any]]] = [
-    ("city", lambda r: r.get("name")),
-    ("country", lambda r: r.get("country_iso2")),
+EXPERIMENTAL_FIELDS = [
+    ("city", lambda r: r["name"]),
+    ("country", lambda r: r["country_iso2"]),
     ("continent", lambda r: r.get("continent")),
+    ("settlement_class", lambda r: r.get("settlement_class")),
     ("urban_centre_id", lambda r: r.get("urban_centre_id")),
-    ("ghsl_centre", lambda r: r.get("ghsl_centre")),
-    ("city_population", lambda r: r.get("city_population")),
-    ("walkability_score", lambda r: _round(r.get("walkability_score"))),
-    (
-        "public_transport_score",
-        lambda r: _round(r.get("public_transport_score")),
-    ),
+    ("walkability_score", lambda r: _r(r.get("walkability_score"))),
     ("transit_stops_5km", lambda r: r.get("transit_stops_5km")),
-    (
-        "transit_observation_status",
-        lambda r: r.get("transit_observation_status"),
-    ),
-    ("culture_food_score", lambda r: _round(r.get("culture_food_score"))),
+    ("transit_observation_status", lambda r: r.get("transit_observation_status")),
+    ("museum_culture_count", lambda r: r.get("museum_culture_count")),
+    ("restaurant_count", lambda r: r.get("restaurant_count")),
+    ("cuisine_entropy", lambda r: _r(r.get("cuisine_entropy"), 3)),
     ("poi_observation_status", lambda r: r.get("poi_observation_status")),
-    ("park_score", lambda r: _round(r.get("park_score"))),
+    ("park_count_5km", lambda r: r.get("park_count_5km")),
     ("park_observation_status", lambda r: r.get("park_observation_status")),
-    (
-        "physical_green_score",
-        lambda r: _round(r.get("physical_green_score")),
-    ),
+    ("worldcover_green_score", lambda r: _r(r.get("worldcover_green_score"))),
+    ("ghsl_hazard_events", lambda r: r.get("ghsl_hazard_events")),
+    ("price_level_vs_usd", lambda r: _r(r.get("price_level_vs_usd"), 3)),
+    ("out_of_pocket_pct", lambda r: _r(r.get("out_of_pocket_pct"), 1)),
+    ("airport_nearest_km", lambda r: _r(r.get("airport_nearest_km"), 1)),
 ]
 
 
-def normalise_rows(rows: list[dict[str, Any]]) -> list[dict[str, Any]]:
-    """Convert psycopg Decimal values to float for CSV and arithmetic."""
-    result = []
-    for row in rows:
-        clean = dict(row)
-        for key, value in clean.items():
-            if isinstance(value, Decimal):
-                clean[key] = float(value)
-        result.append(clean)
-    return result
+def pearson_r(xs: list[float], ys: list[float]) -> float | None:
+    if len(xs) < 3 or len(xs) != len(ys):
+        return None
+    mx = sum(xs) / len(xs)
+    my = sum(ys) / len(ys)
+    num = sum((x - mx) * (y - my) for x, y in zip(xs, ys))
+    dx = math.sqrt(sum((x - mx) ** 2 for x in xs))
+    dy = math.sqrt(sum((y - my) ** 2 for y in ys))
+    if dx == 0 or dy == 0:
+        return None
+    return num / (dx * dy)
 
 
-def _population_key(row: dict[str, Any]) -> tuple:
-    population = row.get("city_population")
-    return (
-        population is None,
-        -(population or 0),
-        row.get("name") or "",
+def compute_gdp_diagnostics(rows: list[dict[str, Any]]) -> dict[str, float | None]:
+    """Mandatory council release diagnostic: correlation with log GDP/capita."""
+    out: dict[str, float | None] = {}
+    for label, key in [
+        ("quality_score", "quality_score"),
+        ("biophysical_board", "biophysical_board_score"),
+        ("institutional_board", "institutional_board_score"),
+        ("broadband_score", "broadband_score"),
+    ]:
+        xs: list[float] = []
+        ys: list[float] = []
+        for r in rows:
+            gdp = r.get("gdp_per_capita_ppp")
+            val = r.get(key)
+            if gdp is not None and float(gdp) > 0 and val is not None:
+                xs.append(math.log(float(gdp)))
+                ys.append(float(val))
+        r_val = pearson_r(xs, ys)
+        out[label] = round(r_val, 3) if r_val is not None else None
+    return out
+
+
+def compute_pathological_checks(
+    centres: list[dict[str, Any]], tier_a: list[dict[str, Any]]
+) -> dict[str, Any]:
+    """Council release-gate diagnostics on known pathological cases."""
+    top10_pct_n = max(1, len(tier_a) // 10)
+    top_decile = tier_a[:top10_pct_n]
+    hot_in_top_decile = sum(
+        1
+        for r in top_decile
+        if r.get("ghsl_heat_stress_days") is not None
+        and float(r["ghsl_heat_stress_days"]) >= 150
     )
-
-
-def _quality_key(row: dict[str, Any]) -> tuple:
-    quality = row.get("quality_score")
-    population = row.get("city_population")
-    return (
-        quality is None,
-        -(quality or 0.0),
-        population is None,
-        -(population or 0),
-        row.get("name") or "",
+    hot_high_thermal = sum(
+        1
+        for r in centres
+        if r.get("ghsl_heat_stress_days") is not None
+        and float(r["ghsl_heat_stress_days"]) >= 150
+        and r.get("thermal_heat_score") is not None
+        and float(r["thermal_heat_score"]) >= 50
     )
+    china_zero_scored = sum(
+        1
+        for r in centres
+        if r.get("country_iso2") == "CN"
+        and (r.get("restaurant_count") or 0) == 0
+        and r.get("poi_observation_status") == "observed"
+    )
+    unique_centres_top100 = len({r.get("urban_centre_id") for r in tier_a[:100]})
+    return {
+        "hot_ge150d_in_top_decile": hot_in_top_decile,
+        "hot_ge150d_with_thermal_ge50": hot_high_thermal,
+        "china_zero_pois_marked_observed": china_zero_scored,
+        "unique_ghsl_centres_in_top100": unique_centres_top100,
+    }
 
 
-def principal_cities(rows: list[dict[str, Any]]) -> list[dict[str, Any]]:
-    """Keep the largest destination per GHSL centre, else per destination."""
-    seen: set[str] = set()
-    result = []
-    for row in sorted(rows, key=_population_key):
-        urban_centre_id = row.get("urban_centre_id")
-        key = (
-            f"uc:{urban_centre_id}"
-            if urban_centre_id is not None
-            else f"dest:{row.get('destination_id')}"
-        )
-        if key in seen:
-            continue
-        seen.add(key)
-        result.append(dict(row))
-    return result
-
-
-def rank_principal_cities(
-    rows: list[dict[str, Any]],
-) -> list[dict[str, Any]]:
-    """Sort by Core quality and assign a rank only to complete-enough rows."""
-    ordered = sorted(rows, key=_quality_key)
-    rank = 0
-    for row in ordered:
-        completeness = row.get("data_completeness")
-        if (
-            row.get("quality_score") is not None
-            and completeness is not None
-            and completeness >= MIN_COMPLETENESS
-        ):
-            rank += 1
-            row["_rank"] = rank
-        else:
-            row["_rank"] = None
-    return ordered
-
-
-def low_completeness(
-    rows: list[dict[str, Any]],
-) -> list[dict[str, Any]]:
-    return [
-        row
-        for row in rows
-        if row.get("data_completeness") is None
-        or row["data_completeness"] < MIN_COMPLETENESS
-    ]
-
-
-def write_csv(
-    path: Path,
-    rows: list[dict[str, Any]],
-    fields: list[tuple[str, Callable[[dict], Any]]],
-) -> None:
+def write_csv(path: Path, rows: list[dict[str, Any]], fields: list[tuple[str, Any]]) -> None:
     with path.open("w", newline="", encoding="utf-8") as handle:
         writer = csv.writer(handle, lineterminator="\n")
         writer.writerow([name for name, _ in fields])
         for row in rows:
-            writer.writerow([getter(row) for _, getter in fields])
+            writer.writerow([fn(row) for _, fn in fields])
 
 
-def continent_label(code: str | None) -> str:
-    if not code:
-        return "Unknown"
-    name = CONTINENT_NAMES.get(code)
-    return f"{name} ({code})" if name else code
+def render_markdown(
+    centres: list[dict[str, Any]],
+    tier_a: list[dict[str, Any]],
+    *,
+    suppressed_satellites: int = 0,
+    unmatched_towns: int = 0,
+    limit: int = 100,
+) -> str:
+    top = tier_a[:limit]
+    base_counts = Counter(r.get("continent") or "Unknown" for r in centres)
+    top_counts = Counter(r.get("continent") or "Unknown" for r in top)
+    total_centres = max(1, len(centres))
+    total_top = max(1, len(top))
 
+    gdp_diag = compute_gdp_diagnostics(tier_a)
+    checks = compute_pathological_checks(centres, tier_a)
 
-def continent_summary(
-    rows: list[dict[str, Any]],
-) -> list[tuple[str, int, float]]:
-    counts = Counter(continent_label(row.get("continent")) for row in rows)
-    total = len(rows)
-    return sorted(
-        (
-            (name, count, 100.0 * count / total if total else 0.0)
-            for name, count in counts.items()
-        ),
-        key=lambda item: (-item[1], item[0]),
-    )
-
-
-def _format(value: Any, digits: int = 1) -> str:
-    if value is None:
-        return "—"
-    return f"{float(value):.{digits}f}"
-
-
-def _md(value: Any) -> str:
-    return str(value if value is not None else "").replace("|", "\\|")
-
-
-def markdown(rows: list[dict[str, Any]], limit: int = 100) -> str:
-    top = rows[:limit]
     lines = [
-        "# Global City Quality Index — Top 100",
+        "# Intrinsic City Quality Index — Phase 1 Tier A Top 100",
         "",
-        "Core ranking only (completeness >= 0.90). Supplementary GHSL values "
-        "are shown but do not affect the rank; experimental indicators are "
-        "exported separately.",
+        "Three-board, absolute-anchor, no-imputation GHSL urban-centre cohort (cost/affordability, airports, life expectancy, physicians, road deaths, and WorldClim precipitation excluded). "
+        f"Phase 1 active construct coverage = **0.42** of the 100% intrinsic reference vector (58% named holes: full thermal UTCI, full WorldCover polygons, urban form, hospital care friction, non-heat hazards, gated transit, UNESCO heritage; GHSL UTCI>32 heat days are shown as a diagnostic column only). "
+        f"GHSL urban centres: **{len(centres):,}** (Tier A: **{len(tier_a):,}**); suppressed 15 km satellites: **{suppressed_satellites:,}**; separate unmatched towns: **{unmatched_towns:,}**.",
         "",
-        "## Continent distribution (top 100)",
+        "## Continent distribution vs GHSL centre base rates",
         "",
-        "| Continent | Cities | Share |",
-        "|---|---:|---:|",
+        "| Continent | Top 100 | Top 100 Share | All GHSL Centres | Base Rate |",
+        "|---|---:|---:|---:|---:|",
     ]
-    for name, count, share in continent_summary(top):
-        lines.append(f"| {_md(name)} | {count} | {share:.1f}% |")
+    for code in sorted(set(base_counts) | set(top_counts), key=lambda c: (-top_counts[c], -base_counts[c], c)):
+        label = CONTINENT_LABELS.get(code, code)
+        lines.append(
+            f"| {label} | {top_counts[code]} | {100.0 * top_counts[code] / total_top:.1f}% | "
+            f"{base_counts[code]} | {100.0 * base_counts[code] / total_centres:.1f}% |"
+        )
+
     lines.extend(
         [
             "",
-            "## Top 100",
+            "## Mandatory release diagnostics",
             "",
-            "| # | City | Country | Continent | Quality | Environment | "
-            "Climate | Safety/health | Affordability | Connectivity | "
-            "Completeness | Uncertainty |",
-            "|---:|---|---|---|---:|---:|---:|---:|---:|---:|---:|---|",
+            f"- **Log GDP/capita correlation (Tier A):** composite `r = {gdp_diag['quality_score']}`, biophysical `r = {gdp_diag['biophysical_board']}`, institutional (country-level) `r = {gdp_diag['institutional_board']}`, broadband `r = {gdp_diag['broadband_score']}`.",
+            f"- **Pathological checks:** hot cities (≥150 UTCI>32 days) with thermal_heat ≥50 = `{checks['hot_ge150d_with_thermal_ge50']}`; hot cities in top decile = `{checks['hot_ge150d_in_top_decile']}`; China zero-POI rows falsely marked observed = `{checks['china_zero_pois_marked_observed']}`; unique GHSL centres in top 100 = `{checks['unique_ghsl_centres_in_top100']}`.",
+            "",
+            "## Top 100 (Tier A GHSL urban centres)",
+            "",
+            "| # | City | Country | Continent | Quality | Biophysical | Institutional | Broadband | Air | Shore | Heat | Construct Cov |",
+            "|---:|---|---|---|---:|---:|---:|---:|---:|---:|---:|---:|",
         ]
     )
-    for row in top:
+
+    def fmt(val: Any) -> str:
+        return f"{float(val):.1f}" if val is not None else "—"
+
+    for i, row in enumerate(top, 1):
+        cont = CONTINENT_LABELS.get(row.get("continent") or "", row.get("continent") or "—")
         lines.append(
-            "| {rank} | {city} | {country} | {continent} | {quality} | "
-            "{environment} | {climate} | {safety} | {affordability} | "
-            "{connectivity} | {completeness} | {uncertainty} |".format(
-                rank=row.get("_rank") or "",
-                city=_md(row.get("name")),
-                country=_md(row.get("country_iso2")),
-                continent=_md(continent_label(row.get("continent"))),
-                quality=_format(row.get("quality_score")),
-                environment=_format(row.get("environment_score")),
-                climate=_format(row.get("climate_score")),
-                safety=_format(row.get("safety_health_score")),
-                affordability=_format(row.get("affordability_score")),
-                connectivity=_format(row.get("connectivity_score")),
-                completeness=_format(row.get("data_completeness"), 2),
-                uncertainty=_md(row.get("uncertainty_tier")),
-            )
+            f"| {i} | {row['name']} | {row['country_iso2']} | {cont} | "
+            f"{fmt(row.get('quality_score'))} | {fmt(row.get('biophysical_board_score'))} | "
+            f"{fmt(row.get('institutional_board_score'))} | {fmt(row.get('broadband_score'))} | "
+            f"{fmt(row.get('air_score'))} | {fmt(row.get('waterfront_score'))} | "
+            f"{fmt(row.get('thermal_heat_score'))} | {float(row.get('construct_coverage') or 0):.2f} |"
         )
     return "\n".join(lines) + "\n"
 
 
-def write_exports(
-    rows: list[dict[str, Any]], out_dir: Path
-) -> dict[str, Any]:
-    """Write every Core, low-completeness and Experimental export."""
-    out_dir.mkdir(parents=True, exist_ok=True)
-    principal = principal_cities(normalise_rows(rows))
-    ranked = rank_principal_cities(principal)
-    incomplete = low_completeness(ranked)
-    experimental = sorted(principal, key=_population_key)
-    ranked_only = [row for row in ranked if row.get("_rank") is not None]
-
-    write_csv(out_dir / "quality_all_cities.csv", ranked, QUALITY_FIELDS)
-    write_csv(
-        out_dir / "quality_all_cities_top100.csv",
-        ranked_only[:100],
-        QUALITY_FIELDS,
-    )
-    write_csv(
-        out_dir / "quality_all_cities_low_completeness.csv",
-        incomplete,
-        QUALITY_FIELDS,
-    )
-    write_csv(
-        out_dir / "quality_experimental_indicators.csv",
-        experimental,
-        EXPERIMENTAL_FIELDS,
-    )
-    (out_dir / "quality_all_cities_top100.md").write_text(
-        markdown(ranked_only), encoding="utf-8"
-    )
-    return {
-        "principal_cities": len(principal),
-        "ranked_completeness_ge_0_90": len(ranked_only),
-        "low_completeness": len(incomplete),
-        "experimental_rows": len(experimental),
-        "top": ranked_only[0]["name"] if ranked_only else None,
-        "continent_count": len(continent_summary(ranked_only[:100])),
-    }
-
-
-def fetch_rows(database_url: str) -> list[dict[str, Any]]:
-    with psycopg.connect(database_url, row_factory=dict_row) as conn:
-        with conn.cursor() as cur:
-            cur.execute(QUERY)
-            return [dict(row) for row in cur.fetchall()]
+def _coerce_decimals(rows: list[dict[str, Any]]) -> list[dict[str, Any]]:
+    cleaned: list[dict[str, Any]] = []
+    for r in rows:
+        item = dict(r)
+        for k, v in list(item.items()):
+            if hasattr(v, "as_tuple"):
+                item[k] = float(v)
+        cleaned.append(item)
+    return cleaned
 
 
 def main() -> int:
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--db-url", required=True)
     args = parser.parse_args()
-    stats = write_exports(fetch_rows(args.db_url), OUT)
-    print(stats)
+    with psycopg.connect(args.db_url, row_factory=dict_row) as conn:
+        with conn.cursor() as cur:
+            cur.execute(CENTRES_QUERY)
+            centres = _coerce_decimals(cur.fetchall())
+            cur.execute(UNMATCHED_TOWNS_QUERY)
+            towns = _coerce_decimals(cur.fetchall())
+            cur.execute(SATELLITE_COUNT_QUERY)
+            suppressed = int(cur.fetchone()["suppressed"])
+
+    tier_a = [r for r in centres if r["tier"] == "A"]
+    tier_bc = [r for r in centres if r["tier"] != "A"]
+    for i, row in enumerate(tier_a, 1):
+        row["_rank"] = i
+
+    write_csv(OUT / "quality_all_cities.csv", centres, CENTRE_FIELDS)
+    write_csv(OUT / "quality_all_cities_top100.csv", tier_a[:100], CENTRE_FIELDS)
+    write_csv(OUT / "quality_all_cities_low_completeness.csv", tier_bc, CENTRE_FIELDS)
+    write_csv(OUT / "quality_unmatched_towns.csv", towns, CENTRE_FIELDS)
+    write_csv(
+        OUT / "quality_experimental_indicators.csv",
+        centres + towns,
+        EXPERIMENTAL_FIELDS,
+    )
+    (OUT / "quality_all_cities_top100.md").write_text(
+        render_markdown(
+            centres,
+            tier_a,
+            suppressed_satellites=suppressed,
+            unmatched_towns=len(towns),
+        ),
+        encoding="utf-8",
+    )
+    print(
+        {
+            "ghsl_centres": len(centres),
+            "tier_a": len(tier_a),
+            "tier_bc": len(tier_bc),
+            "unmatched_towns": len(towns),
+            "suppressed_satellites": suppressed,
+            "top": tier_a[0]["name"] if tier_a else None,
+            "gdp_diagnostics": compute_gdp_diagnostics(tier_a),
+            "pathological_checks": compute_pathological_checks(centres, tier_a),
+        }
+    )
     return 0
 
 
