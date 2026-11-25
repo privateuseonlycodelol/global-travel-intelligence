@@ -278,9 +278,9 @@ Islington (449), Osaka (428), Paris (408), Geneva (392) and New York City
 | --- | --- |
 | Party | Third-party |
 | Publisher | World Bank WDI and WGI (homicide series sourced from UNODC) |
-| Dataset | `VC.IHR.PSRC.P5` homicides per 100k, `EN.ATM.PM25.MC.M3` PM2.5 exposure, `SP.DYN.LE00.IN` life expectancy, `NY.GDP.PCAP.PP.CD` GDP per capita PPP, `GOV_WGI_PV.EST` political stability, `PA.NUS.GDP.PLI` price level (stored as a ratio), `SH.MED.PHYS.ZS` physicians per 1,000, `SH.MED.BEDS.ZS` hospital beds per 1,000, `SH.STA.TRAF.P5` road traffic deaths per 100k, and `SH.XPD.OOPC.CH.ZS` out-of-pocket health spending share. Deriving PPP / exchange rate was rejected: it breaks on currency redenominations (Bulgaria, Liberia) and official pegs (Iran). |
+| Dataset | `VC.IHR.PSRC.P5` homicides per 100k, `EN.ATM.PM25.MC.M3` PM2.5 exposure, `SP.DYN.LE00.IN` life expectancy, `NY.GDP.PCAP.PP.CD` GDP per capita PPP, `GOV_WGI_PV.EST` political stability, `PA.NUS.GDP.PLI` price level (stored as a ratio), `SH.MED.PHYS.ZS` physicians per 1,000, `SH.MED.BEDS.ZS` hospital beds per 1,000, `SH.STA.TRAF.P5` road traffic deaths per 100k, `SH.XPD.OOPC.CH.ZS` out-of-pocket health spending share, `SH.H2O.SMDW.ZS` safely managed drinking water, `SH.STA.SMSS.ZS` safely managed sanitation, and `SH.H2O.BASW.ZS` basic drinking water. Deriving PPP / exchange rate was rejected: it breaks on currency redenominations (Bulgaria, Liberia) and official pegs (Iran). |
 | Licence | CC BY 4.0 |
-| Coverage | 164-216 countries per indicator; latest non-null year is kept and its year stored |
+| Coverage | 146-216 countries per indicator; latest non-null year is kept and its year stored |
 | Granularity | **Country** |
 | Used by | `bootstrap_places.py` → `country_indicators`; `place_profile` / `compare_places` |
 | Status | **Implemented** |

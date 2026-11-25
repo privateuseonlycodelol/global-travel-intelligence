@@ -110,6 +110,21 @@ WORLD_BANK_INDICATORS: dict[str, tuple[str, int | None, str, str, str | None, fl
         "Out-of-pocket health spending as a share of current health expenditure",
         "% of health spending", "lower", 1.0,
     ),
+    "safely_managed_water_pct": (
+        "SH.H2O.SMDW.ZS", None,
+        "People using safely managed drinking water services",
+        "% of population", "higher", 1.0,
+    ),
+    "safely_managed_sanitation_pct": (
+        "SH.STA.SMSS.ZS", None,
+        "People using safely managed sanitation services",
+        "% of population", "higher", 1.0,
+    ),
+    "basic_water_pct": (
+        "SH.H2O.BASW.ZS", None,
+        "People using at least basic drinking water services",
+        "% of population", "higher", 1.0,
+    ),
 }
 INDICATOR_YEARS = "2012:2026"
 

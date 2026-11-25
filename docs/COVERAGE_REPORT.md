@@ -41,7 +41,7 @@ final production numbers.
 | `flight_quote_cache` / `hotel_quote_cache` | 0 | Populated only by MCP stage 2 with SerpApi key |
 | `destination_aliases` | 188,403 | GeoNames names/alternatenames for all 13,101 cities (`bootstrap_places.py`) |
 | `country_facts` | 252 | GeoNames countryInfo; every destination has a country row |
-| `country_indicators` | 1,943 | World Bank: homicide 177, PM2.5 200, life expectancy 216, GDP PPP 201, political stability 207, price level 202, physicians 193, beds 164, road deaths 190, out-of-pocket 193 |
+| `country_indicators` | 2,454 | World Bank: homicide 177, PM2.5 200, life expectancy 216, GDP PPP 201, political stability 207, price level 202, physicians 193, beds 164, road deaths 190, out-of-pocket 193, safely managed water 151, sanitation 146, basic water 214 |
 | `destination_admin1` | 13,094 | GeoNames first-level region (state/province) codes; 13,071 with a name |
 
 ## 2. What is missing and why
