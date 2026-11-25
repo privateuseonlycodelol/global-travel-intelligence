@@ -409,7 +409,9 @@ this implementation:
 - **Nature is regional context, not a beach or trail finder.** Ecoregion is the
   surrounding biome; terrain is a 10 km cell; coast distance is a straight line.
   They do not say whether there is a sandy beach, a trailhead or a park you can
-  enter.
+  enter. The optional green score is vegetation cover only, not nature quality:
+  it excludes cropland, built-up and water, and deserts or high mountains score
+  low by definition.
 - **WorldClim 2.1 is a 1970–2000 climatology**, not recent daily ERA5. The
   `median_temp_max_c` / `median_temp_min_c` columns are monthly **means of daily
   max/min** (the Phase-1 column names are retained); `precip_mm` is the monthly

@@ -91,6 +91,25 @@ class LiveNatureTests(unittest.TestCase):
             if values:
                 self.assertAlmostEqual(sum(values), 1.0, delta=0.05)
 
+    def test_green_score(self):
+        with self.conn.cursor() as cur:
+            cur.execute("SELECT count(*) n FROM destination_green_score")
+            if cur.fetchone()["n"] == 0:
+                self.skipTest("green score not loaded yet")
+            cur.execute(
+                "SELECT min(green_score_0_100) lo, max(green_score_0_100) hi "
+                "FROM destination_green_score"
+            )
+            row = cur.fetchone()
+            self.assertGreaterEqual(row["lo"], 0)
+            self.assertLessEqual(row["hi"], 100)
+            trento = pp.build_profile(cur, "gn-3165243")
+            paris = pp.build_profile(cur, "gn-2988507")
+        self.assertGreater(
+            trento["nature"]["green_score"]["score_0_100"],
+            paris["nature"]["green_score"]["score_0_100"],
+        )
+
     def test_inland_water(self):
         with self.conn.cursor() as cur:
             cur.execute(

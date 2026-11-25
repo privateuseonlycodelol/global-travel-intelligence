@@ -103,6 +103,30 @@ separate lines.
 - Source: ESA WorldCover 2021 v200, CC BY 4.0,
   https://esa-worldcover.org/en/data-access
 
+### Optional green score
+
+If you want one number, there is an **optional vegetation-cover score**:
+
+```
+green_score = 100 × (0.65 × local_green + 0.35 × hinterland_green)
+
+local_green      = tree + shrub + grass in the 1 km disc
+hinterland_green = tree + shrub + grass in the 15 km disc
+```
+
+It is stored in `destination_green_score` and shown in the profile as both the
+score and its two components. It is **not** a nature-quality score:
+
+- cropland, built-up and water are excluded;
+- deserts, steppes and high mountains score low by definition;
+- only cities with WorldCover land cover are scored, and nothing is imputed;
+- the weights are explicit so you can reweight the two components yourself.
+
+Trento scores **48.4** (25.7% local vegetation, 90.5% hinterland), Paris **12.7**
+(5.2% / 26.5%), Innsbruck **38.6** (14.8% / 82.7%) and Dubai **3.3**
+(3.4% / 3.0%). That reads as “how much vegetation is around the city”, not
+“how good its nature is”.
+
 ## Council decision and current trade-offs
 
 The experience agent ranked landscape, coast, terrain, forest/green, water,

@@ -87,6 +87,54 @@ CREATE TABLE IF NOT EXISTS destination_land_cover (
     updated_at              TIMESTAMPTZ NOT NULL DEFAULT NOW(),
     PRIMARY KEY (destination_id, radius_m)
 );
+
+CREATE OR REPLACE VIEW destination_green_score AS
+WITH one AS (
+    SELECT destination_id,
+           COALESCE(tree_fraction, 0) + COALESCE(shrub_fraction, 0)
+             + COALESCE(grassland_fraction, 0) AS local_green_fraction,
+           tree_fraction AS local_tree_fraction,
+           shrub_fraction AS local_shrub_fraction,
+           grassland_fraction AS local_grass_fraction,
+           cropland_fraction AS local_cropland_fraction,
+           built_up_fraction AS local_built_up_fraction,
+           water_fraction AS local_water_fraction,
+           valid_pixel_count AS local_valid_pixels,
+           source, observed_period
+    FROM destination_land_cover
+    WHERE radius_m = 1000
+),
+fifteen AS (
+    SELECT destination_id,
+           COALESCE(tree_fraction, 0) + COALESCE(shrub_fraction, 0)
+             + COALESCE(grassland_fraction, 0) AS hinterland_green_fraction,
+           tree_fraction AS hinterland_tree_fraction,
+           shrub_fraction AS hinterland_shrub_fraction,
+           grassland_fraction AS hinterland_grass_fraction,
+           cropland_fraction AS hinterland_cropland_fraction,
+           built_up_fraction AS hinterland_built_up_fraction,
+           water_fraction AS hinterland_water_fraction,
+           valid_pixel_count AS hinterland_valid_pixels
+    FROM destination_land_cover
+    WHERE radius_m = 15000
+)
+SELECT one.destination_id,
+       one.local_green_fraction,
+       fifteen.hinterland_green_fraction,
+       CASE WHEN one.local_valid_pixels > 0 AND fifteen.hinterland_valid_pixels > 0
+            THEN 100.0 * (
+                0.65 * one.local_green_fraction
+                + 0.35 * fifteen.hinterland_green_fraction
+            )
+       END AS green_score_0_100,
+       one.local_tree_fraction, one.local_shrub_fraction,
+       one.local_grass_fraction, one.local_cropland_fraction,
+       one.local_built_up_fraction, one.local_water_fraction,
+       fifteen.hinterland_tree_fraction, fifteen.hinterland_shrub_fraction,
+       fifteen.hinterland_grass_fraction, fifteen.hinterland_cropland_fraction,
+       fifteen.hinterland_built_up_fraction, fifteen.hinterland_water_fraction,
+       one.local_valid_pixels, one.source, one.observed_period
+FROM one JOIN fifteen USING (destination_id);
 """
 
 

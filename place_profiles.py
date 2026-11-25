@@ -98,6 +98,7 @@ TABLES = {
     "g": "ghsci_city_indicators",
     "a": "air_quality_annual",
     "s": "transit_city_weekday_peak",
+    "n": "destination_green_score",
 }
 
 METRICS: tuple[Metric, ...] = (
@@ -195,6 +196,17 @@ METRICS: tuple[Metric, ...] = (
            "walkability_ghsci", "g.source", "g.observed_period",
            note="Sum of access to fresh food, convenience and public transport; one of the index inputs.",
            cohort="cities with a GHSCI run", source_url_expr="g.source_url"),
+    Metric("green_score", "n", "green_score_0_100",
+           "Vegetation cover around the city (optional green score)",
+           "score 0-100", "higher", "environment",
+           "'ESA WorldCover 2021 (10 m)'", "n.observed_period",
+           note=("0.65 × 1 km + 0.35 × 15 km share of tree, shrub and grass. "
+                 "Cropland, built-up and water are excluded. This is "
+                 "vegetation cover, not nature quality: deserts, steppes and "
+                 "high mountains score low by definition. Only cities with "
+                 "land cover are scored; no value is imputed."),
+           sample_sql="n.local_valid_pixels",
+           cohort="cities with WorldCover land cover"),
     Metric("pm25_annual_ugm3", "a", "pm25_ugm3",
            "Annual PM2.5 concentration", "µg/m³", "lower", "environment",
            "a.source", "a.observed_period",
@@ -677,6 +689,39 @@ def _land_cover_block(rows: list[dict[str, Any]]) -> dict[str, Any] | None:
     }
 
 
+def _green_score_block(rows: list[dict[str, Any]]) -> dict[str, Any] | None:
+    by_radius = {int(row["radius_m"]): row for row in rows}
+    one = by_radius.get(1000)
+    fifteen = by_radius.get(15000)
+    if not one or not fifteen:
+        return None
+    local = sum(float(one.get(field) or 0) for field in (
+        "tree_fraction", "shrub_fraction", "grassland_fraction"
+    ))
+    hinterland = sum(float(fifteen.get(field) or 0) for field in (
+        "tree_fraction", "shrub_fraction", "grassland_fraction"
+    ))
+    return {
+        "score_0_100": round(100 * (0.65 * local + 0.35 * hinterland), 1),
+        "local_green_pct": round(local * 100, 1),
+        "hinterland_green_pct": round(hinterland * 100, 1),
+        "local_tree_pct": round(float(one.get("tree_fraction") or 0) * 100, 1),
+        "local_shrub_pct": round(float(one.get("shrub_fraction") or 0) * 100, 1),
+        "local_grass_pct": round(float(one.get("grassland_fraction") or 0) * 100, 1),
+        "local_cropland_pct": round(float(one.get("cropland_fraction") or 0) * 100, 1),
+        "local_built_up_pct": round(float(one.get("built_up_fraction") or 0) * 100, 1),
+        "hinterland_tree_pct": round(float(fifteen.get("tree_fraction") or 0) * 100, 1),
+        "hinterland_cropland_pct": round(float(fifteen.get("cropland_fraction") or 0) * 100, 1),
+        "hinterland_built_up_pct": round(float(fifteen.get("built_up_fraction") or 0) * 100, 1),
+        "note": (
+            "Optional vegetation-cover score: 0.65 × 1 km + 0.35 × 15 km share "
+            "of tree, shrub and grass. Cropland, built-up and water are "
+            "excluded. This is not nature quality; deserts, steppes and high "
+            "mountains score low by definition."
+        ),
+    }
+
+
 def nature_summary(row: dict[str, Any] | None) -> dict[str, Any]:
     if not row:
         return {"status": "not_loaded"}
@@ -704,6 +749,7 @@ def nature_summary(row: dict[str, Any] | None) -> dict[str, Any]:
             if row.get("climate") else None
         ),
         "land_cover": _land_cover_block(row.get("land_cover") or []),
+        "green_score": _green_score_block(row.get("land_cover") or []),
         "inland_water": (
             {
                 "nearest_lake_km": row["inland_water"].get("distance_km"),

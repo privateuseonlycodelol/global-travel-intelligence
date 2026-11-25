@@ -47,6 +47,7 @@ final production numbers.
 | `destination_land_cover` | 10,000 | ESA WorldCover 2021, 5,000 largest cities × 1 km and 15 km; growing |
 | `destination_inland_water` | 13,101 | HydroLAKES nearest lake/reservoir shore, area and type |
 | `destination_climate_class` | 13,101 | Köppen-Geiger 1991-2020 class at the city point |
+| `destination_green_score` (view) | 5,000 | Optional vegetation-cover score for cities with 1 km and 15 km land cover |
 | `flight_quote_cache` / `hotel_quote_cache` | 0 | Populated only by MCP stage 2 with SerpApi key |
 | `destination_aliases` | 188,403 | GeoNames names/alternatenames for all 13,101 cities (`bootstrap_places.py`) |
 | `country_facts` | 252 | GeoNames countryInfo; every destination has a country row |
