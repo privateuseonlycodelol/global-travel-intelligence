@@ -1297,6 +1297,14 @@ def inspect_destination(
                 """,
                 (resolved_id,),
             )
+            air_quality_monthly = optional_rows(
+                """
+                SELECT year, month, pm25_ugm3, source, source_url, observed_period
+                FROM air_quality_monthly
+                WHERE destination_id = %s ORDER BY month
+                """,
+                (resolved_id,),
+            )
             rent = optional_rows(
                 """
                 SELECT dwelling_type, bedrooms, rent_local, currency_code,
@@ -1428,6 +1436,7 @@ def inspect_destination(
         "climate": climate,
         "recent_climate": recent_climate,
         "air_quality": air_quality,
+        "air_quality_monthly": air_quality_monthly,
         "rent": rent,
         "facilities": facilities,
         "geography": geography,

@@ -36,6 +36,14 @@ class OfflineTests(unittest.TestCase):
         self.assertEqual(summary["counts"]["pharmacy"]["status"], "measured")
         self.assertEqual(summary["counts"]["pharmacy"]["count"], 3)
 
+    def test_air_quality_monthly_summary(self):
+        summary = pp.air_quality_monthly_summary([
+            {"year": 2024, "month": 1, "pm25_ugm3": 80.0},
+            {"year": 2024, "month": 8, "pm25_ugm3": 20.0},
+        ])
+        self.assertEqual(summary["worst_month"], 1)
+        self.assertEqual(summary["cleanest_month"], 8)
+
     def test_hazard_summary_counts(self):
         summary = pp.hazard_summary({
             "events_2015": 10, "hazards_2015": 3,
@@ -108,6 +116,16 @@ class LiveContextTests(unittest.TestCase):
         )
         self.assertEqual(profile["airport_access"]["nearest"]["iata"], "LIS")
         self.assertEqual(profile["airport_access"]["nearest"]["type"], "large_airport")
+
+    def test_monthly_air_quality_coverage(self):
+        with self.conn.cursor() as cur:
+            cur.execute("SELECT count(*) n FROM air_quality_monthly")
+            self.assertEqual(cur.fetchone()["n"], 157_212)
+            profile = pp.build_profile(cur, "gn-1273294")  # Delhi
+        self.assertEqual(profile["air_quality_monthly"]["worst_month"], 11)
+        self.assertGreater(
+            profile["air_quality_monthly"]["worst_pm25_ugm3"], 100
+        )
 
     def test_ucdb_hazard_and_health_coverage(self):
         with self.conn.cursor() as cur:

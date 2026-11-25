@@ -35,6 +35,7 @@ calls:
 | `bootstrap_metro.py` | authoritative GHSL UCDB polygon containment for metro grouping |
 | `bootstrap_climate_recent.py` | recent monthly climate normals from NASA POWER (2015-2024) |
 | `bootstrap_air_quality.py` | global annual city PM2.5 from SatPM V6.GL.03 |
+| `bootstrap_air_quality_monthly.py` | monthly city PM2.5 seasonality from SatPM V6.GL.03 |
 | `bootstrap_rent.py` | official Eurostat city rents in local currency |
 | `bootstrap_rent_uk.py` | ONS local-authority rents for Great Britain and Northern Ireland |
 | `bootstrap_advisories.py` | US State and UK FCDO country travel advisories |
@@ -799,6 +800,7 @@ Implemented third-party sources:
 | Walkability/rail | Overture Maps Transportation | **ODbL; © OpenStreetMap contributors; share-alike for derived databases** | partial: 1,131 cities across DE/GB/TR/ES/FR/PT/SE/LU |
 | Walkability score (0-100) | How Walkable city ranking (Overture Maps + OpenStreetMap) | CC BY 4.0; attribution and link required | 690 cities ranked, 662 matched to loaded destinations |
 | Annual PM2.5 | SatPM V6.GL.03 (CNN) | CC BY 4.0; attribution required | 13,101 cities, 0.1° city-point sample |
+| Monthly PM2.5 | SatPM V6.GL.03 monthly | CC BY 4.0; attribution required | 13,101 cities × 12 months, 2024 |
 | City rent | Eurostat `prc_colc_rents` + ONS PIPR | Eurostat reuse / OGL v3.0 | ~160 cities in local currency; not a rank input |
 | Travel advisories | US State Department + UK FCDO | Public domain / OGL v3.0 | ~220 countries each; two separate scales, not averaged |
 | Facilities | Overture Maps Places | CDLA-Permissive 2.0 | 13,101 cities within 5 km: hospital, pharmacy, school, grocery, park, beach |

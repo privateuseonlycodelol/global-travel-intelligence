@@ -533,6 +533,53 @@ def fetch_climate(cur: Any, destination_ids: list[str]) -> dict[str, list[dict[s
     return out
 
 
+AIR_MONTHLY_NOTE = (
+    "SatPM V6.GL.03 monthly 0.1° (~11 km) satellite/model/monitor-fused "
+    "estimates, sampled at the city point. These are model values, not monitor "
+    "readings, and they do not resolve street-level differences."
+)
+
+
+def fetch_air_quality_monthly(cur: Any, destination_ids: list[str]) -> dict[str, list[dict[str, Any]]]:
+    if "air_quality_monthly" not in _existing_tables(cur, ["air_quality_monthly"]):
+        return {}
+    cur.execute(
+        """
+        SELECT destination_id, year, month, pm25_ugm3, source, observed_period
+        FROM air_quality_monthly
+        WHERE destination_id = ANY(%s)
+        ORDER BY destination_id, month
+        """,
+        (destination_ids,),
+    )
+    out: dict[str, list[dict[str, Any]]] = {}
+    for row in cur.fetchall():
+        row = dict(row)
+        out.setdefault(str(row.pop("destination_id")), []).append(row)
+    return out
+
+
+def air_quality_monthly_summary(rows: list[dict[str, Any]]) -> dict[str, Any]:
+    if not rows:
+        return {"status": "not_loaded"}
+    peak = max(rows, key=lambda row: row["pm25_ugm3"])
+    low = min(rows, key=lambda row: row["pm25_ugm3"])
+    return {
+        "status": "loaded",
+        "year": rows[0].get("year"),
+        "worst_month": peak["month"],
+        "worst_pm25_ugm3": peak["pm25_ugm3"],
+        "cleanest_month": low["month"],
+        "cleanest_pm25_ugm3": low["pm25_ugm3"],
+        "months": [
+            {"month": row["month"], "pm25_ugm3": row["pm25_ugm3"],
+             "observed_period": row.get("observed_period")}
+            for row in rows
+        ],
+        "note": AIR_MONTHLY_NOTE,
+    }
+
+
 HAZARD_TYPES = (
     ("extreme_wind", "Extreme wind"),
     ("heatwave", "Heatwave"),
@@ -1682,6 +1729,7 @@ def build_profile(cur: Any, destination_id: str) -> dict[str, Any]:
     airports = fetch_airport_access(cur, [destination_id]).get(destination_id)
     tourism_monthly = fetch_tourism_monthly(cur, [destination_id]).get(destination_id, [])
     ucdb = fetch_ucdb_themes(cur, [destination_id]).get(destination_id)
+    air_monthly = fetch_air_quality_monthly(cur, [destination_id]).get(destination_id, [])
     country = fetch_country_context(cur, [basics["country_iso2"]]).get(basics["country_iso2"], {})
 
     groups: dict[str, list[dict[str, Any]]] = {}
@@ -1724,6 +1772,7 @@ def build_profile(cur: Any, destination_id: str) -> dict[str, Any]:
         "tourism_seasonality": tourism_seasonality(tourism_monthly),
         "hazard_exposure": hazard_summary(ucdb),
         "health_access": health_access_summary(ucdb),
+        "air_quality_monthly": air_quality_monthly_summary(air_monthly),
         "country": country,
         "not_measured_for_this_city": not_measured,
         "not_in_database_for_any_city": NOT_IN_DATABASE + not_loaded,
@@ -1742,6 +1791,7 @@ def build_comparison(cur: Any, destination_ids: list[str]) -> dict[str, Any]:
     airports = fetch_airport_access(cur, ids)
     tourism_monthly = fetch_tourism_monthly(cur, ids)
     ucdb = fetch_ucdb_themes(cur, ids)
+    air_monthly = fetch_air_quality_monthly(cur, ids)
     countries = sorted({basics[i]["country_iso2"] for i in ids})
     country_context = fetch_country_context(cur, countries)
 
@@ -1849,6 +1899,9 @@ def build_comparison(cur: Any, destination_ids: list[str]) -> dict[str, Any]:
         },
         "hazard_exposure": {i: hazard_summary(ucdb.get(i)) for i in ids},
         "health_access": {i: health_access_summary(ucdb.get(i)) for i in ids},
+        "air_quality_monthly": {
+            i: air_quality_monthly_summary(air_monthly.get(i, [])) for i in ids
+        },
         "country_context": country_rows,
         "not_in_database_for_any_city": NOT_IN_DATABASE
         + [label + " (dataset not loaded for any city)" for label in not_loaded],

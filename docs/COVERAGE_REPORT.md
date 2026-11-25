@@ -22,6 +22,7 @@ final production numbers.
 | `walkability_scores` | 662 | How Walkable 2026: 690 ranked cities, 662 matched by name/alias |
 | `ghsci_city_indicators` | 25 | GHSCI: Trento pilot + 24 of the published 25-city study |
 | `air_quality_annual` | 13,101 | SatPM V6.GL.03 annual PM2.5, 2024, 0.1° point sample |
+| `air_quality_monthly` | 157,212 | SatPM V6.GL.03 monthly PM2.5, 13,101 cities × 12 months, 2024 |
 | `destination_metro` | 9,730 | GHSL UCDB R2024A polygon containment (9,065) or ≤5 km edge match (665) |
 | `ghsl_urban_centres` | 11,422 | GHSL UCDB R2024A urban-centre polygons, WGS84 |
 | `climate_recent` | 20,148 | 1,679 cities x 12 months, NASA POWER 2015-2024 |
@@ -54,7 +55,7 @@ final production numbers.
 | Safety / crime | Country context loaded | US State levels 1-4 and UK FCDO advice for ~220 countries; no global city-level crime rate. |
 | Long-term rent | Partial (~160 cities) | Eurostat city averages (41) and ONS GB local-authority averages (119) in local currency; HUD/CMHC/ABS are country-specific and not yet loaded. |
 | Rainy/hot days | Partial (1,679 cities) | NASA POWER 2015-2024 monthly counts in `climate_recent`; the rest are not yet fetched. |
-| Air quality | Loaded, not scored | SatPM V6.GL.03 annual city PM2.5 for 13,101 cities; exposed as a metric and shown in profiles, not in `final_score`. |
+| Air quality | Loaded, not scored | SatPM V6.GL.03 annual and monthly city PM2.5 for 13,101 cities; exposed as a metric and seasonal block, not in `final_score`. |
 | Facilities | Loaded, not scored | Overture Places presence counts for hospitals, pharmacies, schools, groceries, parks and beaches; zero is `none_listed`. |
 | Airport access | Loaded, not scored | Nearest scheduled-service airport and large/medium counts within 100 km. |
 | Natural hazards | Partial, metro only | Urban-centre event counts for 11 hazard types (MYRIAD-HES, 2015 window); no live alerts. |
