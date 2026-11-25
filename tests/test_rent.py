@@ -8,6 +8,7 @@ from pathlib import Path
 sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
 
 import bootstrap_rent as br  # noqa: E402
+import bootstrap_rent_uk as bru  # noqa: E402
 
 
 def payload(value):
@@ -32,6 +33,23 @@ def payload(value):
         },
         "value": value,
     }
+
+
+class UkParseTests(unittest.TestCase):
+    def test_number_handles_commas_and_placeholders(self):
+        self.assertEqual(bru.number("1,234"), 1234.0)
+        self.assertIsNone(bru.number("[x]"))
+        self.assertIsNone(bru.number(None))
+
+    def test_area_name_tokens_can_find_a_city(self):
+        candidates = [name for _score, name in bru.candidate_names("Kingston upon Hull, City of")]
+        self.assertIn("hull", candidates)
+
+    def test_house_type_keys_are_present(self):
+        keys = {key for key, _bedrooms, _column in bru.TYPES}
+        self.assertIn("FLAT2", keys)
+        self.assertIn("HOUSE_TERRACE", keys)
+        self.assertIn("ALL", keys)
 
 
 class ParseTests(unittest.TestCase):
@@ -76,13 +94,24 @@ class LiveRentTests(unittest.TestCase):
                 "SELECT count(DISTINCT destination_id) cities, count(*) rows FROM rent_monthly"
             )
             row = cur.fetchone()
-            self.assertEqual(row["cities"], 42)
-            self.assertEqual(row["rows"], 206)
+            self.assertGreaterEqual(row["cities"], 150)
+            self.assertGreaterEqual(row["rows"], 1_200)
+            cur.execute(
+                "SELECT count(DISTINCT destination_id) n FROM rent_monthly "
+                "WHERE source LIKE 'Eurostat%'"
+            )
+            self.assertGreaterEqual(cur.fetchone()["n"], 40)
+            cur.execute(
+                "SELECT count(DISTINCT destination_id) n FROM rent_monthly "
+                "WHERE source LIKE 'ONS%'"
+            )
+            self.assertGreaterEqual(cur.fetchone()["n"], 100)
             cur.execute("SELECT DISTINCT currency_code FROM rent_monthly")
             currencies = {r["currency_code"] for r in cur.fetchall()}
         self.assertIn("EUR", currencies)
         self.assertIn("GBP", currencies)
         self.assertIn("RON", currencies)
+        self.assertIn("GBP", currencies)
 
     def test_profile_uses_local_currency(self):
         import place_profiles as pp
@@ -93,6 +122,7 @@ class LiveRentTests(unittest.TestCase):
         self.assertEqual(paris["housing"]["headline"]["rent_local"], 2500.0)
         self.assertEqual(london["housing"]["currency_code"], "GBP")
         self.assertEqual(london["housing"]["headline"]["dwelling_type"], "FLAT2")
+        self.assertEqual(london["housing"]["headline"]["area_name"], "London")
 
 
 if __name__ == "__main__":

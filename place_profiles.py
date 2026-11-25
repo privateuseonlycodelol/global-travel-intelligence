@@ -757,6 +757,10 @@ DWELLING_LABELS = {
     "FLAT1": "1-bedroom flat",
     "FLAT2": "2-bedroom flat",
     "FLAT3": "3-bedroom flat",
+    "BED4": "4+ bedroom home",
+    "HOUSE_SD": "Semi-detached house",
+    "HOUSE_TERRACE": "Terraced house",
+    "FLAT_MAISONETTE": "Flat or maisonette",
 }
 HEADLINE_DWELLING = "FLAT2"
 RENT_NOTE = (
@@ -773,7 +777,8 @@ def fetch_rents(cur: Any, destination_ids: list[str]) -> dict[str, list[dict[str
     cur.execute(
         """
         SELECT destination_id, dwelling_type, bedrooms, rent_local, currency_code,
-               rent_basis, year, source, source_url, observed_period
+               rent_basis, area_name, area_code, year, source, source_url,
+               observed_period
         FROM rent_monthly
         WHERE destination_id = ANY(%s)
         ORDER BY destination_id, dwelling_type
@@ -803,6 +808,8 @@ def rent_summary(rows: list[dict[str, Any]]) -> dict[str, Any]:
             "bedrooms": headline["bedrooms"],
             "rent_local": headline["rent_local"],
             "year": headline["year"],
+            "area_name": headline.get("area_name"),
+            "area_code": headline.get("area_code"),
         },
         "options": [
             {
@@ -810,6 +817,7 @@ def rent_summary(rows: list[dict[str, Any]]) -> dict[str, Any]:
                 "label": row["label"],
                 "bedrooms": row["bedrooms"],
                 "rent_local": row["rent_local"],
+                "area_name": row.get("area_name"),
             }
             for row in rows
         ],

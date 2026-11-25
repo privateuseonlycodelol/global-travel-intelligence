@@ -441,17 +441,18 @@ US/UK-only city-crime mode is added, it must be labelled as such.
 | --- | --- | --- | --- |
 | Inside Airbnb | City/regional; global coverage varies | CC BY 4.0; verified | Implemented optional; short-term-rental price, local currency, not long-term rent. |
 | HUD Fair Market Rents | County/MSA; US | US government data; API/CSV; verified page | Candidate for US long-term rent. |
-| UK ONS private rent | Local authority; UK | Open Government Licence; verify current release | Candidate for UK. |
+| UK ONS private rent | Local authority; UK | Open Government Licence v3.0; XLSX verified 2026-11 | **Implemented**: 119 GB local-authority areas, 2026-10, GBP. |
 | Canada CMHC Rental Market | CMA; Canada | CMHC terms; verify | Candidate for Canada. |
 | Australia ABS rent | State/city; Australia | ABS terms; verify | Candidate for Australia. |
 | Eurostat `prc_colc_rents` | 42 cities; EU/EFTA/UK/TR/Balkans | Eurostat reuse with attribution; API verified | **Implemented**: average monthly rent by dwelling type, 2025, local currency. |
 | Eurostat housing price/rent indices | NUTS; EU | Eurostat reuse with attribution; verify dataset | Candidate regional context, not city rent. |
 | OECD Affordable Housing Database | Country; OECD | OECD terms; verify | Country-level only. |
 
-**Decision:** `rent_monthly` stores official Eurostat city rents in local
-currency for 42 cities. There is still no global city-level long-term rent
-source in the checked set, and the values are not FX-converted or put into the
-rank. `housing_monthly` remains the separate optional Inside Airbnb table.
+**Decision:** `rent_monthly` stores official rents in local currency for about
+160 cities: Eurostat city averages (41) and ONS local-authority averages (119
+GB areas). There is still no global city-level long-term rent source in the
+checked set, and values are not FX-converted or put into the rank.
+`housing_monthly` remains the separate optional Inside Airbnb table.
 
 ### 4.4 Walkability / rail
 
@@ -528,7 +529,7 @@ means without labelling the approximation.
 | `destination_metro` | GHSL UCDB R2024A urban-centre polygons | Yes (point-in-polygon; ≤5 km edge fallback) | `GHSL UCDB R2024A urban-centre boundary (European Commission JRC)` |
 | `ghsl_urban_centres` | GHSL UCDB R2024A geography theme | No (geometry converted to WGS84) | n/a |
 | `housing_monthly` | Inside Airbnb | Yes (median, nearest city) | `Inside Airbnb (local currency, 30+ night listings)` |
-| `rent_monthly` | Eurostat `prc_colc_rents` | No (latest annual value per dwelling type) | `Eurostat prc_colc_rents (average rent per month in cities)` |
+| `rent_monthly` | Eurostat `prc_colc_rents` + ONS PIPR | No (latest published value per dwelling type) | `Eurostat prc_colc_rents (average rent per month in cities)`, `ONS Price Index of Private Rents (local authority)` |
 | `travel_advisory` | US State Department + UK FCDO | No (country-level official advisory) | `US Department of State Travel Advisory`, `UK FCDO Foreign Travel Advice` |
 | `facility_metrics` | Overture Places | Yes (5 km counts) | `Overture Maps Places (facility counts)` |
 | `destination_geography` | GeoNames DEM + Natural Earth 10m coastline | Yes (straight-line distance) | `GeoNames cities15000 (dem, fallback elev)`, `Natural Earth 10m coastline (public domain)` |

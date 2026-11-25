@@ -120,6 +120,8 @@ CREATE TABLE IF NOT EXISTS rent_monthly (
     rent_local      DOUBLE PRECISION NOT NULL,
     currency_code   TEXT NOT NULL,
     rent_basis      TEXT NOT NULL,
+    area_name       TEXT,
+    area_code       TEXT,
     year            INT NOT NULL,
     source          TEXT NOT NULL,
     source_url      TEXT NOT NULL,
@@ -188,15 +190,26 @@ def load(database_url: str) -> dict[str, Any]:
         with conn.cursor() as cur:
             cur.execute(SCHEMA_SQL)
             cur.execute(
+                "ALTER TABLE rent_monthly ADD COLUMN IF NOT EXISTS area_name TEXT"
+            )
+            cur.execute(
+                "ALTER TABLE rent_monthly ADD COLUMN IF NOT EXISTS area_code TEXT"
+            )
+            cur.execute(
                 "SELECT country_iso2, currency_code FROM country_facts"
             )
             currency = {
                 str(row["country_iso2"]).upper(): row["currency_code"]
                 for row in cur.fetchall()
             }
-            cur.execute("DELETE FROM rent_monthly")
+            cur.execute("DELETE FROM rent_monthly WHERE source = %s", (SOURCE,))
             for geo, buildings in sorted(parsed.items()):
                 name, iso2 = CITY_QUERIES[geo]
+                # ONS is the local-authority source for Great Britain and
+                # Northern Ireland; do not overwrite it with a city average.
+                if iso2 == "GB":
+                    skipped.append(f"{geo} {name} (covered by ONS)")
+                    continue
                 resolved = pp.resolve_place(cur, f"{name}, {iso2}")["resolved"]
                 if not resolved or resolved["country_iso2"] != iso2:
                     skipped.append(f"{geo} {name}")
@@ -208,8 +221,8 @@ def load(database_url: str) -> dict[str, Any]:
                         INSERT INTO rent_monthly (
                             destination_id, dwelling_type, bedrooms, rent_local,
                             currency_code, rent_basis, year, source, source_url,
-                            observed_period
-                        ) VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s)
+                            observed_period, area_name, area_code
+                        ) VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s)
                         ON CONFLICT (destination_id, dwelling_type) DO UPDATE SET
                             bedrooms = EXCLUDED.bedrooms,
                             rent_local = EXCLUDED.rent_local,
@@ -219,13 +232,15 @@ def load(database_url: str) -> dict[str, Any]:
                             source = EXCLUDED.source,
                             source_url = EXCLUDED.source_url,
                             observed_period = EXCLUDED.observed_period,
+                            area_name = EXCLUDED.area_name,
+                            area_code = EXCLUDED.area_code,
                             updated_at = NOW()
                         """,
                         (
                             resolved["destination_id"], building["dwelling_type"],
                             building["bedrooms"], building["rent_local"], code,
                             BASIS, building["year"], SOURCE, DATASET_URL,
-                            str(building["year"]),
+                            str(building["year"]), resolved["name"], geo,
                         ),
                     )
                     written += 1
