@@ -150,6 +150,11 @@ Water is the nearest of the coast, a lake of at least 10 km², or a river with
 Strahler order ≥4, with linear decay to zero at 50 km. It is **access, not
 water quality**.
 
+The original all-component view, `destination_all_green_score`, is also
+available: `0.40 × vegetation + 0.20 × parks + 0.20 × air + 0.20 × water`.
+It uses the point-based vegetation score, not the GHSL urban-area measure.
+Top 100: [ALL_GREEN_RANKING.md](ALL_GREEN_RANKING.md).
+
 A third view, `destination_combined_score`, is the literal 50/50 blend:
 `0.50 × greenery + 0.50 × environment`. Because the environment score already
 contains greenery, its effective weights are 75% greenery, 17.5% air and 7.5%

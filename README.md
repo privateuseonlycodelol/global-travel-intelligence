@@ -69,6 +69,7 @@ calls:
 | `docs/NATURE.md` | nature typology, sources, what is loaded and what is rejected |
 | `docs/METHODOLOGY_AUDIT.md` | green-score audit, formulas, rankings, sensitivity and limits |
 | `docs/COMBINED_RANKING.md` | combined physical-greenery + environmental-quality top 100 |
+| `docs/ALL_GREEN_RANKING.md` | all-encompassing vegetation + parks + air + water top 100 |
 | `docs/URBAN_AREA_AUDIT.md` | urban-area greenery and surrounding-nature audit, two rankings |
 | `reports/generate_rankings.py` | reproducible million-plus greenery and environment rankings |
 | `sql/rank_examples.sql` | Phase 1/v2 scorer examples |

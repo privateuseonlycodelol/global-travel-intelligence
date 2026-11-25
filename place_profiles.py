@@ -102,6 +102,7 @@ TABLES = {
     "q": "destination_greenery_score",
     "f": "destination_environment_score",
     "c": "destination_combined_score",
+    "ag": "destination_all_green_score",
     "u": "destination_urban_greenery",
     "sn": "destination_surrounding_nature",
 }
@@ -213,6 +214,17 @@ METRICS: tuple[Metric, ...] = (
                  "composite, not an observation. A zero park count is none "
                  "listed, so the park-inclusive score is null."),
            cohort="cities with land cover and at least one mapped park"),
+    Metric("all_green_score", "ag", "all_green_score_0_100",
+           "All-encompassing green score (vegetation, parks, air, water)",
+           "score 0-100", "higher", "environment",
+           "'First-party: ESA WorldCover 2021, Overture Places, SatPM 2024, HydroLAKES, HydroRIVERS, Natural Earth'",
+           "'2021/2024/2026'",
+           note=("40% vegetation cover, 20% mapped park count, 20% annual "
+                 "PM2.5, 20% water access. Vegetation is the point-based "
+                 "land-only cover score; it is not citywide canopy. A "
+                 "first-party composite, not an observation. A zero park "
+                 "count is none listed, so the score is null."),
+           cohort="cities with all four all-green components"),
     Metric("combined_score", "c", "combined_score_0_100",
            "Combined physical greenery and environmental quality",
            "score 0-100", "higher", "environment",
@@ -704,6 +716,24 @@ def fetch_nature(cur: Any, destination_ids: list[str]) -> dict[str, dict[str, An
             out.setdefault(str(row.pop("destination_id")), {})[
                 "combined_score"
             ] = row
+    if "destination_all_green_score" in _existing_tables(
+        cur, ["destination_all_green_score"]
+    ):
+        cur.execute(
+            """
+            SELECT destination_id, all_green_score_0_100, vegetation_score,
+                   park_score, air_score, water_score, weights, source,
+                   observed_period
+            FROM destination_all_green_score
+            WHERE destination_id = ANY(%s)
+            """,
+            (destination_ids,),
+        )
+        for row in cur.fetchall():
+            row = dict(row)
+            out.setdefault(str(row.pop("destination_id")), {})[
+                "all_green_score"
+            ] = row
     if "destination_urban_greenery" in _existing_tables(
         cur, ["destination_urban_greenery"]
     ):
@@ -994,6 +1024,26 @@ def nature_summary(row: dict[str, Any] | None) -> dict[str, Any]:
                 ),
             }
             if row.get("environment_score") else None
+        ),
+        "all_green_score": (
+            {
+                "score_0_100": row["all_green_score"].get("all_green_score_0_100"),
+                "components_0_100": {
+                    "vegetation": row["all_green_score"].get("vegetation_score"),
+                    "parks": row["all_green_score"].get("park_score"),
+                    "air": row["all_green_score"].get("air_score"),
+                    "water": row["all_green_score"].get("water_score"),
+                },
+                "weights": row["all_green_score"].get("weights"),
+                "source": row["all_green_score"].get("source"),
+                "observed_period": row["all_green_score"].get("observed_period"),
+                "note": (
+                    "All-encompassing green composite: point vegetation, "
+                    "mapped parks, air and water access. Vegetation is a "
+                    "point sample, not citywide canopy."
+                ),
+            }
+            if row.get("all_green_score") else None
         ),
         "urban_greenery": (
             {

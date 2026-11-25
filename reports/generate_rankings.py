@@ -46,6 +46,7 @@ SELECT g.destination_id, d.name, d.country_iso2, d.population,
        g.hinterland_tree_share, g.hinterland_shrub_share,
        g.local_water_fraction, g.hinterland_water_fraction,
        e.environment_score_0_100, c.combined_score_0_100,
+       a.all_green_score_0_100, a.vegetation_score,
        e.air_score, e.pm25_ugm3,
        e.worst_month_pm25, e.water_score, e.water_feature,
        e.water_distance_km, e.coast_distance_km, e.large_lake_name,
@@ -56,6 +57,7 @@ JOIN destinations d USING (destination_id)
 LEFT JOIN destination_metro m USING (destination_id)
 LEFT JOIN destination_environment_score e USING (destination_id)
 LEFT JOIN destination_combined_score c USING (destination_id)
+LEFT JOIN destination_all_green_score a USING (destination_id)
 WHERE g.greenery_score_0_100 IS NOT NULL AND d.population >= 1000000
 """
 
@@ -104,6 +106,7 @@ FIELDS = [
     ("rank_greenery", lambda r: r.get("_rank_greenery")),
     ("rank_environment", lambda r: r.get("_rank_environment")),
     ("rank_combined", lambda r: r.get("_rank_combined")),
+    ("rank_all_green", lambda r: r.get("_rank_all_green")),
     ("city", lambda r: r["name"]),
     ("country", lambda r: r["country_iso2"]),
     ("city_population", lambda r: r["population"]),
@@ -125,6 +128,8 @@ FIELDS = [
     ("hinterland_water_pct", lambda r: round(r["hinterland_water_fraction"] * 100, 2)),
     ("environment_score_0_100", lambda r: round(r["environment_score_0_100"], 2)),
     ("combined_score_0_100", lambda r: round(r["combined_score_0_100"], 2)),
+    ("all_green_score_0_100", lambda r: round(r["all_green_score_0_100"], 2)),
+    ("vegetation_score_0_100", lambda r: round(r["vegetation_score"], 2)),
     ("air_score", lambda r: round(r["air_score"], 2)),
     ("pm25_ugm3", lambda r: round(r["pm25_ugm3"], 2)),
     ("worst_month_pm25", lambda r: round(r["worst_month_pm25"], 2)),
@@ -164,6 +169,19 @@ def markdown(rows: list[dict[str, Any]], kind: str, limit: int = 100) -> str:
                 f"{row['park_score']:.1f} | {row['population']:,} | "
                 f"{row['urban_centre_name']} |"
             )
+    elif kind == "all_green":
+        lines = [
+            "| # | City | Country | All-green | Vegetation | Parks | Air | Water | Population | GHSL centre |",
+            "|---:|---|---:|---:|---:|---:|---:|---:|---:|---|",
+        ]
+        for i, row in enumerate(rows[:limit], 1):
+            lines.append(
+                f"| {i} | {row['name']} | {row['country_iso2']} | "
+                f"{row['all_green_score_0_100']:.1f} | "
+                f"{row['vegetation_score']:.1f} | {row['park_score']:.1f} | "
+                f"{row['air_score']:.1f} | {row['water_score']:.1f} | "
+                f"{row['population']:,} | {row['urban_centre_name']} |"
+            )
     elif kind == "combined":
         lines = [
             "| # | City | Country | Combined | Physical greenery | Environmental quality | Population | GHSL centre |",
@@ -202,12 +220,15 @@ def main() -> int:
     greenery = rank(rows, "greenery_score_0_100")
     environment = rank(rows, "environment_score_0_100")
     combined = rank(rows, "combined_score_0_100")
+    all_green = rank(rows, "all_green_score_0_100")
     for i, row in enumerate(greenery, 1):
         row["_rank_greenery"] = i
     for i, row in enumerate(environment, 1):
         row["_rank_environment"] = i
     for i, row in enumerate(combined, 1):
         row["_rank_combined"] = i
+    for i, row in enumerate(all_green, 1):
+        row["_rank_all_green"] = i
 
     write_csv(OUT / "greenery_top100.csv", greenery[:100])
     write_csv(OUT / "environment_top100.csv", environment[:100])
@@ -220,6 +241,10 @@ def main() -> int:
     (OUT / "combined_top100.md").write_text(
         markdown(combined, "combined"), encoding="utf-8"
     )
+    write_csv(OUT / "all_green_top100.csv", all_green[:100])
+    (OUT / "all_green_top100.md").write_text(
+        markdown(all_green, "all_green"), encoding="utf-8"
+    )
     print(
         {
             "principal_cities": len(rows),
@@ -228,6 +253,7 @@ def main() -> int:
             "greenery_top": greenery[0]["name"],
             "environment_top": environment[0]["name"],
             "combined_top": combined[0]["name"],
+            "all_green_top": all_green[0]["name"],
         }
     )
     return 0

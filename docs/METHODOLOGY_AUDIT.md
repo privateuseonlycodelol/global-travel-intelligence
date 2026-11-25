@@ -167,6 +167,11 @@ $$
 
 The score exists only when all three exist. Components are exposed.
 
+An **all-encompassing 40/20/20/20** view is available as
+`destination_all_green_score`: 40% point vegetation, 20% parks, 20% air and
+20% water. It is the original all-component idea with the corrected
+components; the top 100 is in [ALL_GREEN_RANKING.md](ALL_GREEN_RANKING.md).
+
 A **combined physical + environmental** score is also available: `50% greenery
 + 50% environment`. Because environment already includes greenery, its
 effective weights are 75% greenery, 17.5% air and 7.5% water. The full top 100

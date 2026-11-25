@@ -144,6 +144,36 @@ class LiveNatureTests(unittest.TestCase):
             trento["nature"]["environment_score"]["components_0_100"]["air"],
         )
 
+    def test_all_green_score(self):
+        with self.conn.cursor() as cur:
+            cur.execute(
+                "SELECT count(*) n, count(all_green_score_0_100) scored "
+                "FROM destination_all_green_score"
+            )
+            row = cur.fetchone()
+            if row["n"] == 0:
+                self.skipTest("all-green score not built")
+            self.assertGreaterEqual(row["scored"], 3_000)
+            trento = pp.build_profile(cur, "gn-3165243")
+            paris = pp.build_profile(cur, "gn-2988507")
+        full = trento["nature"]["all_green_score"]
+        self.assertEqual(
+            set(full["components_0_100"]),
+            {"vegetation", "parks", "air", "water"},
+        )
+        self.assertAlmostEqual(
+            float(full["score_0_100"]),
+            0.40 * float(full["components_0_100"]["vegetation"])
+            + 0.20 * float(full["components_0_100"]["parks"])
+            + 0.20 * float(full["components_0_100"]["air"])
+            + 0.20 * float(full["components_0_100"]["water"]),
+            places=4,
+        )
+        self.assertGreater(
+            trento["nature"]["all_green_score"]["score_0_100"],
+            paris["nature"]["all_green_score"]["score_0_100"],
+        )
+
     def test_combined_score(self):
         with self.conn.cursor() as cur:
             cur.execute(

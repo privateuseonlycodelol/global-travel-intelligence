@@ -52,6 +52,7 @@ final production numbers.
 | `destination_greenery_score` (view) | 4,038 scored | Physical greenery: 25% local tree, 15% local other, 45% hinterland, 15% parks |
 | `destination_environment_score` (view) | 4,038 scored | Environmental quality: 50% greenery, 35% air, 15% water access |
 | `destination_combined_score` (view) | 4,038 scored | Combined: 50% greenery + 50% environment (effective 75/17.5/7.5) |
+| `destination_all_green_score` (view) | 4,038 scored | All-encompassing: vegetation 40%, parks 20%, air 20%, water 20% |
 | `destination_urban_land_cover` | 482 | WorldCover fractions inside the GHSL urban-centre polygon |
 | `destination_urban_greenery` (view) | 482 | Urban tree/green scores inside the GHSL polygon |
 | `destination_surrounding_nature` (view) | 5,000 | 1–15 km annulus tree+shrub shares |

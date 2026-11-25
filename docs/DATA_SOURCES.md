@@ -690,6 +690,7 @@ means without labelling the approximation.
 | `destination_greenery_score` (view) | vegetation + mapped parks | Yes (25/15/45/15 composite) | `First-party: ESA WorldCover 2021 + Overture Places` |
 | `destination_environment_score` (view) | greenery + PM2.5 + water access | Yes (50/35/15 composite) | `First-party: ESA WorldCover 2021, Overture Places, SatPM 2024, HydroLAKES, HydroRIVERS, Natural Earth` |
 | `destination_combined_score` (view) | greenery + environment | Yes (50/50 blend; effective 75/17.5/7.5) | `First-party: physical greenery + environmental quality` |
+| `destination_all_green_score` (view) | vegetation + parks + PM2.5 + water | Yes (40/20/20/20 composite) | `First-party: ESA WorldCover 2021, Overture Places, SatPM 2024, HydroLAKES, HydroRIVERS, Natural Earth` |
 | `destination_urban_land_cover` | WorldCover masked to GHSL polygons | Yes (class fractions) | `ESA WorldCover 2021 v200; GHSL UCDB R2024A` |
 | `destination_urban_greenery` (view) | urban land cover | Yes (tree/green shares) | `First-party: WorldCover inside GHSL polygon` |
 | `destination_surrounding_nature` (view) | 1 km + 15 km land cover | Yes (annulus shares) | `First-party: WorldCover 1–15 km annulus` |

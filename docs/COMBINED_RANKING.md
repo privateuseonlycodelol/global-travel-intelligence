@@ -22,6 +22,10 @@ That is deliberate: it is the answer to “combine the two lists”, not an
 equal-weight component index. If you want the 50% greenery / 35% air / 15%
 water balance, use the environmental-quality score instead.
 
+If you want all four components in one number instead of a 50/50 blend of the
+two published scores, use the all-green 40/20/20/20 view in
+[ALL_GREEN_RANKING.md](ALL_GREEN_RANKING.md).
+
 The ranking unit is the same as the other two: city population ≥1M, one
 principal city per GHSL urban centre, 25% centre/city boundary filter. 407
 cities are ranked.

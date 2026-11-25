@@ -45,6 +45,7 @@ import psycopg
 from psycopg.rows import dict_row
 
 SCHEMA_SQL = """
+DROP VIEW IF EXISTS destination_all_green_score CASCADE;
 DROP VIEW IF EXISTS destination_combined_score CASCADE;
 DROP VIEW IF EXISTS destination_environment_score CASCADE;
 DROP VIEW IF EXISTS destination_greenery_score CASCADE;
@@ -230,6 +231,28 @@ FROM destination_greenery_score g
 JOIN destination_environment_score e USING (destination_id)
 WHERE g.greenery_score_0_100 IS NOT NULL
   AND e.environment_score_0_100 IS NOT NULL;
+
+CREATE VIEW destination_all_green_score AS
+SELECT g.destination_id,
+       g.vegetation_only_score_0_100 AS vegetation_score,
+       g.park_score,
+       e.air_score,
+       e.water_score,
+       0.40 * g.vegetation_only_score_0_100
+         + 0.20 * g.park_score
+         + 0.20 * e.air_score
+         + 0.20 * e.water_score AS all_green_score_0_100,
+       '40% vegetation, 20% parks, 20% air, 20% water'::text AS weights,
+       'First-party: ESA WorldCover 2021, Overture Places, SatPM 2024, HydroLAKES, HydroRIVERS, Natural Earth'::text
+           AS source,
+       '2021/2024/2026'::text AS observed_period,
+       NOW() AS computed_at
+FROM destination_greenery_score g
+JOIN destination_environment_score e USING (destination_id)
+WHERE g.vegetation_only_score_0_100 IS NOT NULL
+  AND g.park_score IS NOT NULL
+  AND e.air_score IS NOT NULL
+  AND e.water_score IS NOT NULL;
 """
 
 

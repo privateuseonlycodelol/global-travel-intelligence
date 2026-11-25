@@ -1495,6 +1495,15 @@ def inspect_destination(
                 (resolved_id,),
                 ("destination_greenery_score",),
             )
+            all_green_score = optional_row(
+                """
+                SELECT all_green_score_0_100, vegetation_score, park_score,
+                       air_score, water_score, weights, source, observed_period
+                FROM destination_all_green_score WHERE destination_id = %s
+                """,
+                (resolved_id,),
+                ("destination_all_green_score",),
+            )
             urban_greenery = optional_row(
                 """
                 SELECT urban_centre_id, area_km2, urban_tree_score_0_100,
@@ -1642,6 +1651,7 @@ def inspect_destination(
         "greenery_score": greenery_score,
         "environment_score": environment_score,
         "combined_score": combined_score,
+        "all_green_score": all_green_score,
         "urban_greenery": urban_greenery,
         "surrounding_nature": surrounding_nature,
         "gtfs_feeds": gtfs_feeds,
