@@ -77,8 +77,9 @@ BROADBAND_VALUE = (
     "CASE WHEN b.total_tests >= " + str(MIN_BROADBAND_TESTS) + " AND {col} > 0 THEN {col} END"
 )
 BROADBAND_NOTE = (
-    f"Ookla tile medians within 5 km; values from fewer than {MIN_BROADBAND_TESTS} "
-    "tests, or zero, are not ranked. sample_size is the number of tests."
+    f"Tests-weighted median of Ookla tile mean speeds within 5 km; latency is the "
+    f"tests-weighted mean. Values from fewer than {MIN_BROADBAND_TESTS} tests, or "
+    "zero, are not ranked. sample_size is the number of tests."
 )
 
 OVERTURE_TRANSPORT_SOURCE = (
@@ -207,17 +208,17 @@ METRICS: tuple[Metric, ...] = (
            "Rail track segments within 5 km", "segments", "higher",
            "getting_around", OVERTURE_TRANSPORT_SOURCE, OVERTURE_TRANSPORT_PERIOD),
     Metric("internet_download_mbps", "b", "median_down_mbps",
-           "Typical fixed-broadband download speed", "Mbps", "higher",
+           "Tests-weighted median of Ookla tile download speeds within 5 km", "Mbps", "higher",
            "internet", "b.source", "b.observed_period",
            value_sql=BROADBAND_VALUE.format(col="b.median_down_mbps"), sample_sql="b.total_tests",
            note=BROADBAND_NOTE),
     Metric("internet_upload_mbps", "b", "median_up_mbps",
-           "Typical fixed-broadband upload speed", "Mbps", "higher",
+           "Tests-weighted median of Ookla tile upload speeds within 5 km", "Mbps", "higher",
            "internet", "b.source", "b.observed_period",
            value_sql=BROADBAND_VALUE.format(col="b.median_up_mbps"), sample_sql="b.total_tests",
            note=BROADBAND_NOTE),
     Metric("internet_latency_ms", "b", "avg_latency_ms",
-           "Typical fixed-broadband latency", "ms", "lower",
+           "Tests-weighted mean of Ookla tile latency within 5 km", "ms", "lower",
            "internet", "b.source", "b.observed_period",
            value_sql=BROADBAND_VALUE.format(col="b.avg_latency_ms"), sample_sql="b.total_tests",
            note=BROADBAND_NOTE),
@@ -1148,7 +1149,21 @@ def fetch_basics(cur: Any, destination_ids: list[str]) -> dict[str, dict[str, An
         """,
         (destination_ids,),
     )
-    return {str(r["destination_id"]): dict(r) for r in cur.fetchall()}
+    out = {str(r["destination_id"]): dict(r) for r in cur.fetchall()}
+    if "street_network_metrics" in _existing_tables(cur, ["street_network_metrics"]):
+        cur.execute(
+            """
+            SELECT destination_id, urban_centre_id, urban_centre_name,
+                   match_kind, match_distance_km
+            FROM street_network_metrics
+            WHERE destination_id = ANY(%s)
+            """,
+            (destination_ids,),
+        )
+        for row in cur.fetchall():
+            row = dict(row)
+            out[str(row.pop("destination_id"))]["urban_centre"] = row
+    return out
 
 
 def build_profile(cur: Any, destination_id: str) -> dict[str, Any]:
@@ -1279,6 +1294,7 @@ def build_comparison(cur: Any, destination_ids: list[str]) -> dict[str, Any]:
                 "country_iso2": basics[i]["country_iso2"],
                 "population": basics[i]["population"],
                 "nearest_airports_iata": basics[i]["iata_codes"] or [],
+                "urban_centre": basics[i].get("urban_centre"),
             }
             for i in ids
         ],
