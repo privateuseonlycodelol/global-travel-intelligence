@@ -198,7 +198,9 @@ STATIC_WEIGHT_KEYS = (
 )
 
 REGIME_WEIGHTS: dict[str, tuple[float, ...]] = {
-    "extended_stay": (0.20, 0.10, 0.10, 0.20, 0.15, 0.15, 0.05, 0.05),
+    # Housing is zero because no comparable global rent series is loaded;
+    # official local-currency rents are profile context, not a rank input.
+    "extended_stay": (0.20, 0.10, 0.10, 0.20, 0.15, 0.15, 0.05, 0.00),
     "short_stay": (0.25, 0.25, 0.20, 0.15, 0.10, 0.00, 0.05, 0.00),
 }
 
