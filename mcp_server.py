@@ -1150,6 +1150,7 @@ def rank_destinations(
                 "pedestrian_ratio_2km is a separate Overture 8-country context field, not the score",
                 "transit_stops_5km is an Overture Places facility count, not service frequency",
                 "rent_monthly holds official local-currency rents for about 1,250 cities; it is not a rank input",
+                "facility counts, hazard exposure, health access, geography and airport access are profile context, not scored",
                 "housing_monthly is empty unless Inside Airbnb has been loaded",
                 "climate is WorldClim 2.1 (1970-2000 averages); recent monthly normals are a separate NASA POWER layer for a growing subset",
                 "missing dimensions are NULL; see docs/DATA_SOURCES.md",
