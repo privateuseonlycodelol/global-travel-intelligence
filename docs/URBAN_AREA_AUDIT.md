@@ -5,6 +5,12 @@
 and can we measure greenery inside the urban area and nature around it
 separately?
 
+> **Superseded for current values.** The urban land cover was recomputed at
+> native 10 m with cos(latitude) area weighting after this audit. See
+> [GHSL_METHOD_AUDIT.md](GHSL_METHOD_AUDIT.md) for the current numbers and
+> rankings. The tables below are from the earlier ~100 m nearest-neighbour
+> pass and are retained as history only; do not use them as current data.
+
 ## Executive summary
 
 The 1 km “Tree” column is **not canopy coverage**. It is the share of ESA
@@ -18,7 +24,7 @@ discrepancy:
 | City | 1 km point tree | GHSL urban-centre tree | Published / reference |
 |---|---:|---:|---|
 | Montréal | 59.7% | **28.5%** | ~23–26% citywide |
-| Oslo | 15.5% | **55.7%** | much higher than the point |
+| Oslo | 15.5% | **55.6%** | much higher than the point |
 | Philadelphia | 3.9% | **40.9%** | ~20% city proper |
 | Vancouver | 52.4% | **43.7%** | — |
 | Singapore | 18.3% | **27.4%** | ~47% all green cover |
@@ -123,7 +129,7 @@ The point is a green residential block, not the city.
 ### 2.3 Why does Oslo score 15.5 for trees when published coverage is higher?
 
 The 15.5% is the **1 km point**, which sits in a dense central block. The GHSL
-Oslo polygon is **55.7% tree** (land-only) and the 15 km ring is 79.1%
+Oslo polygon is **55.6% tree** (land-only) and the 15 km ring is 79.1%
 tree+shrub. Published municipal figures are closer to the polygon than to the
 point. The point is not the city.
 
@@ -223,7 +229,7 @@ Partially:
 
 - The urban-polygon tree share is close to published Montréal canopy (28.5% vs
   23–26%), which the 1 km point (59.7%) does not.
-- Oslo’s point (15.5%) is contradicted by both the polygon (55.7%) and the
+- Oslo’s point (15.5%) is contradicted by both the polygon (55.6%) and the
   15 km ring (79.1%); the polygon is consistent with a forest-surrounded city.
 - Philadelphia’s official ~20% is a city-proper figure; the polygon (40.9%)
   covers a larger suburban area. The point (3.9%) is not citywide.
@@ -516,7 +522,7 @@ Built-up ≥20%.
 - Montréal’s urban polygon (28.5%) matches published canopy; the 59.7% point
   is explicitly a local block.
 - Oslo’s low point is explained by its dense central block; the polygon is
-  55.7% tree.
+  55.6% tree.
 - The hinterland overlap is removed in the new surrounding-nature measure.
 - Tree, Other and total green use the same GHSL polygon in the urban ranking.
 - Parks are excluded from the urban ranking, so a 5 km POI count is not mixed

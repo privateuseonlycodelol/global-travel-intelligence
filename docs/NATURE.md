@@ -173,7 +173,8 @@ surrounding-nature measure uses the **1–15 km annulus**, so the 1 km disc is
 not counted twice.
 
 The audit, named-city comparisons and two rankings are in
-[URBAN_AREA_AUDIT.md](URBAN_AREA_AUDIT.md).
+[URBAN_AREA_AUDIT.md](URBAN_AREA_AUDIT.md) and the GHSL-only native 10 m
+audit in [GHSL_METHOD_AUDIT.md](GHSL_METHOD_AUDIT.md).
 
 Examples:
 

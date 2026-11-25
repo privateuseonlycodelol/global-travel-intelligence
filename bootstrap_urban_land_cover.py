@@ -37,15 +37,12 @@ import rasterio
 from psycopg.rows import dict_row
 from rasterio.features import geometry_mask
 from rasterio.windows import from_bounds
-from rasterio.enums import Resampling
 
 BUCKET = "https://esa-worldcover.s3.amazonaws.com/v200/2021/map"
 TILE = "ESA_WorldCover_10m_2021_v200_{tile}_Map.tif"
 SOURCE = "ESA WorldCover 2021 v200 (10 m), masked to GHSL urban centre"
 SOURCE_URL = "https://esa-worldcover.org/en/data-access"
 PERIOD = "2021"
-TARGET_RES_M = 100.0
-MAX_SIDE = 2000
 OUT = Path(__file__).resolve().parent / "reports"
 
 CLASS_COLUMNS = {
@@ -170,9 +167,7 @@ WITH scored AS (
     SELECT d.destination_id, d.name, d.population,
            m.urban_centre_id, m.centre_population
     FROM destinations d
-    JOIN destination_greenery_score g USING (destination_id)
     JOIN destination_metro m USING (destination_id)
-    WHERE g.greenery_score_0_100 IS NOT NULL
 ),
 principal AS (
     SELECT DISTINCT ON (urban_centre_id) *
@@ -239,10 +234,17 @@ def polygon_counts(
     cache: TileCache,
     geom: dict[str, Any],
     bounds: tuple[float, float, float, float],
-) -> tuple[Counter, int]:
+) -> tuple[np.ndarray, int, float]:
+    """Return area-weighted class sums, valid pixel count and total weight.
+
+    WorldCover is in EPSG:4326, so a pixel's ground area scales with cos(lat).
+    Counting pixels equally overweights high-latitude rows; weighting each row
+    by cos(lat) keeps the fractions area-weighted without reprojecting.
+    """
     min_lon, min_lat, max_lon, max_lat = bounds
-    counts: Counter = Counter()
+    counts = np.zeros(256, dtype=np.float64)
     valid_total = 0
+    weight_total = 0.0
     for lat0, lon0 in tile_origins(min_lat, max_lat, min_lon, max_lon):
         dataset = cache.get(lat0 + 1.5, lon0 + 1.5)
         if dataset is None:
@@ -257,26 +259,22 @@ def polygon_counts(
         window = window.round_offsets().round_lengths()
         if window.width <= 0 or window.height <= 0:
             continue
-        height_m = (top - bottom) * 111320.0
-        width_m = (right - left) * 111320.0 * max(
-            0.05, abs(math.cos(math.radians((top + bottom) / 2.0)))
-        )
-        out_h = max(1, min(MAX_SIDE, int(round(height_m / TARGET_RES_M))))
-        out_w = max(1, min(MAX_SIDE, int(round(width_m / TARGET_RES_M))))
-        data = dataset.read(
-            1, window=window, out_shape=(out_h, out_w),
-            resampling=Resampling.nearest,
-        )
-        transform = rasterio.transform.from_bounds(
-            left, bottom, right, top, out_w, out_h
-        )
+        # Native 10 m read: no categorical downsampling bias.
+        data = dataset.read(1, window=window)
+        transform = dataset.window_transform(window)
         mask = geometry_mask(
-            [geom], out_shape=(out_h, out_w), transform=transform, invert=True
+            [geom], out_shape=data.shape, transform=transform, invert=True
         )
         valid = mask & (data != 0)
-        counts.update(int(value) for value in data[valid])
         valid_total += int(valid.sum())
-    return counts, valid_total
+        rows = np.arange(data.shape[0], dtype=np.float64) + 0.5
+        lats = transform.f + rows * transform.e
+        weights = np.cos(np.radians(lats))[:, None]
+        values = data[valid].astype(np.int64)
+        weights_valid = np.broadcast_to(weights, data.shape)[valid]
+        counts += np.bincount(values, weights=weights_valid, minlength=256)
+        weight_total += float(weights_valid.sum())
+    return counts, valid_total, weight_total
 
 
 def load(
@@ -304,9 +302,9 @@ def load(
                     row["min_lon"], row["min_lat"],
                     row["max_lon"], row["max_lat"],
                 )
-                counts, valid = polygon_counts(cache, geom, bounds)
+                counts, valid, weight_total = polygon_counts(cache, geom, bounds)
                 fractions = {
-                    column: (counts.get(code, 0) / valid if valid else None)
+                    column: (counts[code] / weight_total if weight_total else None)
                     for code, column in CLASS_COLUMNS.items()
                 }
                 with conn.cursor() as cur:
@@ -364,11 +362,11 @@ def load(
         finally:
             cache.close()
     OUT.mkdir(exist_ok=True)
-    (OUT / "urban_centres_482.geojson").write_text(
+    (OUT / "urban_centres_516.geojson").write_text(
         json.dumps({"type": "FeatureCollection", "features": features}),
         encoding="utf-8",
     )
-    return {"cities": len(rows), "geojson": str(OUT / "urban_centres_482.geojson")}
+    return {"cities": len(rows), "geojson": str(OUT / "urban_centres_516.geojson")}
 
 
 def report(database_url: str) -> None:

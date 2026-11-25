@@ -692,7 +692,8 @@ means without labelling the approximation.
 | `destination_combined_score` (view) | greenery + environment | Yes (50/50 blend; effective 75/17.5/7.5) | `First-party: physical greenery + environmental quality` |
 | `destination_all_green_score` (view) | vegetation + parks + PM2.5 + water | Yes (40/20/20/20 composite) | `First-party: ESA WorldCover 2021, Overture Places, SatPM 2024, HydroLAKES, HydroRIVERS, Natural Earth` |
 | `destination_urban_land_cover` | WorldCover masked to GHSL polygons | Yes (class fractions) | `ESA WorldCover 2021 v200; GHSL UCDB R2024A` |
-| `destination_urban_greenery` (view) | urban land cover | Yes (tree/green shares) | `First-party: WorldCover inside GHSL polygon` |
+| `destination_urban_greenery` (view) | urban land cover | Yes (tree/green shares) | `First-party: WorldCover native 10 m inside GHSL polygon, cos(lat) weighted` |
+| `destination_ghsl_greenery` (view) | urban land cover + air/water | Yes (physical/environment scores, flags) | `First-party: GHSL centre population; WorldCover native 10 m; SatPM; HydroLAKES/HydroRIVERS` |
 | `destination_surrounding_nature` (view) | 1 km + 15 km land cover | Yes (annulus shares) | `First-party: WorldCover 1–15 km annulus` |
 | `flight_quote_cache` | SerpApi Google Flights | No (cached response) | `SerpApi Google Flights` |
 | `hotel_quote_cache` | SerpApi Google Hotels | No (cached response) | `SerpApi Google Hotels` |

@@ -238,7 +238,7 @@ counted by class, not by ecological quality.
 
 **Post-audit update.** The 1 km point sample is not citywide canopy. Masking
 WorldCover to the GHSL urban-centre polygon gives Montréal 28.5% tree
-(published 23–26%), Oslo 55.7% (point 15.5%), and Philadelphia 40.9% (city
+(published 23–26%), Oslo 55.6% (point 15.5%), and Philadelphia 40.9% (city
 proper ~20%, but the GHSL centre is 654 km² versus 369 km²). The full
 comparison, formulas and two new rankings are in
 [URBAN_AREA_AUDIT.md](URBAN_AREA_AUDIT.md).

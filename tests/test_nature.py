@@ -218,6 +218,36 @@ class LiveNatureTests(unittest.TestCase):
         urban = profile["nature"]["urban_greenery"]
         self.assertGreater(urban["score_0_100"], 0)
 
+    def test_ghsl_greenery(self):
+        with self.conn.cursor() as cur:
+            cur.execute(
+                "SELECT count(*) n, count(physical_green_score) physical, "
+                "count(nature_access_score) nature, "
+                "count(environment_score) environment "
+                "FROM destination_ghsl_greenery"
+            )
+            row = cur.fetchone()
+            if row["n"] == 0:
+                self.skipTest("GHSL greenery not built")
+            self.assertGreaterEqual(row["physical"], 450)
+            self.assertEqual(row["nature"], 0)
+            self.assertGreaterEqual(row["environment"], 450)
+            cur.execute(
+                """
+                SELECT physical_green_score, nature_access_score,
+                       everyday_greenery_available,
+                       public_green_access_available
+                FROM destination_ghsl_greenery
+                WHERE name = 'Montréal'
+                """
+            )
+            montreal = cur.fetchone()
+        self.assertIsNotNone(montreal)
+        self.assertGreater(montreal["physical_green_score"], 20)
+        self.assertIsNone(montreal["nature_access_score"])
+        self.assertFalse(montreal["everyday_greenery_available"])
+        self.assertFalse(montreal["public_green_access_available"])
+
     def test_surrounding_nature(self):
         with self.conn.cursor() as cur:
             cur.execute(
