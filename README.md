@@ -2,8 +2,9 @@
 
 PostGIS bootstrap for a travel-ranking database covering every GeoNames city
 with **population ≥ 40,000** (~13k destinations after metro de-duplication),
-with climate, POI, airport, broadband, walkability/transit and optional monthly
-housing data attached.
+with climate, recent monthly normals, air quality, official rents, facilities,
+hazards, health access, travel advisories, geography, airports,
+walkability/transit and optional housing data attached.
 
 The goal is a **fixed number of bulk operations** instead of per-city API/S3
 calls:
@@ -17,7 +18,10 @@ calls:
 | Broadband | Ookla Open Data (S3 Parquet) | one DuckDB scan + grid hash join |
 | Walkability/transit | Overture Maps Transportation + Mobility Database GTFS | one transport scan + one CSV join |
 | Walkability score (global) | How Walkable city ranking (Overture/OSM) | one CSV, name/alias match |
-| Air quality (global) | SatPM V6.GL.03 annual PM2.5 (0.1°) | one NetCDF, point sample |
+| Air quality (global) | SatPM V6.GL.03 annual + monthly PM2.5 (0.1°) | 13 NetCDFs, point samples |
+| Rent (official) | Eurostat, ONS, HUD | three official loaders, local currency |
+| Facilities | Overture Places | one DuckDB scan, 5 km counts |
+| Hazards / health access | GHSL UCDB hazard + health themes | two CSVs, urban-centre join |
 | Housing (optional) | Inside Airbnb city dumps | local CSV scan |
 | Tourism pressure (optional) | Eurostat NUTS 2 tourism + population | one API + GISCO boundary join; annual and monthly |
 
