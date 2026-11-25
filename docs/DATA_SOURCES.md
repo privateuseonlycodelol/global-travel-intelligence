@@ -336,7 +336,7 @@ exists; cities without it are neutral (0.5) and are reported via
 | Granularity | City point; monthly normals |
 | Used by | `bootstrap_climate_recent.py` → `climate_recent`; `place_profile.recent_climate` |
 | Status | **Implemented loader; not yet global.** |
-| Notes | Separate from WorldClim 1970-2000. Adds rainy days, days >=30 C, warm nights and recent precipitation. A city-point sample; not a neighbourhood climatology. |
+| Notes | Separate from WorldClim 1970-2000. Adds rainy days, days >=30 C, warm nights and recent precipitation. A city-point sample at ~0.5°; not a neighbourhood climatology. In mountainous terrain the grid cell can be much higher than the city, so temperatures may read cold; check the WorldClim baseline as a second view. |
 
 ### 3.17 Annual city PM2.5
 

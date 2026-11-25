@@ -1099,8 +1099,10 @@ def recent_climate_summary(months: list[dict[str, Any]]) -> dict[str, Any]:
             float(m["warm_nights"]) for m in months if m.get("warm_nights") is not None
         ), 1),
         "note": (
-            "Recent monthly normals from NASA POWER (MERRA-2); separate from "
-            "the 1970-2000 WorldClim baseline."
+            "Recent monthly normals from NASA POWER (MERRA-2) at ~0.5°. In "
+            "mountainous terrain the grid cell can sit well above the city, so "
+            "temperatures may read cold; compare with the 1970-2000 WorldClim "
+            "baseline."
         ),
     }
 
