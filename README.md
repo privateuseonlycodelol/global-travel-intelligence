@@ -562,9 +562,11 @@ km² and dead-end share) is still loaded by `bootstrap_street_network.py` for
 analysis, but it is **not shown in profiles**: Houston outranking Berlin on that
 proxy showed it should not be presented as walkability.
 
-`rank_destinations_v3` scores eight dimensions with weights that sum to 1:
-climate, culture, food, walkability, transit, broadband, low crowding and
-housing cost. Missing dimensions are **neutral-imputed at 0.5 for the score**
+`rank_destinations_v3` scores seven active dimensions with weights that sum to
+1: climate, culture, food, walkability, transit, broadband and low crowding.
+The housing-cost weight is zero by default because there is no comparable global
+rent series; official local-currency rents are profile context. Missing
+dimensions are **neutral-imputed at 0.5 for the score**
 so a data-rich city is not punished for having measured, mediocre values;
 `data_completeness` reports how much real evidence the row has, so check it
 before trusting a high score. The Phase 3 tables are one row per city, so
@@ -645,9 +647,9 @@ country-scoped. A 2 GiB limit OOMs on Spain+Sweden; 8 GiB completed it.
   handful of listings is noisy; `sample_listings` is reported so you can apply
   your own minimum. **Inside Airbnb prices are in the listing's local
   currency**, not USD: the loader does not perform FX conversion, so
-  `median_monthly_local` is only comparable within a currency area. Zero the
-  `p_w_housing` weight for cross-currency searches, or convert the column
-  before scoring. Listings are attributed to the nearest destination within
+  `median_monthly_local` is only comparable within a currency area. The default
+  housing weight is already zero; if you opt in with `p_w_housing`, keep the
+  search inside one currency or convert the column with a dated rate first. Listings are attributed to the nearest destination within
   10 km, so a small-town dump near a larger city can inflate the larger city's
   sample.
 - **The Schengen filter** implements the 90/180-day short-stay rule for
