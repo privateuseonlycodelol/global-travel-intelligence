@@ -131,6 +131,10 @@ class LiveNatureTests(unittest.TestCase):
             trento["nature"]["full_green_score"]["score_0_100"],
             paris["nature"]["full_green_score"]["score_0_100"],
         )
+        self.assertGreater(
+            paris["nature"]["full_green_score"]["components_0_100"]["air"],
+            trento["nature"]["full_green_score"]["components_0_100"]["air"],
+        )
 
     def test_inland_water(self):
         with self.conn.cursor() as cur:

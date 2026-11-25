@@ -61,7 +61,7 @@ scored AS (
                 THEN 100.0 * PERCENT_RANK() OVER (ORDER BY parks_per_100k)
            END AS park_score,
            CASE WHEN pm25_ugm3 IS NOT NULL
-                THEN 100.0 * (1.0 - PERCENT_RANK() OVER (ORDER BY pm25_ugm3 DESC))
+                THEN 100.0 * (1.0 - PERCENT_RANK() OVER (ORDER BY pm25_ugm3 ASC))
            END AS air_score,
            CASE WHEN water_distance_km IS NOT NULL
                 THEN 100.0 * GREATEST(0.0, 1.0 - water_distance_km / 50.0)

@@ -127,10 +127,10 @@ count is `none_listed`, not evidence of no parks, so those cities stay
 unmeasured. The score is a first-party composite, not an observation, and it is
 not in `final_score`.
 
-Trento scores **50.4** (vegetation 48.4, parks 65.3, air 23.8, water 88.1);
-Paris **30.9** (12.7, 57.5, 16.5, 73.8); Innsbruck **41.0**; Dubai **27.7**
-(vegetation 3.3 but air 73.0 and water 74.2). The component breakdown is always
-shown, so a low-vegetation city cannot hide behind clean air.
+Trento scores **63.5** (vegetation 48.4, parks 65.3, air 76.2, water 88.1);
+Paris **47.7** (12.7, 57.5, 83.5, 73.8); Innsbruck **57.5**; Dubai **16.1**
+(vegetation 3.3, parks 2.7, air 27.0, water 74.2). The component breakdown is
+always shown, so a low-vegetation city cannot hide behind clean air.
 
 ### Optional vegetation-only green score
 
