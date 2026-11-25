@@ -456,7 +456,7 @@ leaves the rest NULL.
 | UK Police API | Street/neighbourhood; UK | Open Government Licence; verified docs | Candidate for UK only; street-level aggregation needed. |
 | National police open data | Country-specific | Varies | Candidate per country. |
 | UNODC | Country; global | UNODC terms; verify | Country-level only. |
-| US State Department advisories | Country; ~217 entries | US government work; JSON API verified | **Implemented**: levels 1-4, date, URL. |
+| US State Department advisories | Country; 214 countries (multiple entries can collapse) | US government work; JSON API verified | **Implemented**: levels 1-4, date, URL. |
 | UK FCDO foreign travel advice | Country; ~225 entries | Open Government Licence v3.0; content API verified | **Implemented**: `alert_status`, review date, URL. |
 
 **Decision:** `safety_crime` remains unavailable at city level. The national

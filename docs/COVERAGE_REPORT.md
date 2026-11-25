@@ -30,7 +30,7 @@ final production numbers.
 | `tourism_pressure` | 1,405 | Eurostat NUTS 2 2024; EU/EFTA only |
 | `housing_monthly` | 0 | Optional Inside Airbnb load not run globally |
 | `rent_monthly` | 1,272 | Eurostat 41 cities (2025) + ONS 119 GB local-authority areas (2026-10), local currency |
-| `travel_advisory` | 442 | US State (217) + UK FCDO (225) country advisories, retrieved 2026-11-25 |
+| `travel_advisory` | 439 | US State (214) + UK FCDO (225) country advisories, retrieved 2026-11-25 |
 | `facility_metrics` | 13,101 | Overture Places counts within 5 km: hospital, pharmacy, school, grocery, park, beach |
 | `airport_access` | 13,101 | OurAirports nearest scheduled-service airport + 100 km counts |
 | `destination_geography` | 13,101 | GeoNames elevation (13,084) + Natural Earth coastline distance (13,101) |
