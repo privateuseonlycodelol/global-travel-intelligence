@@ -381,12 +381,14 @@ leaves the rest NULL.
 | UK Police API | Street/neighbourhood; UK | Open Government Licence; verified docs | Candidate for UK only; street-level aggregation needed. |
 | National police open data | Country-specific | Varies | Candidate per country. |
 | UNODC | Country; global | UNODC terms; verify | Country-level only. |
+| US State Department advisories | Country; ~217 entries | US government work; JSON API verified | **Implemented**: levels 1-4, date, URL. |
+| UK FCDO foreign travel advice | Country; ~225 entries | Open Government Licence v3.0; content API verified | **Implemented**: `alert_status`, review date, URL. |
 
 **Decision:** `safety_crime` remains unavailable at city level. The national
-UNODC homicide rate (via World Bank, section 3.13) is stored per country in
-`country_indicators` and shown only as country context; it is not copied onto
-cities. If a US/UK-only mode is added,
-it must be labelled as such.
+homicide rate (via World Bank, section 3.13) and the US/UK travel advisories are
+stored per country and shown only as country context. The two advisory scales
+are separate rows and are never averaged; neither is copied onto a city. If a
+US/UK-only city-crime mode is added, it must be labelled as such.
 
 ### 4.3 Housing / rent
 
@@ -482,6 +484,7 @@ means without labelling the approximation.
 | `ghsl_urban_centres` | GHSL UCDB R2024A geography theme | No (geometry converted to WGS84) | n/a |
 | `housing_monthly` | Inside Airbnb | Yes (median, nearest city) | `Inside Airbnb (local currency, 30+ night listings)` |
 | `rent_monthly` | Eurostat `prc_colc_rents` | No (latest annual value per dwelling type) | `Eurostat prc_colc_rents (average rent per month in cities)` |
+| `travel_advisory` | US State Department + UK FCDO | No (country-level official advisory) | `US Department of State Travel Advisory`, `UK FCDO Foreign Travel Advice` |
 | `tourism_pressure` | Eurostat NUTS 2 tourism + population | Yes (NUTS 2 assignment/division) | `Eurostat tour_occ_nin2m + demo_r_pjangrp3 (NUTS 2)` |
 | `flight_quote_cache` | SerpApi Google Flights | No (cached response) | `SerpApi Google Flights` |
 | `hotel_quote_cache` | SerpApi Google Hotels | No (cached response) | `SerpApi Google Hotels` |

@@ -256,7 +256,8 @@ METRIC_GROUP_LABELS = {
 NOT_IN_DATABASE = [
     "Long-term rent outside the 42 Eurostat cities (no global city-level open "
     "source loaded)",
-    "City-level crime or safety (only the national homicide rate is loaded)",
+    "City-level crime rates (national advisories and the homicide rate are "
+    "country-scoped)",
     "Neighbourhood-level walkability, sidewalk quality and crossing safety "
     "(the published score covers the city centre, not a neighbourhood)",
     "GHSCI scoring for cities without a completed run (Trento and the 24 "
@@ -663,7 +664,9 @@ def _climate_for_summary(months: list[dict[str, Any]]) -> list[dict[str, Any]]:
 
 def fetch_country_context(cur: Any, country_codes: list[str]) -> dict[str, dict[str, Any]]:
     """Country facts and indicators (with world percentiles across countries)."""
-    available = _existing_tables(cur, ["country_facts", "country_indicators"])
+    available = _existing_tables(
+        cur, ["country_facts", "country_indicators", "travel_advisory"]
+    )
     out: dict[str, dict[str, Any]] = {
         code: {"granularity": "country", "status": "not_loaded"} for code in country_codes
     }
@@ -758,6 +761,33 @@ def fetch_country_context(cur: Any, country_codes: list[str]) -> dict[str, dict[
                 ctx["indicators_missing"] = [
                     label for key, label in all_indicators.items() if key not in present
                 ]
+    if "travel_advisory" in available:
+        cur.execute(
+            """
+            SELECT country_iso2, source, level, level_label, headline, summary,
+                   url, advisory_date
+            FROM travel_advisory
+            WHERE country_iso2 = ANY(%s)
+            ORDER BY country_iso2, source
+            """,
+            (country_codes,),
+        )
+        for row in cur.fetchall():
+            row = dict(row)
+            code = str(row.pop("country_iso2"))
+            if code not in out:
+                continue
+            summary = row.pop("summary")
+            if summary and len(summary) > 700:
+                summary = summary[:697].rsplit(" ", 1)[0] + "..."
+            row["summary"] = summary
+            out[code].setdefault("advisories", []).append(row)
+        for ctx in out.values():
+            if ctx.get("advisories"):
+                ctx["advisory_note"] = (
+                    "US levels 1-4 and UK FCDO advice are separate official scales. "
+                    "They apply to the country, not the city, and are not averaged."
+                )
     return out
 
 
