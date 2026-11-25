@@ -39,6 +39,17 @@ The nature profile therefore separates **landscape region**, **terrain**,
 - Source: RESOLVE Ecoregions 2017, CC BY 4.0,
   https://storage.googleapis.com/teow2016/Ecoregions2017.zip
 
+### Climate class — Köppen-Geiger 1991–2020
+
+- Beck et al. 2023, 1 km, 1991–2020. One point sample per city.
+- **13,101 cities** loaded. Trento is **Cfa** (temperate, hot summer); Paris
+  and Innsbruck are **Cfb** (temperate, warm summer); Dubai is **BWh** (hot
+  desert).
+- The class is a label, not a score. It sits beside the monthly climate and the
+  ecoregion, not instead of them.
+- Source: Beck et al. 2023, CC BY 4.0,
+  https://www.gloh2o.org/koppen/
+
 ### Terrain — Amatulli et al. 2018, GMTED 10 km
 
 - Median elevation, elevation standard deviation, Terrain Ruggedness Index
@@ -92,6 +103,29 @@ separate lines.
 - Source: ESA WorldCover 2021 v200, CC BY 4.0,
   https://esa-worldcover.org/en/data-access
 
+## Council decision and current trade-offs
+
+The experience agent ranked landscape, coast, terrain, forest/green, water,
+night sky and protected areas. The data-feasibility agent recommended the
+Copernicus 100 m 2018 fractional land cover, Copernicus GLO-90 relief with the
+GMBA mountain mask, and GLWD v2 wetlands.
+
+What is loaded now uses the **already validated, licence-clean, higher-resolution
+alternatives**:
+
+- WorldCover 10 m rather than CGLS 100 m. It gives sharper 1 km composition but
+  currently covers the largest 5,000 cities, not all 13,101.
+- Amatulli GMTED 10 km median/SD/TRI/TPI rather than GLO-90 p95−p5. It is
+  global and already loaded, but it is a coarser terrain description.
+- HydroLAKES lakes rather than HydroLAKES plus GLWD wetlands. Rivers and
+  seasonal wetlands remain missing.
+
+The 1 km figure is a fixed daily-walk disc around the city point, **not the GHSL
+urban-centre polygon**; the 15 km figure is the fixed hinterland. They are
+labelled that way. The next upgrade is the CGLS 2018 fractions for all cities
+and GLWD v2 wetland/river fractions; neither is required for the current
+profile to be useful.
+
 ## Planned, globally repeatable
 
 - **Shore type** — USGS coastal segment slope/erodibility, only for cities
@@ -107,8 +141,6 @@ separate lines.
 - WDPA / Protected Planet without written permission.
 - Falchi sky-brightness atlas (CC BY-NC).
 - Sandy-shore points from Luijendijk et al. (not an open bulk download).
-- Köppen-Geiger until the figshare licence is read; the article is CC BY but
-  the dataset page did not state it clearly.
 - Regional or city-only inventories (Natura 2000, PAD-US, Urban Atlas,
   ParkScore, Tree Equity, municipal tree inventories) as the global layer.
 - OSM/Overture wood and park geometry as a second nature system; park and beach

@@ -8,6 +8,8 @@ This is the first, uncontroversial nature layer:
   realms). One point-in-polygon sample at the city centroid. The ecoregion is
   the surrounding region, not the view from the window; the built-up fraction
   from land cover is a separate layer.
+* **Climate class** — Beck et al. 2023 Köppen-Geiger 1991-2020 at 1 km, one
+  point sample. A class label, not a score.
 * **Terrain** — Amatulli et al. 2018 GMTED 10 km median elevation, elevation
   standard deviation, Terrain Ruggedness Index and Topographic Position Index.
   This separates a high flat city (Denver), a high city (La Paz) and a valley
@@ -59,6 +61,44 @@ RASTER_URLS = {
     "tri_10KMmd_GMTEDmd.tif": "https://hs.pangaea.de/model/GMTED/tri/tri_10KMmd_GMTEDmd.tif",
     "tpi_10KMmd_GMTEDmd.tif": "https://hs.pangaea.de/model/GMTED/tpi/tpi_10KMmd_GMTEDmd.tif",
 }
+KOPPEN_URL = (
+    "https://data.naturalcapitalalliance.stanford.edu/download/global/"
+    "koppen_geiger_climatezones/koppen_geiger_climatezones_1991_2020_1km.tif"
+)
+KOPPEN_CACHE = CACHE / "koppen_1991_2020_1km.tif"
+KOPPEN_SOURCE = "Beck et al. 2023 Köppen-Geiger 1991-2020 (CC BY 4.0)"
+KOPPEN_LEGEND = {
+    1: ("Af", "Tropical, rainforest"),
+    2: ("Am", "Tropical, monsoon"),
+    3: ("Aw", "Tropical, savannah"),
+    4: ("BWh", "Arid, desert, hot"),
+    5: ("BWk", "Arid, desert, cold"),
+    6: ("BSh", "Arid, steppe, hot"),
+    7: ("BSk", "Arid, steppe, cold"),
+    8: ("Csa", "Temperate, dry summer, hot summer"),
+    9: ("Csb", "Temperate, dry summer, warm summer"),
+    10: ("Csc", "Temperate, dry summer, cold summer"),
+    11: ("Cwa", "Temperate, dry winter, hot summer"),
+    12: ("Cwb", "Temperate, dry winter, warm summer"),
+    13: ("Cwc", "Temperate, dry winter, cold summer"),
+    14: ("Cfa", "Temperate, no dry season, hot summer"),
+    15: ("Cfb", "Temperate, no dry season, warm summer"),
+    16: ("Cfc", "Temperate, no dry season, cold summer"),
+    17: ("Dsa", "Cold, dry summer, hot summer"),
+    18: ("Dsb", "Cold, dry summer, warm summer"),
+    19: ("Dsc", "Cold, dry summer, cold summer"),
+    20: ("Dsd", "Cold, dry summer, very cold winter"),
+    21: ("Dwa", "Cold, dry winter, hot summer"),
+    22: ("Dwb", "Cold, dry winter, warm summer"),
+    23: ("Dwc", "Cold, dry winter, cold summer"),
+    24: ("Dwd", "Cold, dry winter, very cold winter"),
+    25: ("Dfa", "Cold, no dry season, hot summer"),
+    26: ("Dfb", "Cold, no dry season, warm summer"),
+    27: ("Dfc", "Cold, no dry season, cold summer"),
+    28: ("Dfd", "Cold, no dry season, very cold winter"),
+    29: ("ET", "Polar, tundra"),
+    30: ("EF", "Polar, frost"),
+}
 ECOREGION_SOURCE = "RESOLVE Ecoregions 2017 (CC BY 4.0)"
 TERRAIN_SOURCE = "Amatulli et al. 2018 GMTED 10 km (CC BY 3.0)"
 SOURCE_URL = "https://ecoregions2017.appspot.com/"
@@ -77,6 +117,16 @@ CREATE TABLE IF NOT EXISTS destination_landscape (
     source_url      TEXT NOT NULL,
     observed_period TEXT NOT NULL,
     updated_at      TIMESTAMPTZ NOT NULL DEFAULT NOW()
+);
+
+CREATE TABLE IF NOT EXISTS destination_climate_class (
+    destination_id TEXT PRIMARY KEY REFERENCES destinations(destination_id) ON DELETE CASCADE,
+    koppen_code    TEXT,
+    koppen_label   TEXT,
+    source         TEXT NOT NULL,
+    source_url     TEXT NOT NULL,
+    observed_period TEXT NOT NULL,
+    updated_at     TIMESTAMPTZ NOT NULL DEFAULT NOW()
 );
 
 CREATE TABLE IF NOT EXISTS destination_terrain (
@@ -206,6 +256,38 @@ def position_class(tpi: float | None) -> str | None:
     return "slope or neutral"
 
 
+def ensure_koppen() -> Path:
+    return download(KOPPEN_URL, KOPPEN_CACHE)
+
+
+def load_koppen(conn: psycopg.Connection, path: Path) -> int:
+    with rasterio.open(path) as dataset:
+        with conn.cursor() as cur:
+            cur.execute("SELECT destination_id, lat, lon FROM destinations")
+            cities = cur.fetchall()
+            cur.execute("DELETE FROM destination_climate_class")
+            rows = []
+            for city in cities:
+                value = _read_raster(dataset, float(city["lat"]), float(city["lon"]))
+                code = label = None
+                if value is not None:
+                    code, label = KOPPEN_LEGEND.get(int(round(value)), (None, None))
+                rows.append((
+                    city["destination_id"], code, label, KOPPEN_SOURCE,
+                    "https://www.gloh2o.org/koppen/", "1991-2020",
+                ))
+            cur.executemany(
+                """
+                INSERT INTO destination_climate_class (
+                    destination_id, koppen_code, koppen_label, source,
+                    source_url, observed_period
+                ) VALUES (%s, %s, %s, %s, %s, %s)
+                """,
+                rows,
+            )
+            return len(rows)
+
+
 def load_terrain(conn: psycopg.Connection, rasters: dict[str, Path]) -> int:
     with conn.cursor() as cur:
         cur.execute("SELECT destination_id, lat, lon FROM destinations")
@@ -255,7 +337,10 @@ def load(database_url: str) -> dict[str, Any]:
         rasters = ensure_rasters()
         terrain = load_terrain(conn, rasters)
         conn.commit()
-    return {"landscape": landscape, "terrain": terrain}
+        koppen_path = ensure_koppen()
+        climate_class = load_koppen(conn, koppen_path)
+        conn.commit()
+    return {"landscape": landscape, "terrain": terrain, "climate_class": climate_class}
 
 
 def report(database_url: str) -> None:
@@ -265,6 +350,8 @@ def report(database_url: str) -> None:
             print({"landscape": cur.fetchone()["n"]})
             cur.execute("SELECT count(*) n FROM destination_terrain")
             print({"terrain": cur.fetchone()["n"]})
+            cur.execute("SELECT count(*) n FROM destination_climate_class")
+            print({"climate_class": cur.fetchone()["n"]})
             cur.execute(
                 """
                 SELECT d.name, l.biome_name, l.ecoregion_name,

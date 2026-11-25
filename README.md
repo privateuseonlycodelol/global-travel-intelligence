@@ -49,7 +49,7 @@ calls:
 | `bootstrap_geography.py` | GeoNames elevation and Natural Earth coastline distance |
 | `bootstrap_airport_access.py` | nearest scheduled-service airport and 100 km counts |
 | `bootstrap_gtfs.py` | global GTFS scheduled headways and service span |
-| `bootstrap_nature.py` | ecoregion landscape and 10 km terrain |
+| `bootstrap_nature.py` | ecoregion landscape, Köppen class and 10 km terrain |
 | `bootstrap_land_cover.py` | ESA WorldCover land-cover fractions at 1 km and 15 km |
 | `bootstrap_inland_water.py` | nearest HydroLAKES lake/reservoir per city |
 | `bootstrap_ucdb_themes.py` | GHSL urban-centre hazard and health-access themes |
@@ -847,6 +847,7 @@ Implemented third-party sources:
 | Nature | RESOLVE Ecoregions + Amatulli topography | CC BY 4.0 / CC BY 3.0 | 12,927 city landscapes; 13,101 terrains |
 | Land cover | ESA WorldCover 2021 | CC BY 4.0 | 1 km and 15 km class fractions; initial largest-city batch |
 | Inland water | HydroLAKES v1.0 | CC BY 4.0 | 13,101 cities; nearest lake/reservoir |
+| Climate class | Köppen-Geiger 1991-2020 | CC BY 4.0 | 13,101 cities; class label only |
 | Hazard exposure | GHSL UCDB / MYRIAD-HES | CC BY 4.0 | 11,422 urban centres; event counts by hazard type, 2015 window |
 | Health access | GHSL UCDB / healthsites.io | ODbL / EC reuse | 11,422 urban centres; hospital and pharmacy access |
 | Broadband | Ookla Open Data | **CC BY-NC-SA 4.0; non-commercial; attribution required** | global tiles |

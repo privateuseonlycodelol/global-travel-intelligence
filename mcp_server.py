@@ -1468,6 +1468,14 @@ def inspect_destination(
                 (resolved_id,),
                 ("destination_terrain",),
             )
+            climate_class = optional_row(
+                """
+                SELECT koppen_code, koppen_label, source, observed_period
+                FROM destination_climate_class WHERE destination_id = %s
+                """,
+                (resolved_id,),
+                ("destination_climate_class",),
+            )
             inland_water = optional_row(
                 """
                 SELECT lake_id, lake_name, lake_type, lake_area_km2, distance_km,
@@ -1543,6 +1551,7 @@ def inspect_destination(
         "terrain": terrain,
         "land_cover": land_cover,
         "inland_water": inland_water,
+        "climate_class": climate_class,
         "gtfs_feeds": gtfs_feeds,
         "transit_service": transit_service,
         "poi_metrics": poi_metrics,

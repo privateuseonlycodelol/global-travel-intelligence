@@ -473,7 +473,22 @@ exists; cities without it are neutral (0.5) and are reported via
 | Status | **Implemented** |
 | Notes | Does not include rivers, small tarns or seasonal pans. Lake names are often blank in the source. |
 
-### 3.26 Land-cover fractions (ESA WorldCover)
+### 3.26 Köppen-Geiger climate class
+
+| Field | Value |
+| --- | --- |
+| Party | Third-party |
+| Publisher | Beck et al. / GloH2O; COG mirror by Natural Capital Alliance |
+| Dataset | Köppen-Geiger 1991-2020, 1 km |
+| URL | https://www.gloh2o.org/koppen/ ; https://data.naturalcapitalalliance.stanford.edu/download/global/koppen_geiger_climatezones/koppen_geiger_climatezones_1991_2020_1km.tif |
+| Licence | CC BY 4.0; cite Beck et al. 2023 |
+| Coverage | 13,101 cities |
+| Granularity | City point |
+| Used by | `bootstrap_nature.py` → `destination_climate_class`; `place_profile.nature.climate` |
+| Status | **Implemented** |
+| Notes | A class label, not a score. A city on a class boundary can flip; the monthly climate remains the detailed view. |
+
+### 3.27 Land-cover fractions (ESA WorldCover)
 
 | Field | Value |
 | --- | --- |
@@ -639,6 +654,7 @@ means without labelling the approximation.
 | `destination_terrain` | Amatulli 2018 GMTED 10 km | No (point sample) | `Amatulli et al. 2018 GMTED 10 km (CC BY 3.0)` |
 | `destination_land_cover` | ESA WorldCover 2021 v200 | Yes (class fractions) | `ESA WorldCover 2021 v200 (10 m)` |
 | `destination_inland_water` | HydroLAKES v1.0 | Yes (nearest lake join) | `HydroLAKES v1.0 (lakes >= 10 ha, CC BY 4.0)` |
+| `destination_climate_class` | Köppen-Geiger 1991-2020 | No (point sample) | `Beck et al. 2023 Köppen-Geiger 1991-2020 (CC BY 4.0)` |
 | `flight_quote_cache` | SerpApi Google Flights | No (cached response) | `SerpApi Google Flights` |
 | `hotel_quote_cache` | SerpApi Google Hotels | No (cached response) | `SerpApi Google Hotels` |
 | `destination_aliases` | GeoNames alternatenames | Yes (normalized) | n/a |

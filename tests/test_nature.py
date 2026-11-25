@@ -108,6 +108,8 @@ class LiveNatureTests(unittest.TestCase):
             trento = pp.build_profile(cur, "gn-3165243")
             paris = pp.build_profile(cur, "gn-2988507")
         self.assertEqual(trento["nature"]["landscape"]["biome"], "Temperate Conifer Forests")
+        self.assertEqual(trento["nature"]["climate"]["koppen_code"], "Cfa")
+        self.assertEqual(paris["nature"]["climate"]["koppen_code"], "Cfb")
         self.assertEqual(trento["nature"]["terrain"]["position_class"], "valley or low position")
         self.assertGreater(trento["nature"]["terrain"]["elevation_sd_m"], 100)
         self.assertEqual(paris["nature"]["landscape"]["biome"], "Temperate Broadleaf & Mixed Forests")

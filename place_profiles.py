@@ -568,6 +568,19 @@ def fetch_nature(cur: Any, destination_ids: list[str]) -> dict[str, dict[str, An
         for row in cur.fetchall():
             row = dict(row)
             out.setdefault(str(row.pop("destination_id")), {})["landscape"] = row
+    if "destination_climate_class" in _existing_tables(cur, ["destination_climate_class"]):
+        cur.execute(
+            """
+            SELECT destination_id, koppen_code, koppen_label, source,
+                   observed_period
+            FROM destination_climate_class
+            WHERE destination_id = ANY(%s)
+            """,
+            (destination_ids,),
+        )
+        for row in cur.fetchall():
+            row = dict(row)
+            out.setdefault(str(row.pop("destination_id")), {})["climate"] = row
     if "destination_land_cover" in _existing_tables(cur, ["destination_land_cover"]):
         cur.execute(
             """
@@ -680,6 +693,15 @@ def nature_summary(row: dict[str, Any] | None) -> dict[str, Any]:
                 "observed_period": landscape.get("observed_period"),
             }
             if landscape else None
+        ),
+        "climate": (
+            {
+                "koppen_code": row["climate"].get("koppen_code"),
+                "koppen_label": row["climate"].get("koppen_label"),
+                "source": row["climate"].get("source"),
+                "observed_period": row["climate"].get("observed_period"),
+            }
+            if row.get("climate") else None
         ),
         "land_cover": _land_cover_block(row.get("land_cover") or []),
         "inland_water": (
