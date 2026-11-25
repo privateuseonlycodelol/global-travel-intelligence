@@ -56,6 +56,7 @@ final production numbers.
 | `destination_urban_land_cover` | 516 | WorldCover fractions inside the GHSL urban-centre polygon |
 | `destination_urban_greenery` (view) | 516 | Urban tree/green scores inside the GHSL polygon, native 10 m |
 | `destination_ghsl_greenery` (view) | 516 | GHSL-only physical greenery, nature flags, environment |
+| `city_quality_index` | 516 | Seven-dimension objective quality index; 491 with completeness >= 0.90 |
 | `destination_surrounding_nature` (view) | 5,000 | 1–15 km annulus tree+shrub shares |
 | `flight_quote_cache` / `hotel_quote_cache` | 0 | Populated only by MCP stage 2 with SerpApi key |
 | `destination_aliases` | 188,403 | GeoNames names/alternatenames for all 13,101 cities (`bootstrap_places.py`) |

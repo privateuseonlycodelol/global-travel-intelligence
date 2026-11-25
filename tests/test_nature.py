@@ -218,6 +218,41 @@ class LiveNatureTests(unittest.TestCase):
         urban = profile["nature"]["urban_greenery"]
         self.assertGreater(urban["score_0_100"], 0)
 
+    def test_quality_index(self):
+        with self.conn.cursor() as cur:
+            cur.execute(
+                "SELECT count(*) n, count(quality_score) scored, "
+                "count(*) FILTER (WHERE data_completeness >= 0.90) ranked "
+                "FROM city_quality_index"
+            )
+            row = cur.fetchone()
+            if row["n"] == 0:
+                self.skipTest("quality index not built")
+            self.assertGreaterEqual(row["ranked"], 450)
+            cur.execute(
+                """
+                SELECT quality_score, environment_score, culture_food_score,
+                       safety_health_score, affordability_score,
+                       walkability_score, climate_score, connectivity_score
+                FROM city_quality_index WHERE name = 'Barcelona'
+                """
+            )
+            barcelona = cur.fetchone()
+        self.assertIsNotNone(barcelona)
+        self.assertGreater(barcelona["quality_score"], 70)
+        expected = (
+            0.30 * barcelona["environment_score"]
+            + 0.20 * barcelona["culture_food_score"]
+            + 0.15 * barcelona["safety_health_score"]
+            + 0.10 * barcelona["affordability_score"]
+            + 0.10 * barcelona["walkability_score"]
+            + 0.10 * barcelona["climate_score"]
+            + 0.05 * barcelona["connectivity_score"]
+        )
+        self.assertAlmostEqual(
+            float(barcelona["quality_score"]), expected, places=3
+        )
+
     def test_ghsl_greenery(self):
         with self.conn.cursor() as cur:
             cur.execute(

@@ -54,6 +54,7 @@ calls:
 | `bootstrap_green_score.py` | optional physical-greenery, environmental-quality and combined scores |
 | `bootstrap_urban_land_cover.py` | WorldCover native 10 m inside the GHSL urban-centre polygon |
 | `bootstrap_ghsl_scores.py` | GHSL-only physical greenery, nature-access flags and environmental views |
+| `bootstrap_quality_index.py` | objective city quality index across seven measured dimensions |
 | `bootstrap_inland_water.py` | nearest HydroLAKES lake/reservoir and nearest lake ≥10 km² per city |
 | `bootstrap_rivers.py` | nearest HydroRIVERS major river per city |
 | `bootstrap_ucdb_themes.py` | GHSL urban-centre hazard and health-access themes |
@@ -73,6 +74,7 @@ calls:
 | `docs/ALL_GREEN_RANKING.md` | all-encompassing vegetation + parks + air + water top 100 |
 | `docs/URBAN_AREA_AUDIT.md` | urban-area greenery and surrounding-nature audit, two rankings |
 | `docs/GHSL_METHOD_AUDIT.md` | GHSL-only methodology audit, bugs, native 10 m fixes and new rankings |
+| `docs/QUALITY_INDEX.md` | objective quality index, weights, coverage and sensitivity |
 | `reports/generate_rankings.py` | reproducible million-plus greenery and environment rankings |
 | `sql/rank_examples.sql` | Phase 1/v2 scorer examples |
 | `sql/rank_examples_v3.sql` | Phase 3/v3 scorer examples |
