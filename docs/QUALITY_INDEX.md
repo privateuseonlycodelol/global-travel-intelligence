@@ -218,3 +218,34 @@ python bootstrap_quality_index.py
 python reports/generate_quality_rankings.py \
   --db-url "postgresql:///travel_global?host=/var/run/postgresql&port=5432"
 ```
+
+## All-city extension
+
+The same dimensions are also scored for **all 13,101 destinations**. After
+deduplicating to one principal city per GHSL urban centre (or the city itself
+when no centre is mapped), **10,389 principal cities** have a score. **2,316**
+meet the 0.90 completeness threshold.
+
+Top of the all-city list:
+
+| # | City | Country | Quality | Environment | Culture/food | Safety/health | Affordability | Walkability | Public transport | Climate | Connectivity |
+|---:|---|---:|---:|---:|---:|---:|---:|---:|---:|---:|---:|
+| 1 | Barcelona | ES | 80.6 | 64.1 | 99.7 | 87.5 | 37.7 | 91.0 | 99.8 | 89.2 | 84.0 |
+| 2 | Madrid | ES | 80.5 | 62.8 | 99.2 | 87.5 | 37.7 | 92.0 | 99.6 | 90.1 | 88.2 |
+| 3 | Paris | FR | 80.1 | 69.2 | 98.2 | 77.5 | 41.4 | 99.0 | 99.9 | 57.7 | 92.9 |
+| 4 | Hong Kong | HK | 80.0 | 70.9 | 96.4 | 96.2 | 17.9 | 84.0 | 99.8 | 75.0 | 92.6 |
+| 5 | Brisbane | AU | 79.9 | 77.9 | 98.5 | 84.2 | 29.4 | 82.0 | 98.4 | 84.5 | 58.6 |
+
+**Malmö:** quality **69.5**, rank **376 of 2,316** cities with completeness
+≥0.90 (completeness 1.00). Its dimensions are environment 52.1, culture/food
+95.8, walkability 66, public transport 93.3 and climate 25.2.
+
+The all-city environment is a mixed source: GHSL polygon physical greenery
+for 516 centres, the point-based environmental score for the 5,000 cities that
+have it, and null otherwise. It is not directly comparable to the 516-centre
+index above. The all-city list is context for smaller cities, not a claim that
+a 200k city has the same data quality as a 2M centre.
+
+Files: `reports/quality_all_cities.csv`,
+`reports/quality_all_cities_top100.csv`,
+`reports/quality_all_cities_low_completeness.csv`.

@@ -694,7 +694,8 @@ means without labelling the approximation.
 | `destination_urban_land_cover` | WorldCover masked to GHSL polygons | Yes (class fractions) | `ESA WorldCover 2021 v200; GHSL UCDB R2024A` |
 | `destination_urban_greenery` (view) | urban land cover | Yes (tree/green shares) | `First-party: WorldCover native 10 m inside GHSL polygon, cos(lat) weighted` |
 | `destination_ghsl_greenery` (view) | urban land cover + air/water | Yes (physical/environment scores, flags) | `First-party: GHSL centre population; WorldCover native 10 m; SatPM; HydroLAKES/HydroRIVERS` |
-| `city_quality_index` | seven measured dimensions | Yes (weighted composite) | `First-party: GHSL, WorldCover, Overture, SatPM, NASA POWER, World Bank, How Walkable, Ookla` |
+| `city_quality_index` | seven/eight measured dimensions | Yes (weighted composite) | `First-party: GHSL, WorldCover, Overture, SatPM, NASA POWER, World Bank, How Walkable, Ookla` |
+| `city_quality_index_all` | all destinations | Yes (weighted composite, mixed environment source) | `First-party: same sources; environment point fallback` |
 | `destination_surrounding_nature` (view) | 1 km + 15 km land cover | Yes (annulus shares) | `First-party: WorldCover 1–15 km annulus` |
 | `flight_quote_cache` | SerpApi Google Flights | No (cached response) | `SerpApi Google Flights` |
 | `hotel_quote_cache` | SerpApi Google Hotels | No (cached response) | `SerpApi Google Hotels` |
