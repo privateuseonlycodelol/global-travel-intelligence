@@ -15,6 +15,7 @@ final production numbers.
 | `climate_monthly` | 157,188 | WorldClim 2.1, 12 months × 13,099 cities |
 | `climate_monthly.avg_rainy_days` non-null | 0 | WorldClim baseline has no wet-day field; recent counts are in `climate_recent` |
 | `climate_monthly.avg_hot_days_30c` non-null | 0 | WorldClim baseline only |
+| `climate_recent` | 56,148 | 4,679 cities × 12 months, NASA POWER 2015-2024 |
 | `poi_metrics` | 13,101 | Overture Places global scan |
 | `broadband_metrics` | 11,902 | Ookla 2026 Q2 fixed tiles |
 | `mobility_metrics` | 9,553 | GTFS + transit stops + walk/rail rows |
@@ -25,7 +26,6 @@ final production numbers.
 | `air_quality_monthly` | 157,212 | SatPM V6.GL.03 monthly PM2.5, 13,101 cities × 12 months, 2024 |
 | `destination_metro` | 9,730 | GHSL UCDB R2024A polygon containment (9,065) or ≤5 km edge match (665) |
 | `ghsl_urban_centres` | 11,422 | GHSL UCDB R2024A urban-centre polygons, WGS84 |
-| `climate_recent` | 20,148 | 1,679 cities x 12 months, NASA POWER 2015-2024 |
 | `mobility_metrics` with GTFS > 0 | 4,000 | Mobility Database |
 | `mobility_metrics` with transit stops | 9,008 | Overture Places transit facilities within 5 km |
 | `tourism_pressure` | 1,405 | Eurostat NUTS 2 2024; EU/EFTA only |
@@ -54,7 +54,7 @@ final production numbers.
 | Tourism pressure | Partial (EU only) | Eurostat NUTS 2 annual and monthly nights for 1,405 cities; no global city-level official source. |
 | Safety / crime | Country context loaded | US State levels 1-4 and UK FCDO advice for ~220 countries; no global city-level crime rate. |
 | Long-term rent | Partial (~1,250 cities) | Eurostat city averages (41), ONS GB local-authority averages (121) and HUD US FMRs (1,087), in local currency. |
-| Rainy/hot days | Partial (1,679 cities) | NASA POWER 2015-2024 monthly counts in `climate_recent`; the rest are not yet fetched. |
+| Rainy/hot days | Partial (4,679 cities) | NASA POWER 2015-2024 monthly counts in `climate_recent`; the rest are not yet fetched. |
 | Air quality | Loaded, not scored | SatPM V6.GL.03 annual and monthly city PM2.5 for 13,101 cities; exposed as a metric and seasonal block, not in `final_score`. |
 | Facilities | Loaded, not scored | Overture Places presence counts for hospitals, pharmacies, schools, groceries, parks and beaches; zero is `none_listed`. |
 | Airport access | Loaded, not scored | Nearest scheduled-service airport and large/medium counts within 100 km. |

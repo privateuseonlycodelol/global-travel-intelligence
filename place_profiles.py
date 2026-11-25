@@ -596,9 +596,11 @@ HAZARD_TYPES = (
 )
 HAZARD_NOTE = (
     "MYRIAD-HES multi-hazard events overlaid on the GHSL urban centre for the "
-    "2015 window (2014-2016). These are recorded event counts, not a "
-    "probability or a forecast, and they cover the metro, not one street. A "
-    "dash in the source is stored as zero events."
+    "2015 window (2014-2016). hazard_occurrences counts the hazards that "
+    "overlapped the urban centre, split by type. source_event_count is the "
+    "product's total event field and can be much larger because one event can "
+    "include many hazards; it is retained as raw evidence, not as a headline. "
+    "A dash in the source is stored as zero."
 )
 HEALTH_ACCESS_NOTE = (
     "Urban-centre healthsites.io/OSM counts and the share of metro population "
@@ -659,8 +661,8 @@ def hazard_summary(row: dict[str, Any] | None) -> dict[str, Any]:
     return {
         "status": "loaded",
         "period": "2015 (2014-2016 window)",
-        "events": row.get("events_2015"),
-        "hazards": row.get("hazards_2015"),
+        "hazard_occurrences": row.get("hazards_2015"),
+        "source_event_count": row.get("events_2015"),
         "max_hazards_per_event": row.get("max_hazards_per_event_2015"),
         "by_type": {
             key: {"label": label, "events": row.get(f"{key}_2015") or 0}

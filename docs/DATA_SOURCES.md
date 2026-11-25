@@ -332,7 +332,7 @@ exists; cities without it are neutral (0.5) and are reported via
 | Dataset | Daily 2 m max/min temperature and corrected precipitation, 2015-2024, sampled at each city |
 | URL | https://power.larc.nasa.gov/docs/services/api/temporal/daily/ |
 | Licence | NASA open data; attribution requested (confirm current terms) |
-| Coverage | Loaded in batches by `bootstrap_climate_recent.py`; 1,679+ cities at the last snapshot, continuing |
+| Coverage | Loaded in batches by `bootstrap_climate_recent.py`; 4,679 cities at the 2026-11-25 snapshot, remaining cities not yet fetched |
 | Granularity | City point; monthly normals |
 | Used by | `bootstrap_climate_recent.py` → `climate_recent`; `place_profile.recent_climate` |
 | Status | **Implemented loader; not yet global.** |
@@ -411,7 +411,7 @@ exists; cities without it are neutral (0.5) and are reported via
 | Granularity | Urban centre, by hazard type |
 | Used by | `bootstrap_ucdb_themes.py` → `urban_centre_hazard`; `place_profile.hazard_exposure` |
 | Status | **Implemented** |
-| Notes | Recorded event counts, not a probability or forecast. A dash in the source is stored as zero events. Conflict columns in the same UCDB file are not loaded because their ACLED/UCDP provenance has separate redistribution terms. A city without a GHSL metro match has no row. |
+| Notes | Recorded hazard counts, not a probability or forecast. `source_event_count` is retained as raw evidence; the profile headline is `hazard_occurrences`, split by type. A dash in the source is stored as zero. Conflict columns in the same UCDB file are not loaded because their ACLED/UCDP provenance has separate redistribution terms. A city without a GHSL metro match has no row. |
 
 ### 3.22 Urban-centre health access
 

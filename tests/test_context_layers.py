@@ -58,7 +58,8 @@ class OfflineTests(unittest.TestCase):
             "max_hazards_per_event_2015": 2, "flood_2015": 4,
             "heatwave_2015": 2,
         })
-        self.assertEqual(summary["events"], 10)
+        self.assertEqual(summary["source_event_count"], 10)
+        self.assertEqual(summary["hazard_occurrences"], 3)
         self.assertEqual(summary["by_type"]["flood"]["events"], 4)
         self.assertEqual(summary["by_type"]["earthquake"]["events"], 0)
 
@@ -143,7 +144,7 @@ class LiveContextTests(unittest.TestCase):
             self.assertEqual(cur.fetchone()["n"], 11_422)
             profile = pp.build_profile(cur, "gn-1701668")  # Manila
         self.assertEqual(profile["hazard_exposure"]["status"], "loaded")
-        self.assertGreater(profile["hazard_exposure"]["events"], 0)
+        self.assertGreater(profile["hazard_exposure"]["hazard_occurrences"], 0)
         self.assertEqual(profile["health_access"]["status"], "loaded")
 
     def test_tourism_monthly_coverage(self):
