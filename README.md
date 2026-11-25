@@ -37,6 +37,9 @@ calls:
 | `bootstrap_air_quality.py` | global annual city PM2.5 from SatPM V6.GL.03 |
 | `bootstrap_rent.py` | official Eurostat city rents in local currency |
 | `bootstrap_advisories.py` | US State and UK FCDO country travel advisories |
+| `bootstrap_facilities.py` | Overture Places daily-life facility counts within 5 km |
+| `bootstrap_geography.py` | GeoNames elevation and Natural Earth coastline distance |
+| `bootstrap_airport_access.py` | nearest scheduled-service airport and 100 km counts |
 | `place_profiles.py` | place search, plain-language profiles and comparison used by the MCP server |
 | `mcp_server.py` | Phase 4 FastMCP server (Streamable HTTP, optional SerpApi live pricing) |
 | `Dockerfile` | container image for the pipeline and MCP server |
@@ -796,6 +799,8 @@ Implemented third-party sources:
 | Annual PM2.5 | SatPM V6.GL.03 (CNN) | CC BY 4.0; attribution required | 13,101 cities, 0.1° city-point sample |
 | City rent | Eurostat `prc_colc_rents` | Eurostat reuse with attribution | 42 cities, 2025, local currency; not a rank input |
 | Travel advisories | US State Department + UK FCDO | Public domain / OGL v3.0 | ~220 countries each; two separate scales, not averaged |
+| Facilities | Overture Maps Places | CDLA-Permissive 2.0 | 13,101 cities within 5 km: hospital, pharmacy, school, grocery, park, beach |
+| Airport access | OurAirports | Public domain | 13,101 cities; nearest scheduled airport and 100 km counts |
 | Broadband | Ookla Open Data | **CC BY-NC-SA 4.0; non-commercial; attribution required** | global tiles |
 | GTFS coverage | Mobility Database | catalog metadata CC0 1.0; individual feeds retain provider licences | global catalog |
 | Public transport stops | Overture Places transit facilities | CDLA-Permissive 2.0 / per-provider terms | global where Overture Places has facilities |

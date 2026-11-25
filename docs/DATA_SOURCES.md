@@ -353,6 +353,51 @@ exists; cities without it are neutral (0.5) and are reported via
 | Status | **Implemented; 13,101 cities** |
 | Notes | Satellite/model/monitor-fused annual estimate, not a monitor reading; it cannot resolve near-road or neighbourhood differences. Kept separate from the country-level World Bank PM2.5 indicator. |
 
+### 3.18 Daily-life facilities
+
+| Field | Value |
+| --- | --- |
+| Party | Third-party |
+| Publisher | Overture Maps Foundation |
+| Dataset | Places release `2026-11-18.0`, categories hospital, pharmacy, school, grocery/supermarket, park and beach |
+| URL | https://docs.overturemaps.org/ |
+| Licence | CDLA-Permissive 2.0 |
+| Coverage | 13,101 cities; counts within 5 km of the city centroid |
+| Granularity | Point-of-interest count; presence only |
+| Used by | `bootstrap_facilities.py` → `facility_metrics`; `place_profile.facilities` |
+| Status | **Implemented, global scan** |
+| Notes | A zero is `none_listed`, not proof that no facility exists. Coverage is uneven: Beijing has far fewer mapped pharmacies and schools than European cities. Counts are not quality or capacity. |
+
+### 3.19 Elevation and coastline distance
+
+| Field | Value |
+| --- | --- |
+| Party | Third-party |
+| Publisher | GeoNames; Natural Earth |
+| Dataset | GeoNames `cities15000` DEM field; Natural Earth 10m coastline |
+| URL | https://www.geonames.org/ ; https://www.naturalearthdata.com/ |
+| Licence | GeoNames CC BY 4.0; Natural Earth public domain |
+| Coverage | 13,101 cities |
+| Granularity | City record elevation; straight-line centroid-to-coast distance |
+| Used by | `bootstrap_geography.py` → `destination_geography`; `place_profile.geography` |
+| Status | **Implemented** |
+| Notes | Elevation is the city record's DEM value, not a neighbourhood gradient. Coast distance is not a road distance and does not identify a beach. Daylight hours are computed geometrically from latitude. |
+
+### 3.20 Airport access
+
+| Field | Value |
+| --- | --- |
+| Party | Third-party |
+| Publisher | OurAirports |
+| Dataset | `airports.csv`, scheduled-service airports |
+| URL | https://ourairports.com/data/ |
+| Licence | Public domain |
+| Coverage | 13,101 cities; 4,134 scheduled-service airports |
+| Granularity | Nearest airport plus large/medium counts within 100 km |
+| Used by | `bootstrap_airport_access.py` → `airport_access`; `place_profile.airport_access` |
+| Status | **Implemented** |
+| Notes | Straight-line distance, not drive time. A nearby small field can be closer than the useful commercial hub, so both distance and type are shown. |
+
 ## 4. Missing dimensions and verified candidate sources
 
 These sources were checked but are **not** loaded. They are listed so a
@@ -485,6 +530,9 @@ means without labelling the approximation.
 | `housing_monthly` | Inside Airbnb | Yes (median, nearest city) | `Inside Airbnb (local currency, 30+ night listings)` |
 | `rent_monthly` | Eurostat `prc_colc_rents` | No (latest annual value per dwelling type) | `Eurostat prc_colc_rents (average rent per month in cities)` |
 | `travel_advisory` | US State Department + UK FCDO | No (country-level official advisory) | `US Department of State Travel Advisory`, `UK FCDO Foreign Travel Advice` |
+| `facility_metrics` | Overture Places | Yes (5 km counts) | `Overture Maps Places (facility counts)` |
+| `destination_geography` | GeoNames DEM + Natural Earth 10m coastline | Yes (straight-line distance) | `GeoNames cities15000 (dem, fallback elev)`, `Natural Earth 10m coastline (public domain)` |
+| `airport_access` | OurAirports | Yes (nearest point and 100 km counts) | `OurAirports (scheduled-service airports)` |
 | `tourism_pressure` | Eurostat NUTS 2 tourism + population | Yes (NUTS 2 assignment/division) | `Eurostat tour_occ_nin2m + demo_r_pjangrp3 (NUTS 2)` |
 | `flight_quote_cache` | SerpApi Google Flights | No (cached response) | `SerpApi Google Flights` |
 | `hotel_quote_cache` | SerpApi Google Hotels | No (cached response) | `SerpApi Google Hotels` |

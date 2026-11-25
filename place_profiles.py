@@ -532,6 +532,168 @@ def fetch_climate(cur: Any, destination_ids: list[str]) -> dict[str, list[dict[s
     return out
 
 
+FACILITY_FIELDS = (
+    ("hospital", "hospital_count_5km", "Hospitals"),
+    ("pharmacy", "pharmacy_count_5km", "Pharmacies"),
+    ("school", "school_count_5km", "Schools"),
+    ("grocery", "grocery_count_5km", "Grocery stores"),
+    ("park", "park_count_5km", "Parks"),
+    ("beach", "beach_count_5km", "Beaches"),
+)
+FACILITY_NOTE = (
+    "Overture Places counts within 5 km. These are presence counts, not quality "
+    "or capacity; zero means none listed in the source, not proof that none "
+    "exists, and map coverage is uneven."
+)
+
+
+def fetch_facilities(cur: Any, destination_ids: list[str]) -> dict[str, dict[str, Any]]:
+    if "facility_metrics" not in _existing_tables(cur, ["facility_metrics"]):
+        return {}
+    cur.execute(
+        """
+        SELECT destination_id, hospital_count_5km, pharmacy_count_5km,
+               school_count_5km, grocery_count_5km, park_count_5km,
+               beach_count_5km, source, observed_period
+        FROM facility_metrics
+        WHERE destination_id = ANY(%s)
+        """,
+        (destination_ids,),
+    )
+    out: dict[str, dict[str, Any]] = {}
+    for row in cur.fetchall():
+        row = dict(row)
+        out[str(row.pop("destination_id"))] = row
+    return out
+
+
+def facility_summary(row: dict[str, Any] | None) -> dict[str, Any]:
+    if not row:
+        return {"status": "not_loaded"}
+    counts = {}
+    for key, column, label in FACILITY_FIELDS:
+        count = row.get(column)
+        counts[key] = {
+            "label": label,
+            "count": count,
+            "status": "none_listed" if count == 0 else "measured",
+        }
+    return {
+        "status": "loaded",
+        "counts": counts,
+        "source": row.get("source"),
+        "observed_period": row.get("observed_period"),
+        "note": FACILITY_NOTE,
+    }
+
+
+def fetch_airport_access(cur: Any, destination_ids: list[str]) -> dict[str, dict[str, Any]]:
+    if "airport_access" not in _existing_tables(cur, ["airport_access"]):
+        return {}
+    cur.execute(
+        """
+        SELECT destination_id, nearest_iata, nearest_name, nearest_type,
+               nearest_distance_km, large_airports_100km, medium_airports_100km,
+               source, observed_period
+        FROM airport_access
+        WHERE destination_id = ANY(%s)
+        """,
+        (destination_ids,),
+    )
+    out: dict[str, dict[str, Any]] = {}
+    for row in cur.fetchall():
+        row = dict(row)
+        out[str(row.pop("destination_id"))] = row
+    return out
+
+
+def airport_summary(row: dict[str, Any] | None) -> dict[str, Any]:
+    if not row:
+        return {"status": "not_loaded"}
+    return {
+        "status": "loaded",
+        "nearest": {
+            "iata": row.get("nearest_iata"),
+            "name": row.get("nearest_name"),
+            "type": row.get("nearest_type"),
+            "distance_km": row.get("nearest_distance_km"),
+        },
+        "large_airports_100km": row.get("large_airports_100km"),
+        "medium_airports_100km": row.get("medium_airports_100km"),
+        "source": row.get("source"),
+        "observed_period": row.get("observed_period"),
+        "note": (
+            "Straight-line distance to the nearest scheduled-service airport; "
+            "counts are large/medium airports within 100 km. Not a drive time."
+        ),
+    }
+
+
+def fetch_geography(cur: Any, destination_ids: list[str]) -> dict[str, dict[str, Any]]:
+    """Elevation and coastline distance, if ``destination_geography`` is loaded."""
+    if "destination_geography" not in _existing_tables(cur, ["destination_geography"]):
+        return {}
+    cur.execute(
+        """
+        SELECT destination_id, elevation_m, coast_distance_km,
+               elevation_source, elevation_period, coast_source, coast_period
+        FROM destination_geography
+        WHERE destination_id = ANY(%s)
+        """,
+        (destination_ids,),
+    )
+    out: dict[str, dict[str, Any]] = {}
+    for row in cur.fetchall():
+        row = dict(row)
+        out[str(row.pop("destination_id"))] = row
+    return out
+
+
+def daylight_hours(latitude: float, month: int) -> float:
+    """Geometric daylight at the 15th of a month, without refraction."""
+    day_of_year = [15, 46, 74, 105, 135, 166, 196, 227, 258, 288, 319, 349][month - 1]
+    declination = math.radians(
+        23.44 * math.sin(2 * math.pi * (284 + day_of_year) / 365.0)
+    )
+    lat = math.radians(max(-89.9, min(89.9, float(latitude))))
+    cos_hour_angle = -math.tan(lat) * math.tan(declination)
+    if cos_hour_angle <= -1:
+        return 24.0
+    if cos_hour_angle >= 1:
+        return 0.0
+    return round(24.0 * math.acos(cos_hour_angle) / math.pi, 1)
+
+
+def geography_summary(row: dict[str, Any] | None, latitude: float) -> dict[str, Any]:
+    if not row:
+        return {
+            "status": "not_loaded",
+            "daylight_hours": [
+                {"month": month, "hours": daylight_hours(latitude, month)}
+                for month in range(1, 13)
+            ],
+        }
+    return {
+        "status": "loaded",
+        "elevation_m": row.get("elevation_m"),
+        "coast_distance_km": row.get("coast_distance_km"),
+        "elevation_source": row.get("elevation_source"),
+        "elevation_period": row.get("elevation_period"),
+        "coast_source": row.get("coast_source"),
+        "coast_period": row.get("coast_period"),
+        "daylight_hours": [
+            {"month": month, "hours": daylight_hours(latitude, month)}
+            for month in range(1, 13)
+        ],
+        "note": (
+            "Elevation is the GeoNames city record; coastline distance is a "
+            "straight line to the Natural Earth 10m coast, not a road or beach "
+            "distance. Daylight is geometric at the city latitude, without "
+            "refraction."
+        ),
+    }
+
+
 DWELLING_LABELS = {
     "HOUSE_D": "Detached house",
     "HOUSE_ND": "Non-detached house",
@@ -1343,6 +1505,9 @@ def build_profile(cur: Any, destination_id: str) -> dict[str, Any]:
     climate = fetch_climate(cur, [destination_id]).get(destination_id, [])
     recent_climate = fetch_recent_climate(cur, [destination_id]).get(destination_id, [])
     rents = fetch_rents(cur, [destination_id]).get(destination_id, [])
+    geography = fetch_geography(cur, [destination_id]).get(destination_id)
+    facilities = fetch_facilities(cur, [destination_id]).get(destination_id)
+    airports = fetch_airport_access(cur, [destination_id]).get(destination_id)
     country = fetch_country_context(cur, [basics["country_iso2"]]).get(basics["country_iso2"], {})
 
     groups: dict[str, list[dict[str, Any]]] = {}
@@ -1379,6 +1544,9 @@ def build_profile(cur: Any, destination_id: str) -> dict[str, Any]:
             "months": recent_climate,
         },
         "housing": rent_summary(rents),
+        "geography": geography_summary(geography, basics["lat"]),
+        "facilities": facility_summary(facilities),
+        "airport_access": airport_summary(airports),
         "country": country,
         "not_measured_for_this_city": not_measured,
         "not_in_database_for_any_city": NOT_IN_DATABASE + not_loaded,
@@ -1392,6 +1560,9 @@ def build_comparison(cur: Any, destination_ids: list[str]) -> dict[str, Any]:
     metric_rows = fetch_metric_rows(cur, ids)
     climate = fetch_climate(cur, ids)
     rents = fetch_rents(cur, ids)
+    geography = fetch_geography(cur, ids)
+    facilities = fetch_facilities(cur, ids)
+    airports = fetch_airport_access(cur, ids)
     countries = sorted({basics[i]["country_iso2"] for i in ids})
     country_context = fetch_country_context(cur, countries)
 
@@ -1489,6 +1660,11 @@ def build_comparison(cur: Any, destination_ids: list[str]) -> dict[str, Any]:
         },
         "climate_note": CLIMATE_NOTE,
         "housing": {i: rent_summary(rents.get(i, [])) for i in ids},
+        "geography": {
+            i: geography_summary(geography.get(i), basics[i]["lat"]) for i in ids
+        },
+        "facilities": {i: facility_summary(facilities.get(i)) for i in ids},
+        "airport_access": {i: airport_summary(airports.get(i)) for i in ids},
         "country_context": country_rows,
         "not_in_database_for_any_city": NOT_IN_DATABASE
         + [label + " (dataset not loaded for any city)" for label in not_loaded],

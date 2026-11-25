@@ -31,6 +31,8 @@ final production numbers.
 | `housing_monthly` | 0 | Optional Inside Airbnb load not run globally |
 | `rent_monthly` | 206 | Eurostat official average city rents, 42 cities × 5 dwelling types, 2025, local currency |
 | `travel_advisory` | 442 | US State (217) + UK FCDO (225) country advisories, retrieved 2026-11-25 |
+| `facility_metrics` | 13,101 | Overture Places counts within 5 km: hospital, pharmacy, school, grocery, park, beach |
+| `airport_access` | 13,101 | OurAirports nearest scheduled-service airport + 100 km counts |
 | `flight_quote_cache` / `hotel_quote_cache` | 0 | Populated only by MCP stage 2 with SerpApi key |
 | `destination_aliases` | 188,403 | GeoNames names/alternatenames for all 13,101 cities (`bootstrap_places.py`) |
 | `country_facts` | 252 | GeoNames countryInfo; every destination has a country row |
@@ -49,6 +51,8 @@ final production numbers.
 | Long-term rent | Partial (42 cities) | Eurostat `prc_colc_rents` official city averages in local currency; HUD/ONS/CMHC/ABS are country-specific and not yet loaded. |
 | Rainy/hot days | Missing | Open-Meteo/ERA5/NASA POWER are candidates; no batch enrichment run. |
 | Air quality | Loaded, not scored | SatPM V6.GL.03 annual city PM2.5 for 13,101 cities; exposed as a metric and shown in profiles, not in `final_score`. |
+| Facilities | Loaded, not scored | Overture Places presence counts for hospitals, pharmacies, schools, groceries, parks and beaches; zero is `none_listed`. |
+| Airport access | Loaded, not scored | Nearest scheduled-service airport and large/medium counts within 100 km. |
 | Metro clustering | Implemented (9,730 cities) | GHSL UCDB R2024A polygon containment; 3,371 cities below the UCDB cutoff stay individual. Rank dedupe is display-level. |
 
 ## 3. Transport and walkability
