@@ -228,12 +228,13 @@ class LiveNatureTests(unittest.TestCase):
             row = cur.fetchone()
             if row["n"] == 0:
                 self.skipTest("quality index not built")
-            self.assertGreaterEqual(row["ranked"], 450)
+            self.assertGreaterEqual(row["ranked"], 440)
             cur.execute(
                 """
                 SELECT quality_score, environment_score, culture_food_score,
                        safety_health_score, affordability_score,
-                       walkability_score, climate_score, connectivity_score
+                       walkability_score, public_transport_score,
+                       climate_score, connectivity_score
                 FROM city_quality_index WHERE name = 'Barcelona'
                 """
             )
@@ -241,12 +242,13 @@ class LiveNatureTests(unittest.TestCase):
         self.assertIsNotNone(barcelona)
         self.assertGreater(barcelona["quality_score"], 70)
         expected = (
-            0.30 * barcelona["environment_score"]
+            0.25 * barcelona["environment_score"]
             + 0.20 * barcelona["culture_food_score"]
             + 0.15 * barcelona["safety_health_score"]
             + 0.10 * barcelona["affordability_score"]
             + 0.10 * barcelona["walkability_score"]
-            + 0.10 * barcelona["climate_score"]
+            + 0.10 * barcelona["public_transport_score"]
+            + 0.05 * barcelona["climate_score"]
             + 0.05 * barcelona["connectivity_score"]
         )
         self.assertAlmostEqual(

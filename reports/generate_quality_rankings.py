@@ -30,8 +30,8 @@ MIN_COMPLETENESS = 0.90
 QUERY = """
 SELECT destination_id, name, country_iso2, centre_population,
        environment_score, culture_food_score, safety_health_score,
-       affordability_score, walkability_score, climate_score,
-       connectivity_score, quality_score, data_completeness,
+       affordability_score, walkability_score, public_transport_score,
+       climate_score, connectivity_score, quality_score, data_completeness,
        missing_dimensions
 FROM city_quality_index
 ORDER BY quality_score DESC, centre_population DESC
@@ -47,6 +47,7 @@ FIELDS = [
     ("safety_health", lambda r: round(r["safety_health_score"], 2) if r["safety_health_score"] is not None else None),
     ("affordability", lambda r: round(r["affordability_score"], 2) if r["affordability_score"] is not None else None),
     ("walkability", lambda r: round(r["walkability_score"], 2) if r["walkability_score"] is not None else None),
+    ("public_transport", lambda r: round(r["public_transport_score"], 2) if r["public_transport_score"] is not None else None),
     ("climate", lambda r: round(r["climate_score"], 2) if r["climate_score"] is not None else None),
     ("connectivity", lambda r: round(r["connectivity_score"], 2) if r["connectivity_score"] is not None else None),
     ("data_completeness", lambda r: round(r["data_completeness"], 2)),
@@ -78,8 +79,8 @@ def write_csv(path: Path, rows: list[dict[str, Any]]) -> None:
 
 def markdown(rows: list[dict[str, Any]], limit: int = 100) -> str:
     lines = [
-        "| # | City | Country | Quality | Environment | Culture/food | Safety/health | Affordability | Walkability | Climate | Connectivity |",
-        "|---:|---|---:|---:|---:|---:|---:|---:|---:|---:|---:|",
+        "| # | City | Country | Quality | Environment | Culture/food | Safety/health | Affordability | Walkability | Public transport | Climate | Connectivity |",
+        "|---:|---|---:|---:|---:|---:|---:|---:|---:|---:|---:|---:|",
     ]
     for i, row in enumerate(rows[:limit], 1):
         def fmt(key):
@@ -90,6 +91,7 @@ def markdown(rows: list[dict[str, Any]], limit: int = 100) -> str:
             f"{row['quality_score']:.1f} | {fmt('environment_score')} | "
             f"{fmt('culture_food_score')} | {fmt('safety_health_score')} | "
             f"{fmt('affordability_score')} | {fmt('walkability_score')} | "
+            f"{fmt('public_transport_score')} | "
             f"{fmt('climate_score')} | {fmt('connectivity_score')} |"
         )
     return "\n".join(lines) + "\n"
@@ -117,7 +119,7 @@ def main() -> int:
     ]
 
     write_csv(OUT / "quality_top100.csv", ranked[:100])
-    write_csv(OUT / "quality_all_491.csv", ranked)
+    write_csv(OUT / "quality_all_445.csv", ranked)
     write_csv(OUT / "quality_excluded_low_completeness.csv", excluded)
     (OUT / "quality_top100.md").write_text(markdown(ranked), encoding="utf-8")
     print(

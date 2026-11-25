@@ -62,6 +62,8 @@ CREATE TABLE city_quality_index (
     price_level_vs_usd      DOUBLE PRECISION,
     out_of_pocket_pct       DOUBLE PRECISION,
     walkability_score       DOUBLE PRECISION,
+    transit_stops_5km       INT,
+    public_transport_score  DOUBLE PRECISION,
     median_down_mbps        DOUBLE PRECISION,
     median_up_mbps          DOUBLE PRECISION,
     latency_ms              DOUBLE PRECISION,
@@ -96,6 +98,7 @@ WITH base AS (
            p.cuisine_entropy,
            fm.park_count_5km,
            w.score AS walk_score,
+           mm.transit_stops_5km,
            bb.median_down_mbps,
            bb.median_up_mbps,
            bb.avg_latency_ms,
@@ -111,6 +114,7 @@ WITH base AS (
     LEFT JOIN poi_metrics p USING (destination_id)
     LEFT JOIN facility_metrics fm USING (destination_id)
     LEFT JOIN walkability_scores w USING (destination_id)
+    LEFT JOIN mobility_metrics mm USING (destination_id)
     LEFT JOIN broadband_metrics bb USING (destination_id)
     LEFT JOIN (
         SELECT country_iso2,
@@ -135,12 +139,13 @@ SELECT * FROM base
 """
 
 WEIGHTS = {
-    "environment": 0.30,
+    "environment": 0.25,
     "culture_food": 0.20,
     "safety_health": 0.15,
     "affordability": 0.10,
     "walkability": 0.10,
-    "climate": 0.10,
+    "public_transport": 0.10,
+    "climate": 0.05,
     "connectivity": 0.05,
 }
 
@@ -182,6 +187,10 @@ def load(database_url: str) -> dict[str, Any]:
                 row["restaurant_log"] = math.log1p(row["restaurant_count"])
             else:
                 row["restaurant_log"] = None
+            if row["transit_stops_5km"] is not None:
+                row["transit_log"] = math.log1p(row["transit_stops_5km"])
+            else:
+                row["transit_log"] = None
             if row["park_count_5km"] and row["park_count_5km"] > 0:
                 row["park_score"] = min(
                     100.0,
@@ -212,6 +221,7 @@ def load(database_url: str) -> dict[str, Any]:
             "down": percentile_map([r["median_down_mbps"] for r in rows]),
             "up": percentile_map([r["median_up_mbps"] for r in rows]),
             "latency": percentile_map([r["avg_latency_ms"] for r in rows]),
+            "transit": percentile_map([r["transit_log"] for r in rows]),
         }
 
         def pct(row: dict[str, Any], key: str, source: str, lower_better: bool = False):
@@ -259,12 +269,14 @@ def load(database_url: str) -> dict[str, Any]:
                 ]
             )
             row["walkability"] = row["walk_score"]
+            row["public_transport"] = pct(row, "transit", "transit_log")
             dimensions = [
                 ("environment", row["environment"]),
                 ("culture_food", row["culture_food"]),
                 ("safety_health", row["safety_health"]),
                 ("affordability", row["affordability"]),
                 ("walkability", row["walkability"]),
+                ("public_transport", row["public_transport"]),
                 ("climate", row["climate_score"]),
                 ("connectivity", row["connectivity"]),
             ]
@@ -290,7 +302,8 @@ def load(database_url: str) -> dict[str, Any]:
                     homicide_per_100k, road_deaths_per_100k,
                     life_expectancy_years, physicians_per_1000,
                     price_level_vs_usd, out_of_pocket_pct,
-                    walkability_score, median_down_mbps, median_up_mbps,
+                    walkability_score, transit_stops_5km,
+                    public_transport_score, median_down_mbps, median_up_mbps,
                     latency_ms, climate_avg_high_c, climate_rainy_days,
                     environment_score, culture_food_score, safety_health_score,
                     affordability_score, climate_score, connectivity_score,
@@ -299,7 +312,7 @@ def load(database_url: str) -> dict[str, Any]:
                 ) VALUES (
                     %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s,
                     %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s,
-                    %s, %s, %s, %s, %s, %s
+                    %s, %s, %s, %s, %s, %s, %s, %s
                 )
                 """,
                 [
@@ -312,7 +325,8 @@ def load(database_url: str) -> dict[str, Any]:
                         row["road_traffic_deaths_per_100k"],
                         row["life_expectancy_years"], row["physicians_per_1000"],
                         row["price_level_vs_usd"], row["out_of_pocket_health_pct"],
-                        row["walk_score"], row["median_down_mbps"],
+                        row["walk_score"], row["transit_stops_5km"],
+                        row["public_transport"], row["median_down_mbps"],
                         row["median_up_mbps"], row["avg_latency_ms"],
                         row["avg_high"], row["avg_rainy"],
                         row["environment"], row["culture_food"],
