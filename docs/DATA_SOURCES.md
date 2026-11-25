@@ -189,9 +189,9 @@ README states the CC BY-NC-SA 4.0 licence and attribution wording.
 | Geography | GISCO NUTS 2 2024: https://gisco-services.ec.europa.eu/distribution/v2/nuts/geojson/NUTS_RG_01M_2024_4326_LEVL_2.geojson |
 | Licence | Eurostat reuse with attribution. Editorial content is CC BY 4.0; statistical data reuse is authorised with source acknowledgement under the Eurostat copyright notice, subject to its exceptions. |
 | Coverage | EU/EFTA/candidate countries; **not global** |
-| Granularity | NUTS 2 annual total; assigned to a city by centroid; denominator is NUTS 2 population |
-| Used by | `bootstrap_supplemental.py --eurostat-tourism` → `tourism_pressure` |
-| Status | **Implemented and tested: 1,405 rows in the 2026-11-21 global run; 1,638 cities assigned to a NUTS 2 region** |
+| Granularity | NUTS 2 annual total and monthly nights; assigned to a city by centroid; denominator is NUTS 2 population |
+| Used by | `bootstrap_supplemental.py --eurostat-tourism` → `tourism_pressure`, `tourism_monthly` |
+| Status | **Implemented: 1,405 annual rows and 16,860 monthly rows; 1,638 cities assigned to a NUTS 2 region** |
 | Notes | This is a **regional pressure proxy**, not a city-level tourist count. NUTS 3 tourism is only optionally published from 2023 and is not used here. |
 
 Verified API examples on 2026-11-21:
