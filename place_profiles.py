@@ -1753,6 +1753,7 @@ def build_profile(cur: Any, destination_id: str) -> dict[str, Any]:
         elif entry["status"] == "none_listed":
             not_measured.append(metric.label + " (none listed; likely a map-coverage gap)")
     basics["nearest_airports_iata"] = basics.pop("iata_codes") or []
+    basics.setdefault("urban_centre", None)
     return {
         "place": basics,
         "metrics": [
