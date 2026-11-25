@@ -1207,7 +1207,21 @@ def fetch_basics(cur: Any, destination_ids: list[str]) -> dict[str, dict[str, An
         (destination_ids,),
     )
     out = {str(r["destination_id"]): dict(r) for r in cur.fetchall()}
-    if "street_network_metrics" in _existing_tables(cur, ["street_network_metrics"]):
+    if "destination_metro" in _existing_tables(cur, ["destination_metro"]):
+        cur.execute(
+            """
+            SELECT destination_id, urban_centre_id, urban_centre_name,
+                   urban_centre_country, match_kind, match_distance_km,
+                   centre_area_km2, centre_population
+            FROM destination_metro
+            WHERE destination_id = ANY(%s)
+            """,
+            (destination_ids,),
+        )
+        for row in cur.fetchall():
+            row = dict(row)
+            out[str(row.pop("destination_id"))]["urban_centre"] = row
+    elif "street_network_metrics" in _existing_tables(cur, ["street_network_metrics"]):
         cur.execute(
             """
             SELECT destination_id, urban_centre_id, urban_centre_name,

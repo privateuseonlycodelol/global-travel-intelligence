@@ -15,7 +15,6 @@ final production numbers.
 | `climate_monthly` | 157,188 | WorldClim 2.1, 12 months × 13,099 cities |
 | `climate_monthly.avg_rainy_days` non-null | 0 | Open-Meteo/ERA5 enrichment not run |
 | `climate_monthly.avg_hot_days_30c` non-null | 0 | WorldClim baseline only |
-| `climate_recent` | 1,416 | 118 Italian cities x 12 months (2015-2024, NASA POWER) |
 | `poi_metrics` | 13,101 | Overture Places global scan |
 | `broadband_metrics` | 11,902 | Ookla 2026 Q2 fixed tiles |
 | `mobility_metrics` | 9,553 | GTFS + transit stops + walk/rail rows |
@@ -23,6 +22,8 @@ final production numbers.
 | `walkability_scores` | 662 | How Walkable 2026: 690 ranked cities, 662 matched by name/alias |
 | `ghsci_city_indicators` | 25 | GHSCI: Trento pilot + 24 of the published 25-city study |
 | `air_quality_annual` | 13,101 | SatPM V6.GL.03 annual PM2.5, 2024, 0.1° point sample |
+| `destination_metro` | 9,730 | GHSL UCDB R2024A polygon containment (9,065) or ≤5 km edge match (665) |
+| `ghsl_urban_centres` | 11,422 | GHSL UCDB R2024A urban-centre polygons, WGS84 |
 | `climate_recent` | 20,148 | 1,679 cities x 12 months, NASA POWER 2015-2024 |
 | `mobility_metrics` with GTFS > 0 | 4,000 | Mobility Database |
 | `mobility_metrics` with transit stops | 9,008 | Overture Places transit facilities within 5 km |
@@ -31,7 +32,7 @@ final production numbers.
 | `flight_quote_cache` / `hotel_quote_cache` | 0 | Populated only by MCP stage 2 with SerpApi key |
 | `destination_aliases` | 188,403 | GeoNames names/alternatenames for all 13,101 cities (`bootstrap_places.py`) |
 | `country_facts` | 252 | GeoNames countryInfo; every destination has a country row |
-| `country_indicators` | 1,203 | World Bank: homicide 177, PM2.5 200, life expectancy 216, GDP PPP 201, political stability 207, price level 202 countries |
+| `country_indicators` | 1,943 | World Bank: homicide 177, PM2.5 200, life expectancy 216, GDP PPP 201, political stability 207, price level 202, physicians 193, beds 164, road deaths 190, out-of-pocket 193 |
 | `destination_admin1` | 13,094 | GeoNames first-level region (state/province) codes; 13,071 with a name |
 
 ## 2. What is missing and why
@@ -45,8 +46,8 @@ final production numbers.
 | Safety / crime | Missing | Eurostat crime is country-level; FBI/UK Police are country-specific. No global city-level source. |
 | Long-term rent | Missing | Inside Airbnb is short-term/local-currency; HUD/ONS/CMHC/ABS are country-specific. |
 | Rainy/hot days | Missing | Open-Meteo/ERA5/NASA POWER are candidates; no batch enrichment run. |
-| Air quality | Not scored | OpenAQ/CAMS are candidates; not part of the current scorer. |
-| Metro clustering | Not implemented | Separate municipalities can rank beside a core city; see README caveat. |
+| Air quality | Loaded, not scored | SatPM V6.GL.03 annual city PM2.5 for 13,101 cities; exposed as a metric and shown in profiles, not in `final_score`. |
+| Metro clustering | Implemented (9,730 cities) | GHSL UCDB R2024A polygon containment; 3,371 cities below the UCDB cutoff stay individual. Rank dedupe is display-level. |
 
 ## 3. Transport and walkability
 

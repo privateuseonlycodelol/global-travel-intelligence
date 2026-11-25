@@ -797,51 +797,73 @@ def _apply_stage2_rescore(
 
 
 def _dedupe_metro_rows(rows: list[dict[str, Any]]) -> tuple[list[dict[str, Any]], int]:
-    """Keep one row per GHS urban centre, annotating the shared-group size.
+    """Keep one row per GHSL urban centre, annotating the shared-group size.
 
-    Rows without a street-network match are kept individually. The highest
-    already-sorted row for each centre wins.
+    ``destination_metro`` is the polygon-based assignment. Rows without one are
+    kept individually. The highest already-sorted row for each centre wins.
     """
     if len(rows) < 2:
         return rows, 0
     ids = [str(row.get("destination_id")) for row in rows if row.get("destination_id")]
+    groups: dict[str, dict[str, Any]] = {}
     try:
         with _get_pool().connection() as conn:
             with conn.cursor() as cur:
-                cur.execute("SELECT to_regclass('street_network_metrics') IS NOT NULL AS present")
-                if not cur.fetchone()["present"]:
-                    return rows, 0
                 cur.execute(
                     """
-                    SELECT destination_id, urban_centre_id, urban_centre_name
-                    FROM street_network_metrics
-                    WHERE destination_id = ANY(%s)
-                    """,
-                    (ids,),
+                    SELECT to_regclass('destination_metro') IS NOT NULL AS metro,
+                           to_regclass('street_network_metrics') IS NOT NULL AS street
+                    """
                 )
-                groups = {
-                    str(r["destination_id"]): (r["urban_centre_id"], r["urban_centre_name"])
-                    for r in cur.fetchall()
-                }
+                present = cur.fetchone()
+                if present["metro"]:
+                    cur.execute(
+                        """
+                        SELECT destination_id, urban_centre_id, urban_centre_name,
+                               urban_centre_country, centre_population
+                        FROM destination_metro
+                        WHERE destination_id = ANY(%s)
+                        """,
+                        (ids,),
+                    )
+                elif present["street"]:
+                    cur.execute(
+                        """
+                        SELECT destination_id, urban_centre_id, urban_centre_name,
+                               NULL::text AS urban_centre_country,
+                               resident_population AS centre_population
+                        FROM street_network_metrics
+                        WHERE destination_id = ANY(%s)
+                        """,
+                        (ids,),
+                    )
+                else:
+                    return rows, 0
+                for record in cur.fetchall():
+                    groups[str(record["destination_id"])] = dict(record)
     except Exception:
         return rows, 0
     if not groups:
         return rows, 0
     counts: dict[Any, int] = {}
-    for centre, _name in groups.values():
+    for record in groups.values():
+        centre = record["urban_centre_id"]
         counts[centre] = counts.get(centre, 0) + 1
     kept: list[dict[str, Any]] = []
     seen: set[Any] = set()
     for row in rows:
         dest = str(row.get("destination_id"))
-        centre, name = groups.get(dest, (None, None))
-        if centre is not None:
+        record = groups.get(dest)
+        if record is not None:
+            centre = record["urban_centre_id"]
             if centre in seen:
                 continue
             seen.add(centre)
             row["metro_group"] = {
                 "urban_centre_id": centre,
-                "urban_centre_name": name,
+                "urban_centre_name": record["urban_centre_name"],
+                "urban_centre_country": record.get("urban_centre_country"),
+                "urban_centre_population": record.get("centre_population"),
                 "destinations_in_result": counts.get(centre, 1),
             }
         kept.append(row)

@@ -412,7 +412,7 @@ without an explicit rate table and date.
 | How Walkable city ranking | City centre + 5 km; 690 cities/95 countries | CC BY 4.0; implemented | **Implemented** as the published 0-100 walkability score. |
 | Boeing global street-network indicators | Urban area; 10,351 areas, global | CC0 1.0 (derived) / ODbL (OSM) | Loaded as urban-form context (`street_network_metrics`); not shown in profiles. |
 | OpenStreetMap / Geofabrik | Road/path network; global | ODbL; verified | Candidate for a full pedestrian-network scan; large extracts and processing required. |
-| GHSL (JRC) | Built-up/urbanisation raster; global | EU JRC open data; CC BY 4.0 for UCDB | Boundary/centroid context; not a walkability score. |
+| GHSL (JRC) UCDB R2024A geography | Urban-centre polygons; 11,422 centres, global | EU JRC open data; CC BY 4.0 | **Implemented**: polygon containment assigns 9,730 cities to a metro (`destination_metro`). Grouping context only, not a walkability score. |
 | WHO/UN-Habitat | Country/global reports | Varies | Not city-level walkability. |
 
 **Decision:** Use the How Walkable score as the user-facing walkability number,
@@ -476,6 +476,8 @@ means without labelling the approximation.
 | `walkability_scores` | How Walkable city ranking | No (published score; name/alias match) | `How Walkable (howwalkable.com), CC BY 4.0` |
 | `ghsci_city_indicators` | GHSCI analysis (OSM + GHSL + UCDB) | Yes (access, density, index) | `GHSCI (healthysustainablecities/global-indicators)` |
 | `street_network_metrics` | Boeing street-network indicators + GHSL UCDB centroids | Yes (density; name/distance match) | `Global Urban Street Networks Indicators (Boeing 2026) from 2025 OpenStreetMap; GHSL urban centre boundary` |
+| `destination_metro` | GHSL UCDB R2024A urban-centre polygons | Yes (point-in-polygon; ≤5 km edge fallback) | `GHSL UCDB R2024A urban-centre boundary (European Commission JRC)` |
+| `ghsl_urban_centres` | GHSL UCDB R2024A geography theme | No (geometry converted to WGS84) | n/a |
 | `housing_monthly` | Inside Airbnb | Yes (median, nearest city) | `Inside Airbnb (local currency, 30+ night listings)` |
 | `tourism_pressure` | Eurostat NUTS 2 tourism + population | Yes (NUTS 2 assignment/division) | `Eurostat tour_occ_nin2m + demo_r_pjangrp3 (NUTS 2)` |
 | `flight_quote_cache` | SerpApi Google Flights | No (cached response) | `SerpApi Google Flights` |

@@ -355,15 +355,14 @@ this implementation:
 - **City population** comes from GeoNames city-proper records and can be years
   out of date. It is not a metro population. The source file is
   `cities15000.zip`, so `--min-pop` below 15,000 cannot add smaller places.
-- **Metro de-duplication is a heuristic.** It removes sub-city records
-  (Manhattan/Brooklyn, Tokyo wards, Barcelona's Sant Martí). Separate
-  municipalities in the same metro — L'Hospitalet, Badalona, Cambridge,
-  Oakland, Pantin, Montreuil — are kept, because they are legally distinct
-  cities, and can rank beside the core city because their 5 km POI radii
-  overlap. London boroughs such as Westminster and Islington are `PPLA3` with
-  distinct admin3 codes, so they survive too; filter them or add a
-  metro-cluster key if you want one row per metro. Use
-  `--no-metro-dedupe` for every non-`PPLX` GeoNames row.
+- **Metro grouping is polygon-based for display.** The city table keeps legally
+  separate municipalities (L'Hospitalet, Badalona, Westminster, Islington), so
+  their 5 km POI radii can overlap. `destination_metro` assigns each city point
+  to a GHSL UCDB R2024A urban-centre polygon (9,730 cities into 7,018 centres;
+  3,371 below the UCDB cutoff stay individual). `rank_destinations` returns one
+  row per centre by default and exposes the shared `metro_group`; the
+  percentiles themselves are still computed across all cities. Pass
+  `--no-metro-dedupe` only to the city-table build, not to the ranker.
 - **WorldClim 2.1 is a 1970–2000 climatology**, not recent daily ERA5. The
   `median_temp_max_c` / `median_temp_min_c` columns are monthly **means of daily
   max/min** (the Phase-1 column names are retained); `precip_mm` is the monthly

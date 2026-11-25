@@ -23,6 +23,11 @@ geography theme (CC BY 4.0). A destination accepts a match when its name is one
 of the urban centre's names, or when the two centres are within 12 km; the
 maximum search radius is 25 km and the country must agree.
 
+That centroid heuristic is retained only to attach the street-form indicators.
+It is not the metro key: ``bootstrap_metro.py`` performs point-in-polygon
+containment against the published UCDB boundaries and writes
+``destination_metro``, which profiles and rank dedupe use.
+
 Intersection density is a standard *component* of walkability (a denser, more
 connected grid), not a door-to-door walking score: it does not measure
 sidewalks, crossings, terrain, safety or how many destinations are reachable on
@@ -77,7 +82,8 @@ CENTROIDS_GPKG_NAME = "GHS_UCDB_THEME_GEOGRAPHY_GLOBE_R2024A.gpkg"
 MAX_MATCH_KM = 25.0
 NEARBY_MATCH_KM = 12.0
 MAX_NAME_MATCH_KM = 100.0  # large urban centres can have a distant centroid
-MOLLWEIDE_RADIUS_M = 6371008.8  # ESRI:54009 World Mollweide
+MOLLWEIDE_RADIUS_M = 6378137.0  # ESRI:54009 World Mollweide sphere
+EARTH_RADIUS_KM = 6371.0088
 
 SOURCE = (
     "Global Urban Street Networks Indicators (Boeing 2026) from 2025 "
@@ -252,7 +258,7 @@ def haversine_km(lat1: float, lon1: float, lat2: float, lon2: float) -> float:
         math.sin(dphi / 2) ** 2
         + math.cos(p1) * math.cos(p2) * math.sin(dlambda / 2) ** 2
     )
-    return 2 * MOLLWEIDE_RADIUS_M * math.asin(min(1.0, math.sqrt(a))) / 1000
+    return 2 * EARTH_RADIUS_KM * math.asin(min(1.0, math.sqrt(a)))
 
 
 def _grid_key(lat: float, lon: float) -> tuple[int, int]:
