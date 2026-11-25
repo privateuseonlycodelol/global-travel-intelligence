@@ -1,9 +1,9 @@
 # GHSCI on demand
 
-> **Design only — no on-demand worker.** The Trento pilot row is loaded in
-> `ghsci_city_indicators`, and the tables/schema exist; `place_profile` does
-> not queue cities. All other GHSCI values are absent. Treat this document as
-> the build plan.
+> **Design only — no on-demand worker.** Trento and the 24 published
+> GHSCI 25-city study cities are loaded in `ghsci_city_indicators`; the tables
+> and schema exist, but `place_profile` does not queue cities. All other
+> GHSCI values are absent. Treat this document as the build plan.
 
 Chosen model: **no planet file, no global batch**. Compute a city when it is
 requested, cache the result, and keep only a bounded extract cache on disk.

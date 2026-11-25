@@ -144,7 +144,7 @@ METRICS: tuple[Metric, ...] = (
            note=("GHSCI components: population density, intersection density and daily living "
                  "access, standardised against the published 25-city reference. It is not 0-100 "
                  "and not comparable with the How Walkable score."),
-           cohort="cities with a GHSCI run",
+           cohort="cities with a GHSCI run (2021 study + Trento 2026)",
            source_url_expr="g.source_url"),
     Metric("ghsci_pct_fresh_food_500m", "g", "pct_fresh_food_500m",
            "Residents within a 500 m walk of a fresh-food market", "%", "higher",
@@ -245,8 +245,8 @@ NOT_IN_DATABASE = [
     "City-level air quality (only the national PM2.5 exposure is loaded)",
     "Neighbourhood-level walkability, sidewalk quality and crossing safety "
     "(the published score covers the city centre, not a neighbourhood)",
-    "GHSCI scoring for cities without a completed run (pilot value exists for "
-    "Trento only)",
+    "GHSCI scoring for cities without a completed run (Trento and the 24 "
+    "published 25-city study cities only)",
     "Street-network form (intersections, dead ends) is stored for analysis but "
     "deliberately not shown as walkability",
     "Beaches, parks, healthcare and schools",

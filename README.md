@@ -517,11 +517,11 @@ What the score is and is not:
   without it are neutral in the ranking, and `excluded_for_no_evidence`
   reports rows dropped for having no active evidence. The raw Overture
   `pedestrian_ratio_2km` remains a separate context field, not the score.
-- A separate **Walkability (GHSCI)** group appears only for cities with a
-  completed GHSCI run (currently Trento): 500 m access percentages, density
-  inputs and the 25-city-reference z-score. It is not comparable with the
-  How Walkable 0–100 score and is not queued on demand. See
-  [docs/GHSCI_ON_DEMAND.md](docs/GHSCI_ON_DEMAND.md).
+- A separate **Walkability (GHSCI)** group appears for Trento and the 24
+  published GHSCI 25-city study cities: 500 m access percentages, density
+  inputs and the 25-city-reference z-score. The study rows are 2021; Trento
+  is 2026. It is not comparable with the How Walkable 0–100 score and is not
+  queued on demand. See [docs/GHSCI_ON_DEMAND.md](docs/GHSCI_ON_DEMAND.md).
 
 The previous street-grid experiment (`street_network_metrics`, intersections per
 km² and dead-end share) is still loaded by `bootstrap_street_network.py` for
