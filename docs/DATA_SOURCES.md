@@ -470,7 +470,7 @@ US/UK-only city-crime mode is added, it must be labelled as such.
 | Candidate | Granularity / coverage | Licence / status | Assessment |
 | --- | --- | --- | --- |
 | Inside Airbnb | City/regional; global coverage varies | CC BY 4.0; verified | Implemented optional; short-term-rental price, local currency, not long-term rent. |
-| HUD Fair Market Rents | County/MSA; US | US government data; API/CSV; verified page | Candidate for US long-term rent. |
+| HUD Fair Market Rents | Metro/county polygons; US | US government public domain; ArcGIS service verified 2026-11 | **Implemented**: FY2026 0-4 bedroom FMRs for 1,087 US cities. |
 | UK ONS private rent | Local authority; UK | Open Government Licence v3.0; XLSX verified 2026-11 | **Implemented**: 119 GB local-authority areas, 2026-10, GBP. |
 | Canada CMHC Rental Market | CMA; Canada | CMHC terms; verify | Candidate for Canada. |
 | Australia ABS rent | State/city; Australia | ABS terms; verify | Candidate for Australia. |
@@ -559,7 +559,7 @@ means without labelling the approximation.
 | `destination_metro` | GHSL UCDB R2024A urban-centre polygons | Yes (point-in-polygon; ≤5 km edge fallback) | `GHSL UCDB R2024A urban-centre boundary (European Commission JRC)` |
 | `ghsl_urban_centres` | GHSL UCDB R2024A geography theme | No (geometry converted to WGS84) | n/a |
 | `housing_monthly` | Inside Airbnb | Yes (median, nearest city) | `Inside Airbnb (local currency, 30+ night listings)` |
-| `rent_monthly` | Eurostat `prc_colc_rents` + ONS PIPR | No (latest published value per dwelling type) | `Eurostat prc_colc_rents (average rent per month in cities)`, `ONS Price Index of Private Rents (local authority)` |
+| `rent_monthly` | Eurostat `prc_colc_rents` + ONS PIPR + HUD FMR | No (latest published value per dwelling type) | `Eurostat prc_colc_rents (average rent per month in cities)`, `ONS Price Index of Private Rents (local authority)`, `HUD Fair Market Rents (FY2026)` |
 | `travel_advisory` | US State Department + UK FCDO | No (country-level official advisory) | `US Department of State Travel Advisory`, `UK FCDO Foreign Travel Advice` |
 | `facility_metrics` | Overture Places | Yes (5 km counts) | `Overture Maps Places (facility counts)` |
 | `destination_geography` | GeoNames DEM + Natural Earth 10m coastline | Yes (straight-line distance) | `GeoNames cities15000 (dem, fallback elev)`, `Natural Earth 10m coastline (public domain)` |

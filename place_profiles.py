@@ -254,7 +254,7 @@ METRIC_GROUP_LABELS = {
 }
 
 NOT_IN_DATABASE = [
-    "Long-term rent outside the ~160 Eurostat/ONS cities (no global "
+    "Long-term rent outside the ~1,250 HUD/ONS/Eurostat cities (no global "
     "city-level open source loaded)",
     "City-level crime rates (national advisories and the homicide rate are "
     "country-scoped)",
@@ -911,12 +911,16 @@ DWELLING_LABELS = {
     "FLAT1": "1-bedroom flat",
     "FLAT2": "2-bedroom flat",
     "FLAT3": "3-bedroom flat",
+    "STUDIO": "Studio",
+    "BED1": "1-bedroom home",
+    "BED2": "2-bedroom home",
+    "BED3": "3-bedroom home",
     "BED4": "4+ bedroom home",
     "HOUSE_SD": "Semi-detached house",
     "HOUSE_TERRACE": "Terraced house",
     "FLAT_MAISONETTE": "Flat or maisonette",
 }
-HEADLINE_DWELLING = "FLAT2"
+HEADLINE_ORDER = ("FLAT2", "BED2", "ALL", "BED1", "FLAT1", "BED3", "FLAT3")
 RENT_NOTE = (
     "Official average monthly rent in the local currency. Not FX-converted and "
     "not comparable across countries; rent bases differ between national sources. "
@@ -950,8 +954,9 @@ def fetch_rents(cur: Any, destination_ids: list[str]) -> dict[str, list[dict[str
 def rent_summary(rows: list[dict[str, Any]]) -> dict[str, Any]:
     if not rows:
         return {"status": "not_loaded"}
+    by_type = {row["dwelling_type"]: row for row in rows}
     headline = next(
-        (row for row in rows if row["dwelling_type"] == HEADLINE_DWELLING), rows[0]
+        (by_type[key] for key in HEADLINE_ORDER if key in by_type), rows[0]
     )
     return {
         "status": "loaded",

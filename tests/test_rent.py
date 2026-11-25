@@ -94,8 +94,8 @@ class LiveRentTests(unittest.TestCase):
                 "SELECT count(DISTINCT destination_id) cities, count(*) rows FROM rent_monthly"
             )
             row = cur.fetchone()
-            self.assertGreaterEqual(row["cities"], 150)
-            self.assertGreaterEqual(row["rows"], 1_200)
+            self.assertGreaterEqual(row["cities"], 1_000)
+            self.assertGreaterEqual(row["rows"], 6_000)
             cur.execute(
                 "SELECT count(DISTINCT destination_id) n FROM rent_monthly "
                 "WHERE source LIKE 'Eurostat%'"
@@ -106,6 +106,11 @@ class LiveRentTests(unittest.TestCase):
                 "WHERE source LIKE 'ONS%'"
             )
             self.assertGreaterEqual(cur.fetchone()["n"], 100)
+            cur.execute(
+                "SELECT count(DISTINCT destination_id) n FROM rent_monthly "
+                "WHERE source LIKE 'HUD%'"
+            )
+            self.assertGreaterEqual(cur.fetchone()["n"], 1_000)
             cur.execute("SELECT DISTINCT currency_code FROM rent_monthly")
             currencies = {r["currency_code"] for r in cur.fetchall()}
         self.assertIn("EUR", currencies)
@@ -118,11 +123,15 @@ class LiveRentTests(unittest.TestCase):
         with self.conn.cursor() as cur:
             paris = pp.build_profile(cur, "gn-2988507")
             london = pp.build_profile(cur, "gn-2643743")
+            austin = pp.build_profile(cur, "gn-4671654")
         self.assertEqual(paris["housing"]["currency_code"], "EUR")
         self.assertEqual(paris["housing"]["headline"]["rent_local"], 2500.0)
         self.assertEqual(london["housing"]["currency_code"], "GBP")
         self.assertEqual(london["housing"]["headline"]["dwelling_type"], "FLAT2")
         self.assertEqual(london["housing"]["headline"]["area_name"], "London")
+        self.assertEqual(austin["housing"]["currency_code"], "USD")
+        self.assertEqual(austin["housing"]["headline"]["dwelling_type"], "BED2")
+        self.assertGreater(austin["housing"]["headline"]["rent_local"], 1000)
 
 
 if __name__ == "__main__":
