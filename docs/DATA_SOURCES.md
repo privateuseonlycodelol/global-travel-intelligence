@@ -323,6 +323,21 @@ exists; cities without it are neutral (0.5) and are reported via
 | Status | **Pilot only; no on-demand worker.** The 2021 study and 2026 Trento rows are separate `observed_period` values. |
 | Notes | The study index is the published `all_cities_walkability`; Trento's is the 25-city-reference z-score. Neither is 0–100 and neither is merged with How Walkable. |
 
+### 3.16 Recent climate normals
+
+| Field | Value |
+| --- | --- |
+| Party | Third-party |
+| Publisher | NASA POWER / MERRA-2 |
+| Dataset | Daily 2 m max/min temperature and corrected precipitation, 2015-2024, sampled at each city |
+| URL | https://power.larc.nasa.gov/docs/services/api/temporal/daily/ |
+| Licence | NASA open data; attribution requested (confirm current terms) |
+| Coverage | Loaded for the cities processed by `bootstrap_climate_recent.py`; 118 Italian cities in the first run |
+| Granularity | City point; monthly normals |
+| Used by | `bootstrap_climate_recent.py` → `climate_recent`; `place_profile.recent_climate` |
+| Status | **Implemented loader; not yet global.** |
+| Notes | Separate from WorldClim 1970-2000. Adds rainy days, days >=30 C, warm nights and recent precipitation. A city-point sample; not a neighbourhood climatology. |
+
 ## 4. Missing dimensions and verified candidate sources
 
 These sources were checked but are **not** loaded. They are listed so a

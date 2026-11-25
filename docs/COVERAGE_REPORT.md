@@ -14,7 +14,8 @@ final production numbers.
 | `destinations` with IATA | 11,073 | OurAirports spatial match |
 | `climate_monthly` | 157,188 | WorldClim 2.1, 12 months × 13,099 cities |
 | `climate_monthly.avg_rainy_days` non-null | 0 | Open-Meteo/ERA5 enrichment not run |
-| `climate_monthly.avg_hot_days_30c` non-null | 0 | Open-Meteo/ERA5 enrichment not run |
+| `climate_monthly.avg_hot_days_30c` non-null | 0 | WorldClim baseline only |
+| `climate_recent` | 1,416 | 118 Italian cities x 12 months (2015-2024, NASA POWER) |
 | `poi_metrics` | 13,101 | Overture Places global scan |
 | `broadband_metrics` | 11,902 | Ookla 2026 Q2 fixed tiles |
 | `mobility_metrics` | 9,553 | GTFS + transit stops + walk/rail rows |

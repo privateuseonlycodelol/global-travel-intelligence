@@ -524,6 +524,54 @@ def fetch_climate(cur: Any, destination_ids: list[str]) -> dict[str, list[dict[s
     return out
 
 
+def fetch_recent_climate(cur: Any, destination_ids: list[str]) -> dict[str, list[dict[str, Any]]]:
+    """Recent monthly normals (ERA5 via Open-Meteo), if that table is loaded."""
+    if "climate_recent" not in _existing_tables(cur, ["climate_recent"]):
+        return {}
+    cur.execute(
+        """
+        SELECT destination_id, month, avg_high_c, avg_low_c, precip_mm,
+               rainy_days, hot_days_30c, warm_nights, years, source,
+               observed_period
+        FROM climate_recent
+        WHERE destination_id = ANY(%s)
+        ORDER BY destination_id, month
+        """,
+        (destination_ids,),
+    )
+    out: dict[str, list[dict[str, Any]]] = {}
+    for row in cur.fetchall():
+        row = dict(row)
+        out.setdefault(str(row.pop("destination_id")), []).append(row)
+    return out
+
+
+def recent_climate_summary(months: list[dict[str, Any]]) -> dict[str, Any]:
+    if not months:
+        return {"status": "not_loaded"}
+    wet = max((m for m in months if m.get("precip_mm") is not None),
+              key=lambda m: m["precip_mm"], default=None)
+    hot = max((m for m in months if m.get("hot_days_30c") is not None),
+              key=lambda m: m["hot_days_30c"], default=None)
+    return {
+        "wettest_month": wet["month"] if wet else None,
+        "hottest_month": hot["month"] if hot else None,
+        "annual_precip_mm": round(sum(
+            float(m["precip_mm"]) for m in months if m.get("precip_mm") is not None
+        ), 1),
+        "annual_rainy_days": round(sum(
+            float(m["rainy_days"]) for m in months if m.get("rainy_days") is not None
+        ), 1),
+        "annual_hot_days_30c": round(sum(
+            float(m["hot_days_30c"]) for m in months if m.get("hot_days_30c") is not None
+        ), 1),
+        "annual_warm_nights": round(sum(
+            float(m["warm_nights"]) for m in months if m.get("warm_nights") is not None
+        ), 1),
+        "note": "Recent monthly normals from ERA5; separate from the 1970-2000 WorldClim baseline.",
+    }
+
+
 def _climate_for_summary(months: list[dict[str, Any]]) -> list[dict[str, Any]]:
     return [
         {
@@ -1172,6 +1220,7 @@ def build_profile(cur: Any, destination_id: str) -> dict[str, Any]:
         raise ValueError(f"Destination {destination_id!r} not found.")
     metric_row = fetch_metric_rows(cur, [destination_id]).get(destination_id, {})
     climate = fetch_climate(cur, [destination_id]).get(destination_id, [])
+    recent_climate = fetch_recent_climate(cur, [destination_id]).get(destination_id, [])
     country = fetch_country_context(cur, [basics["country_iso2"]]).get(basics["country_iso2"], {})
 
     groups: dict[str, list[dict[str, Any]]] = {}
@@ -1199,6 +1248,13 @@ def build_profile(cur: Any, destination_id: str) -> dict[str, Any]:
         "climate": {
             "summary": climate_summary(_climate_for_summary(climate)),
             "months": climate,
+        },
+        "recent_climate": {
+            "status": "loaded" if recent_climate else "not_loaded",
+            "source": recent_climate[0].get("source") if recent_climate else None,
+            "observed_period": recent_climate[0].get("observed_period") if recent_climate else None,
+            "summary": recent_climate_summary(recent_climate),
+            "months": recent_climate,
         },
         "country": country,
         "not_measured_for_this_city": not_measured,
