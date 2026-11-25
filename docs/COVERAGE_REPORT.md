@@ -1,7 +1,7 @@
 # Coverage and Rating Verification Snapshot
 
 Database: local PostGIS 15, database `travel_global`
-Date: **2026-11-21** (published walkability scores added 2026-11-22)
+Date: **2026-11-25** (walkability scores added 2026-11-22; climate, air, rent, facilities, geography, hazards and advisories added 2026-11-25)
 Purpose: record what is actually loaded, what is missing, and the checks used
 before trusting a ranking. This is evidence, not a claim that these are the
 final production numbers.
@@ -124,11 +124,11 @@ Observed results:
 - `p_limit => -1`: 0 rows, no error.
 - Luxembourg single-city query: score `0.576`, completeness `0.65` in the
   separate test database; relative dimensions score `0.5` instead of `0`.
-- Global top-10 with `p_min_population => 200000` is London, City of
-  Westminster, Paris, Barcelona, Stockholm, Islington, Berlin, Madrid,
-  Frankfurt am Main and L'Hospitalet de Llobregat. London boroughs
-  (Westminster/Islington) and metro neighbours (L'Hospitalet) still appear;
-  that is the documented metro-fragment caveat, not a hidden adjustment.
+- Global top-10 with `p_min_population => 200000` is San Francisco, London,
+  Madrid, New York City, Paris, Brussels, Barcelona, Los Angeles, Seattle and
+  Köln. Each row carries a `metro_group`; only one row per GHSL urban centre is
+  returned by default. London boroughs and metro neighbours are therefore
+  consolidated, not separate winners.
 
 ## 5. MCP verification
 
