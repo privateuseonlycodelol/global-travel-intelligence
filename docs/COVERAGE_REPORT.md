@@ -13,7 +13,7 @@ final production numbers.
 | `destinations` | 13,101 | GeoNames global ≥40k, after metro dedupe |
 | `destinations` with IATA | 11,073 | OurAirports spatial match |
 | `climate_monthly` | 157,188 | WorldClim 2.1, 12 months × 13,099 cities |
-| `climate_monthly.avg_rainy_days` non-null | 0 | Open-Meteo/ERA5 enrichment not run |
+| `climate_monthly.avg_rainy_days` non-null | 0 | WorldClim baseline has no wet-day field; recent counts are in `climate_recent` |
 | `climate_monthly.avg_hot_days_30c` non-null | 0 | WorldClim baseline only |
 | `poi_metrics` | 13,101 | Overture Places global scan |
 | `broadband_metrics` | 11,902 | Ookla 2026 Q2 fixed tiles |
@@ -53,7 +53,7 @@ final production numbers.
 | Tourism pressure | Partial (EU only) | Eurostat NUTS 2 annual and monthly nights for 1,405 cities; no global city-level official source. |
 | Safety / crime | Country context loaded | US State levels 1-4 and UK FCDO advice for ~220 countries; no global city-level crime rate. |
 | Long-term rent | Partial (~160 cities) | Eurostat city averages (41) and ONS GB local-authority averages (119) in local currency; HUD/CMHC/ABS are country-specific and not yet loaded. |
-| Rainy/hot days | Missing | Open-Meteo/ERA5/NASA POWER are candidates; no batch enrichment run. |
+| Rainy/hot days | Partial (1,679 cities) | NASA POWER 2015-2024 monthly counts in `climate_recent`; the rest are not yet fetched. |
 | Air quality | Loaded, not scored | SatPM V6.GL.03 annual city PM2.5 for 13,101 cities; exposed as a metric and shown in profiles, not in `final_score`. |
 | Facilities | Loaded, not scored | Overture Places presence counts for hospitals, pharmacies, schools, groceries, parks and beaches; zero is `none_listed`. |
 | Airport access | Loaded, not scored | Nearest scheduled-service airport and large/medium counts within 100 km. |
@@ -182,7 +182,9 @@ gaps, not fabricated values:
 
 - Walkability/rail is loaded for 1,131 cities across DE/GB/TR/ES/FR/PT/SE/LU, not globally.
 - Tourism pressure is official but only NUTS 2/EU.
-- Safety/crime and long-term rent have no global city-level official source in
-  the checked set.
+- Safety/crime remains country-level: US State and UK FCDO advisories plus the
+  national homicide rate; there is no global city crime rate.
+- Long-term rent is official but limited to about 160 Eurostat/ONS cities; there
+  is no global city-level open rent series in the checked set.
 - Missing dimensions are reported as NULL and reflected in
   `data_completeness`; the scorer's `0.5` neutral value is arithmetic only.
