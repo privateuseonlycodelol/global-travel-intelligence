@@ -77,8 +77,8 @@ DATA_SOURCES_DOC = "docs/DATA_SOURCES.md"
 UNAVAILABLE_DIMENSIONS = [
     "safety_crime",
     "global_city_level_long_term_rent",
+    "global_rainy_and_hot_days",
     "visa_and_residence_rules",
-    "rainy_and_hot_days",
 ]
 
 FLIGHT_CACHE_DDL = """
@@ -1147,8 +1147,9 @@ def rank_destinations(
                 "cities without it are neutral, so do not read this as global walkability",
                 "pedestrian_ratio_2km is a separate Overture 8-country context field, not the score",
                 "transit_stops_5km is an Overture Places facility count, not service frequency",
-                "housing_monthly, when present, is in local currency (no FX conversion)",
-                "climate is WorldClim 2.1 (1970-2000 averages; recent years are typically warmer)",
+                "rent_monthly holds official local-currency rents for about 1,250 cities; it is not a rank input",
+                "housing_monthly is empty unless Inside Airbnb has been loaded",
+                "climate is WorldClim 2.1 (1970-2000 averages); recent monthly normals are a separate NASA POWER layer for a growing subset",
                 "missing dimensions are NULL; see docs/DATA_SOURCES.md",
             ],
         },
