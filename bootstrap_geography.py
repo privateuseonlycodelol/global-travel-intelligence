@@ -14,6 +14,8 @@ City elevation and straight-line coastline distance.
 The values are exposed in a ``geography`` block. Daylight hours are computed
 from latitude in ``place_profiles`` and need no table.
 
+Requires GDAL's ``ogr2ogr`` on PATH to convert the Natural Earth shapefile.
+
 Usage
 -----
     python bootstrap_geography.py
