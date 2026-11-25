@@ -474,7 +474,7 @@ US/UK-only city-crime mode is added, it must be labelled as such.
 | UK ONS private rent | Local authority; UK | Open Government Licence v3.0; XLSX verified 2026-11 | **Implemented**: 121 GB local-authority areas, 2026-10, GBP. |
 | Canada CMHC Rental Market | CMA; Canada | CMHC terms; verify | Candidate for Canada. |
 | Australia ABS rent | State/city; Australia | ABS terms; verify | Candidate for Australia. |
-| Eurostat `prc_colc_rents` | 42 cities; EU/EFTA/UK/TR/Balkans | Eurostat reuse with attribution; API verified | **Implemented**: average monthly rent by dwelling type, 2025, local currency. |
+| Eurostat `prc_colc_rents` | 42 city geographies; 41 loaded (London is covered by ONS); EU/EFTA/UK/TR/Balkans | Eurostat reuse with attribution; API verified | **Implemented**: average monthly rent by dwelling type, 2025, local currency. |
 | Eurostat housing price/rent indices | NUTS; EU | Eurostat reuse with attribution; verify dataset | Candidate regional context, not city rent. |
 | OECD Affordable Housing Database | Country; OECD | OECD terms; verify | Country-level only. |
 
