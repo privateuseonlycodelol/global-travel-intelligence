@@ -110,31 +110,69 @@ class LiveNatureTests(unittest.TestCase):
             paris["nature"]["green_score"]["score_0_100"],
         )
 
-    def test_all_encompassing_green_score(self):
+    def test_greenery_and_environment_scores(self):
         with self.conn.cursor() as cur:
             cur.execute(
-                "SELECT count(*) n, count(green_score_all_0_100) scored "
-                "FROM destination_green_score_all"
+                "SELECT count(*) n, count(greenery_score_0_100) scored "
+                "FROM destination_greenery_score"
             )
             row = cur.fetchone()
             if row["n"] == 0:
-                self.skipTest("all-encompassing green score not built")
+                self.skipTest("greenery score not built")
             self.assertGreaterEqual(row["scored"], 3_000)
             trento = pp.build_profile(cur, "gn-3165243")
             paris = pp.build_profile(cur, "gn-2988507")
-        full = trento["nature"]["all_green_score"]
-        self.assertGreater(full["score_0_100"], 0)
-        self.assertLessEqual(full["score_0_100"], 100)
-        self.assertEqual(set(full["components_0_100"]),
-                         {"vegetation", "parks", "air", "water"})
-        self.assertGreater(
-            trento["nature"]["all_green_score"]["score_0_100"],
-            paris["nature"]["all_green_score"]["score_0_100"],
+        greenery = trento["nature"]["greenery_score"]
+        self.assertGreater(greenery["score_0_100"], 0)
+        self.assertLessEqual(greenery["score_0_100"], 100)
+        self.assertEqual(
+            set(greenery["components_0_100"]),
+            {"local_tree", "local_other_vegetation",
+             "hinterland_tree_shrub", "parks"},
         )
         self.assertGreater(
-            paris["nature"]["all_green_score"]["components_0_100"]["air"],
-            trento["nature"]["all_green_score"]["components_0_100"]["air"],
+            trento["nature"]["greenery_score"]["score_0_100"],
+            paris["nature"]["greenery_score"]["score_0_100"],
         )
+        environment = trento["nature"]["environment_score"]
+        self.assertEqual(
+            set(environment["components_0_100"]),
+            {"greenery", "air", "water"},
+        )
+        self.assertGreater(
+            paris["nature"]["environment_score"]["components_0_100"]["air"],
+            trento["nature"]["environment_score"]["components_0_100"]["air"],
+        )
+
+    def test_land_only_vegetation(self):
+        with self.conn.cursor() as cur:
+            cur.execute(
+                """
+                SELECT hinterland_water_fraction, hinterland_tree_share
+                FROM destination_green_score
+                WHERE destination_id = 'gn-1880252'
+                """
+            )
+            row = cur.fetchone()
+        if row is None:
+            self.skipTest("Singapore land cover not loaded")
+        self.assertGreater(row["hinterland_water_fraction"], 0.4)
+        self.assertGreater(row["hinterland_tree_share"], 0.25)
+
+    def test_river_access(self):
+        with self.conn.cursor() as cur:
+            cur.execute(
+                """
+                SELECT distance_km, river_order
+                FROM destination_river_access
+                WHERE destination_id = 'gn-2950159'
+                """
+            )
+            row = cur.fetchone()
+        if row is None:
+            self.skipTest("river access not loaded")
+        self.assertLess(row["distance_km"], 2.0)
+        self.assertGreaterEqual(row["river_order"], 4)
 
     def test_inland_water(self):
         with self.conn.cursor() as cur:

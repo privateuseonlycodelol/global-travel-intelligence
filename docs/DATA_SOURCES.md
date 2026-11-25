@@ -351,7 +351,7 @@ exists; cities without it are neutral (0.5) and are reported via
 | Granularity | 0.1 degree grid (~11 km); city-point sample |
 | Used by | `bootstrap_air_quality.py` → `air_quality_annual`; `bootstrap_air_quality_monthly.py` → `air_quality_monthly`; `place_profile` |
 | Status | **Implemented; 13,101 cities** |
-| Notes | Satellite/model/monitor-fused estimate, not a monitor reading; it cannot resolve near-road or neighbourhood differences. The monthly layer adds seasonality (for example Delhi's November peak versus the monsoon low). Kept separate from the country-level World Bank PM2.5 indicator. |
+| Notes | Satellite/model/monitor-fused estimate, not a monitor reading; it cannot resolve near-road or neighbourhood differences. The monthly layer adds seasonality (for example Delhi's November peak versus the monsoon low). The environmental score uses a fixed log scale from 100 at 5 µg/m³ to 0 at 75 µg/m³, not a cohort percentile. Kept separate from the country-level World Bank PM2.5 indicator. |
 
 ### 3.18 Daily-life facilities
 
@@ -468,12 +468,27 @@ exists; cities without it are neutral (0.5) and are reported via
 | URL | https://www.hydrosheds.org/products/hydrolakes |
 | Licence | CC BY 4.0; derived city rows only, original polygons not redistributed |
 | Coverage | 13,101 cities |
-| Granularity | Nearest lake shore distance, lake area and type |
+| Granularity | Nearest lake shore distance, lake area and type; nearest lake >= 10 km² stored separately |
 | Used by | `bootstrap_inland_water.py` → `destination_inland_water`; `place_profile.nature.inland_water` |
 | Status | **Implemented** |
-| Notes | Does not include rivers, small tarns or seasonal pans. Lake names are often blank in the source. |
+| Notes | Does not include rivers, small tarns or seasonal pans. Lake names are often blank in the source. The nearest water body is often a pond, so `large_lake_*` stores the nearest lake of at least 10 km² even when it is farther away. |
 
-### 3.26 Köppen-Geiger climate class
+### 3.26 Major rivers (HydroRIVERS)
+
+| Field | Value |
+| --- | --- |
+| Party | Third-party |
+| Publisher | HydroSHEDS / WWF |
+| Dataset | HydroRIVERS v1.0 line network, filtered to Strahler order >= 4 |
+| URL | https://www.hydrosheds.org/products/hydrorivers |
+| Licence | CC BY 4.0; free for scientific, educational and commercial use; derived city rows only |
+| Coverage | 13,101 cities |
+| Granularity | Nearest river reach distance, Strahler order and long-term mean discharge |
+| Used by | `bootstrap_rivers.py` → `destination_river_access`; `place_profile.nature.river_access`; water component |
+| Status | **Implemented** |
+| Notes | HydroLAKES has no rivers. This is what makes the Seine, Thames, Danube, Spree, Ottawa River and North Saskatchewan visible. Distance is straight-line to the river line, not a walking route or water-quality measure. |
+
+### 3.27 Köppen-Geiger climate class
 
 | Field | Value |
 | --- | --- |
@@ -488,7 +503,7 @@ exists; cities without it are neutral (0.5) and are reported via
 | Status | **Implemented** |
 | Notes | A class label, not a score. A city on a class boundary can flip; the monthly climate remains the detailed view. |
 
-### 3.27 Land-cover fractions (ESA WorldCover)
+### 3.28 Land-cover fractions (ESA WorldCover)
 
 | Field | Value |
 | --- | --- |
@@ -653,10 +668,12 @@ means without labelling the approximation.
 | `destination_landscape` | RESOLVE Ecoregions 2017 | Yes (point-in-polygon) | `RESOLVE Ecoregions 2017 (CC BY 4.0)` |
 | `destination_terrain` | Amatulli 2018 GMTED 10 km | No (point sample) | `Amatulli et al. 2018 GMTED 10 km (CC BY 3.0)` |
 | `destination_land_cover` | ESA WorldCover 2021 v200 | Yes (class fractions) | `ESA WorldCover 2021 v200 (10 m)` |
-| `destination_inland_water` | HydroLAKES v1.0 | Yes (nearest lake join) | `HydroLAKES v1.0 (lakes >= 10 ha, CC BY 4.0)` |
+| `destination_inland_water` | HydroLAKES v1.0 | Yes (nearest lake + nearest large lake join) | `HydroLAKES v1.0 (lakes >= 10 ha, CC BY 4.0)` |
+| `destination_river_access` | HydroRIVERS v1.0 | Yes (nearest Strahler >= 4 reach) | `HydroRIVERS v1.0 (CC BY 4.0)` |
 | `destination_climate_class` | Köppen-Geiger 1991-2020 | No (point sample) | `Beck et al. 2023 Köppen-Geiger 1991-2020 (CC BY 4.0)` |
-| `destination_green_score` (view) | `destination_land_cover` | Yes (0.50 × 1 km tree/shrub/grass + 0.50 × 15 km tree/shrub) | `ESA WorldCover 2021 v200 (10 m)` |
-| `destination_green_score_all` (view) | vegetation + parks + PM2.5 + water | Yes (40/20/20/20 composite) | `First-party: ESA WorldCover 2021, Overture Places, SatPM 2024, HydroLAKES/Natural Earth` |
+| `destination_green_score` (view) | `destination_land_cover` | Yes (land-only 0.50 × 1 km tree/shrub/grass + 0.50 × 15 km tree/shrub) | `ESA WorldCover 2021 v200 (10 m)` |
+| `destination_greenery_score` (view) | vegetation + mapped parks | Yes (25/15/45/15 composite) | `First-party: ESA WorldCover 2021 + Overture Places` |
+| `destination_environment_score` (view) | greenery + PM2.5 + water access | Yes (50/35/15 composite) | `First-party: ESA WorldCover 2021, Overture Places, SatPM 2024, HydroLAKES, HydroRIVERS, Natural Earth` |
 | `flight_quote_cache` | SerpApi Google Flights | No (cached response) | `SerpApi Google Flights` |
 | `hotel_quote_cache` | SerpApi Google Hotels | No (cached response) | `SerpApi Google Hotels` |
 | `destination_aliases` | GeoNames alternatenames | Yes (normalized) | n/a |

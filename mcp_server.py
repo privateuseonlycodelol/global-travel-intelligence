@@ -1480,16 +1480,35 @@ def inspect_destination(
                 (resolved_id,),
                 ("destination_green_score",),
             )
-            green_score_all = optional_row(
+            greenery_score = optional_row(
                 """
-                SELECT green_score_all_0_100, vegetation_score, park_score,
-                       air_score, water_score, park_count_5km, pm25_ugm3,
-                       coast_distance_km, lake_distance_km, lake_area_km2,
-                       weights, source, observed_period
-                FROM destination_green_score_all WHERE destination_id = %s
+                SELECT greenery_score_0_100, local_tree_score,
+                       local_other_veg_score, hinterland_tree_shrub_score,
+                       park_score, park_count_5km, vegetation_only_score_0_100,
+                       tree_score_0_100, local_tree_share, local_shrub_share,
+                       local_grass_share, hinterland_tree_share,
+                       hinterland_shrub_share, local_water_fraction,
+                       hinterland_water_fraction, weights, source,
+                       observed_period
+                FROM destination_greenery_score WHERE destination_id = %s
                 """,
                 (resolved_id,),
-                ("destination_green_score_all",),
+                ("destination_greenery_score",),
+            )
+            environment_score = optional_row(
+                """
+                SELECT environment_score_0_100, greenery_score_0_100,
+                       vegetation_only_score_0_100, park_score,
+                       park_count_5km, air_score, pm25_ugm3, worst_month_pm25,
+                       water_score, coast_distance_km, large_lake_name,
+                       large_lake_area_km2, large_lake_distance_km,
+                       river_order, discharge_cms, river_distance_km,
+                       water_distance_km, water_feature, weights, source,
+                       observed_period
+                FROM destination_environment_score WHERE destination_id = %s
+                """,
+                (resolved_id,),
+                ("destination_environment_score",),
             )
             climate_class = optional_row(
                 """
@@ -1502,11 +1521,21 @@ def inspect_destination(
             inland_water = optional_row(
                 """
                 SELECT lake_id, lake_name, lake_type, lake_area_km2, distance_km,
-                       source, observed_period
+                       large_lake_name, large_lake_area_km2,
+                       large_lake_distance_km, source, observed_period
                 FROM destination_inland_water WHERE destination_id = %s
                 """,
                 (resolved_id,),
                 ("destination_inland_water",),
+            )
+            river_access = optional_row(
+                """
+                SELECT river_order, discharge_cms, distance_km, source,
+                       observed_period
+                FROM destination_river_access WHERE destination_id = %s
+                """,
+                (resolved_id,),
+                ("destination_river_access",),
             )
             land_cover = optional_rows(
                 """
@@ -1574,9 +1603,11 @@ def inspect_destination(
         "terrain": terrain,
         "land_cover": land_cover,
         "inland_water": inland_water,
+        "river_access": river_access,
         "climate_class": climate_class,
         "green_score": green_score,
-        "green_score_all": green_score_all,
+        "greenery_score": greenery_score,
+        "environment_score": environment_score,
         "gtfs_feeds": gtfs_feeds,
         "transit_service": transit_service,
         "poi_metrics": poi_metrics,

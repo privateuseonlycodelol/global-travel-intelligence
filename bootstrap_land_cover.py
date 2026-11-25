@@ -88,17 +88,19 @@ CREATE TABLE IF NOT EXISTS destination_land_cover (
     PRIMARY KEY (destination_id, radius_m)
 );
 
-CREATE OR REPLACE VIEW destination_green_score AS
+DROP VIEW IF EXISTS destination_green_score CASCADE;
+CREATE VIEW destination_green_score AS
 WITH one AS (
     SELECT destination_id,
+           COALESCE(tree_fraction, 0) AS local_tree_fraction,
+           COALESCE(shrub_fraction, 0) AS local_shrub_fraction,
+           COALESCE(grassland_fraction, 0) AS local_grass_fraction,
            COALESCE(tree_fraction, 0) + COALESCE(shrub_fraction, 0)
              + COALESCE(grassland_fraction, 0) AS local_green_fraction,
-           tree_fraction AS local_tree_fraction,
-           shrub_fraction AS local_shrub_fraction,
-           grassland_fraction AS local_grass_fraction,
-           cropland_fraction AS local_cropland_fraction,
-           built_up_fraction AS local_built_up_fraction,
-           water_fraction AS local_water_fraction,
+           COALESCE(cropland_fraction, 0) AS local_cropland_fraction,
+           COALESCE(built_up_fraction, 0) AS local_built_up_fraction,
+           COALESCE(water_fraction, 0) AS local_water_fraction,
+           1.0 - COALESCE(water_fraction, 0) AS local_land_fraction,
            valid_pixel_count AS local_valid_pixels,
            source, observed_period
     FROM destination_land_cover
@@ -106,37 +108,92 @@ WITH one AS (
 ),
 fifteen AS (
     SELECT destination_id,
+           COALESCE(tree_fraction, 0) AS hinterland_tree_fraction,
+           COALESCE(shrub_fraction, 0) AS hinterland_shrub_fraction,
+           COALESCE(grassland_fraction, 0) AS hinterland_grass_fraction,
            COALESCE(tree_fraction, 0) + COALESCE(shrub_fraction, 0)
-             AS hinterland_green_fraction,
-           tree_fraction AS hinterland_tree_fraction,
-           shrub_fraction AS hinterland_shrub_fraction,
-           grassland_fraction AS hinterland_grass_fraction,
-           cropland_fraction AS hinterland_cropland_fraction,
-           built_up_fraction AS hinterland_built_up_fraction,
-           water_fraction AS hinterland_water_fraction,
+             + COALESCE(grassland_fraction, 0) AS hinterland_green_fraction,
+           COALESCE(cropland_fraction, 0) AS hinterland_cropland_fraction,
+           COALESCE(built_up_fraction, 0) AS hinterland_built_up_fraction,
+           COALESCE(water_fraction, 0) AS hinterland_water_fraction,
+           1.0 - COALESCE(water_fraction, 0) AS hinterland_land_fraction,
            valid_pixel_count AS hinterland_valid_pixels
     FROM destination_land_cover
     WHERE radius_m = 15000
+),
+shares AS (
+    SELECT one.destination_id,
+           one.local_land_fraction, fifteen.hinterland_land_fraction,
+           one.local_tree_fraction, one.local_shrub_fraction,
+           one.local_grass_fraction, one.local_green_fraction,
+           one.local_cropland_fraction, one.local_built_up_fraction,
+           one.local_water_fraction,
+           fifteen.hinterland_tree_fraction, fifteen.hinterland_shrub_fraction,
+           fifteen.hinterland_grass_fraction, fifteen.hinterland_green_fraction,
+           fifteen.hinterland_cropland_fraction, fifteen.hinterland_built_up_fraction,
+           fifteen.hinterland_water_fraction,
+           CASE WHEN one.local_land_fraction >= 0.2
+                THEN one.local_green_fraction / one.local_land_fraction END
+             AS local_green_share,
+           CASE WHEN one.local_land_fraction >= 0.2
+                THEN one.local_tree_fraction / one.local_land_fraction END
+             AS local_tree_share,
+           CASE WHEN one.local_land_fraction >= 0.2
+                THEN one.local_shrub_fraction / one.local_land_fraction END
+             AS local_shrub_share,
+           CASE WHEN one.local_land_fraction >= 0.2
+                THEN one.local_grass_fraction / one.local_land_fraction END
+             AS local_grass_share,
+           CASE WHEN fifteen.hinterland_land_fraction >= 0.2
+                THEN fifteen.hinterland_green_fraction
+                     / fifteen.hinterland_land_fraction END
+             AS hinterland_green_share,
+           CASE WHEN fifteen.hinterland_land_fraction >= 0.2
+                THEN fifteen.hinterland_tree_fraction
+                     / fifteen.hinterland_land_fraction END
+             AS hinterland_tree_share,
+           CASE WHEN fifteen.hinterland_land_fraction >= 0.2
+                THEN fifteen.hinterland_shrub_fraction
+                     / fifteen.hinterland_land_fraction END
+             AS hinterland_shrub_share,
+           CASE WHEN fifteen.hinterland_land_fraction >= 0.2
+                THEN fifteen.hinterland_grass_fraction
+                     / fifteen.hinterland_land_fraction END
+             AS hinterland_grass_share,
+           one.local_valid_pixels, fifteen.hinterland_valid_pixels,
+           one.source, one.observed_period
+    FROM one JOIN fifteen USING (destination_id)
 )
-SELECT one.destination_id,
-       one.local_green_fraction,
-       fifteen.hinterland_green_fraction,
-       CASE WHEN one.local_valid_pixels > 0 AND fifteen.hinterland_valid_pixels > 0
+SELECT destination_id,
+       local_land_fraction, hinterland_land_fraction,
+       local_tree_fraction, local_shrub_fraction, local_grass_fraction,
+       local_green_fraction, local_cropland_fraction, local_built_up_fraction,
+       local_water_fraction,
+       local_tree_share, local_shrub_share, local_grass_share,
+       local_green_share,
+       hinterland_tree_fraction, hinterland_shrub_fraction,
+       hinterland_grass_fraction, hinterland_green_fraction,
+       hinterland_cropland_fraction, hinterland_built_up_fraction,
+       hinterland_water_fraction,
+       hinterland_tree_share, hinterland_shrub_share,
+       hinterland_grass_share, hinterland_green_share,
+       CASE WHEN local_green_share IS NOT NULL
+                  AND hinterland_tree_share IS NOT NULL
             THEN 100.0 * (
-                0.50 * one.local_green_fraction
-                + 0.50 * fifteen.hinterland_green_fraction
+                0.50 * local_green_share
+                + 0.50 * hinterland_tree_share
             )
        END AS green_score_0_100,
-       one.local_tree_fraction, one.local_shrub_fraction,
-       one.local_grass_fraction, one.local_cropland_fraction,
-       one.local_built_up_fraction, one.local_water_fraction,
-       fifteen.hinterland_tree_fraction, fifteen.hinterland_shrub_fraction,
-       fifteen.hinterland_grass_fraction, fifteen.hinterland_cropland_fraction,
-       fifteen.hinterland_built_up_fraction, fifteen.hinterland_water_fraction,
-       one.local_valid_pixels, fifteen.hinterland_valid_pixels,
-       one.source, one.observed_period
-FROM one JOIN fifteen USING (destination_id)
-"""
+       CASE WHEN local_tree_share IS NOT NULL
+                  AND hinterland_tree_share IS NOT NULL
+            THEN 100.0 * (
+                0.50 * local_tree_share
+                + 0.50 * hinterland_tree_share
+            )
+       END AS tree_score_0_100,
+       local_valid_pixels, hinterland_valid_pixels,
+       source, observed_period
+FROM shares"""
 
 
 def log(message: str) -> None:

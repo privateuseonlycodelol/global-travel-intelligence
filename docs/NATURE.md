@@ -80,7 +80,8 @@ separate lines.
 ### Inland water — HydroLAKES v1.0
 
 - Nearest lake or reservoir shore, its name when published, area in km², and
-  lake/reservoir/regulated-lake type.
+  lake/reservoir/regulated-lake type. Also the nearest **large lake** (at least
+  10 km²), which may be farther away than the nearest pond.
 - **13,101 cities** loaded. Lakes are at least 10 ha; rivers, small tarns and
   seasonal pans are not in this layer.
 - The original polygon file is imported, queried and dropped; only derived city
@@ -90,6 +91,17 @@ separate lines.
   Geneva 0.4 km from a 572 km² lake. Coast distance cannot show any of that.
 - Source: HydroLAKES v1.0, CC BY 4.0,
   https://www.hydrosheds.org/products/hydrolakes
+
+### Major rivers — HydroRIVERS v1.0
+
+- Nearest river reach with **Strahler order ≥ 4**, its order, long-term mean
+  discharge and straight-line distance.
+- **13,101 cities** loaded. This is what makes the Seine, Thames, Danube,
+  Spree, Ottawa River and North Saskatchewan visible; HydroLAKES has no rivers.
+- The original line network is imported, filtered, queried and dropped. Only
+  derived city rows are kept.
+- Source: HydroRIVERS v1.0, CC BY 4.0 (free for scientific, educational and
+  commercial use), https://www.hydrosheds.org/products/hydrorivers
 
 ### Land cover — ESA WorldCover 2021
 
@@ -103,79 +115,81 @@ separate lines.
 - Source: ESA WorldCover 2021 v200, CC BY 4.0,
   https://esa-worldcover.org/en/data-access
 
-### All-encompassing green score
+### Two optional scores
 
-One optional number that includes all four data families:
+The old “all-encompassing green score” mixed vegetation, park POIs, air and
+water into one number. Air supplied about 41% of its variance, park coverage
+decided which cities appeared, and ponds counted as water. It has been
+replaced by two explicit indices. The full audit, formulas, sensitivity and
+limitations are in [METHODOLOGY_AUDIT.md](METHODOLOGY_AUDIT.md).
+
+**Physical urban greenery** — `destination_greenery_score`:
 
 ```
-all_green_score = 0.40 × vegetation
-                + 0.20 × parks
-                + 0.20 × air
-                + 0.20 × water
+greenery = 0.25 × local tree canopy (1 km, land-only)
+         + 0.15 × local shrub + grass (1 km, land-only)
+         + 0.45 × hinterland tree + shrub (15 km, land-only)
+         + 0.15 × mapped park score (5 km)
 ```
 
-- **Vegetation** — `100 × (0.50 × 1 km tree+shrub+grass + 0.50 × 15 km tree+shrub)`.
-  Grass is kept in the local walk but not in the hinterland, so steppe does not
-  read as forest.
-- **Parks** — `100 × ln(1 + park_count) / ln(101)`, capped at 100. This uses the
-  mapped park count directly, not parks per resident and not a percentile. A
-  zero is `none_listed`, not a measured zero.
-- **Air** — fixed scale: 100 at ≤5 µg/m³, 0 at ≥25 µg/m³ annual PM2.5. This
-  does not move when the city cohort changes.
-- **Water** — coast distance, or a lake of at least 10 km², with distance decay
-  to 50 km and a lake-size factor. Small ponds do not earn full water credit.
-  Rivers are still missing.
+The park score is `100 × ln(1 + park_count) / ln(501)`, capped at 100. A zero
+park count is `none_listed`, so the city is unscored, not given a false zero.
+The 45% hinterland weight stops a single green block from deciding the city;
+it is still a point/ring proxy, not a citywide canopy inventory.
 
-It is stored in `destination_green_score_all`. A city gets the score only when
-all four components exist; **4,040 cities** currently qualify. The components
-are always shown. It is a first-party environmental composite, not an
-observation and not a nature-quality judgment, and it is not in `final_score`.
+**Overall environmental quality** — `destination_environment_score`:
+
+```
+environment = 0.50 × greenery
+            + 0.35 × air
+            + 0.15 × water access
+```
+
+Air is annual PM2.5 on a fixed log scale: 100 at 5 µg/m³, 0 at 75 µg/m³.
+Water is the nearest of the coast, a lake of at least 10 km², or a river with
+Strahler order ≥4, with linear decay to zero at 50 km. It is **access, not
+water quality**.
+
+Both are first-party composites, not observations. Components are always
+shown. Neither is in `final_score`.
 
 Examples:
 
-| City | All score | Vegetation | Parks | Air | Water |
-|---|---:|---:|---:|---:|---:|
-| Montréal | **72.8** | 44.4 | 100.0 | 80.7 | 94.4 |
-| New York City | **60.9** | 10.1 | 100.0 | 86.0 | 98.6 |
-| London | **50.1** | 20.2 | 100.0 | 82.1 | 28.0 |
-| Trento | **47.9** | 49.3 | 74.4 | 62.3 | 4.5 |
-| Paris | **41.9** | 14.1 | 100.0 | 72.1 | 9.2 |
-| Zunyi | **31.6** | 67.9 | 15.0 | 0.0 | 7.3 |
-| Ordos | **25.9** | 25.8 | 23.8 | 6.9 | 47.1 |
-
-The council reviews found the earlier 40/25/25/10 version was really an
-air-and-park index: air carried about 41% of the variance, park coverage
-excluded 960 cities including 72 over 1 million, and ponds counted as water.
-This version keeps one all-encompassing score but corrects those components:
-vegetation is balanced across the local and hinterland rings, parks are no
-longer divided by GeoNames population, air uses a fixed scale, and water no
-longer rewards tiny ponds. The score still depends on mapped parks, so the
-960 zero-park cities remain unmeasured rather than being given a false zero.
+| City | Greenery | Tree | Other veg | Hinterland | Parks | Environment | Air | Water |
+|---|---:|---:|---:|---:|---:|---:|---:|---:|
+| Hong Kong | **52.9** | 26.8 | 0.5 | 69.2 | 100.0 | 61.9 | 58.3 | 99.8 |
+| Oslo | **52.1** | 15.5 | 0.9 | 79.1 | 83.3 | 70.2 | 84.9 | 96.1 |
+| Stockholm | **48.5** | 8.7 | 0.7 | 71.2 | 94.8 | 71.8 | 93.1 | 99.9 |
+| Montréal | **40.5** | 59.7 | 11.7 | 20.5 | 97.4 | 62.0 | 78.9 | 94.4 |
+| Paris | **26.1** | 5.6 | 0.1 | 23.4 | 94.7 | 53.4 | 72.4 | 99.8 |
+| Singapore | **32.9** | 18.3 | 3.9 | 31.6 | 90.3 | 53.0 | 62.7 | 97.4 |
+| Dubai | **6.9** | 0.8 | 2.6 | 2.3 | 35.3 | 29.6 | 32.3 | 99.2 |
 
 ### Optional vegetation-only green score
 
-If you want one number, there is an **optional vegetation-cover score**:
+The older single-number vegetation score remains available separately:
 
 ```
 green_score = 100 × (0.50 × local_green + 0.50 × hinterland_trees)
 
-local_green       = tree + shrub + grass in the 1 km disc
-hinterland_trees  = tree + shrub in the 15 km disc
+local_green       = (tree + shrub + grass) / land in the 1 km disc
+hinterland_trees  = (tree + shrub) / land in the 15 km disc
+land              = 1 - water
 ```
 
-It is stored in `destination_green_score` and shown in the profile as both the
-score and its two components. It is **not** a nature-quality score:
+It is stored in `destination_green_score`. It is **not** a nature-quality
+score:
 
 - cropland, built-up and water are excluded;
 - deserts, steppes and high mountains score low by definition;
 - only cities with WorldCover land cover are scored, and nothing is imputed;
-- the weights are explicit so you can reweight the two components yourself.
+- water is removed from the denominator, so a coastal city is not punished for
+  the sea in its ring.
 
-Trento scores **49.3** (25.7% local vegetation, 72.9% hinterland tree+shrub),
-Paris **14.1** (5.2% / 22.9%), Innsbruck **37.2** (14.8% / 59.6%) and Dubai
-**2.8** (3.4% / 2.2%). That reads as “how much tree, shrub and grass cover is
-around the city”, not “how good its nature is”. This vegetation-only score
-remains available alongside the all-encompassing composite.
+Trento scores **50.7** (26.8% local vegetation, 74.5% hinterland tree+shrub),
+Paris **14.5** (5.7% / 23.4%), Innsbruck **37.6** (15.4% / 59.9%) and Dubai
+**2.3** (3.4% / 1.2%). That reads as “how much tree, shrub and grass cover is
+around the city”, not “how good its nature is”.
 
 ## Council decision and current trade-offs
 
@@ -191,14 +205,14 @@ alternatives**:
   currently covers the largest 5,000 cities, not all 13,101.
 - Amatulli GMTED 10 km median/SD/TRI/TPI rather than GLO-90 p95−p5. It is
   global and already loaded, but it is a coarser terrain description.
-- HydroLAKES lakes rather than HydroLAKES plus GLWD wetlands. Rivers and
-  seasonal wetlands remain missing.
+- HydroLAKES lakes plus HydroRIVERS major rivers (Strahler order ≥4), rather
+  than GLWD wetlands. Seasonal wetlands remain missing.
 
 The 1 km figure is a fixed daily-walk disc around the city point, **not the GHSL
 urban-centre polygon**; the 15 km figure is the fixed hinterland. They are
 labelled that way. The next upgrade is the CGLS 2018 fractions for all cities
-and GLWD v2 wetland/river fractions; neither is required for the current
-profile to be useful.
+and GLWD v2 wetlands; rivers are now loaded from HydroRIVERS. Neither upgrade
+is required for the current profile to be useful.
 
 ## Planned, globally repeatable
 
@@ -229,8 +243,11 @@ profile to be useful.
 python bootstrap_nature.py
 python bootstrap_land_cover.py
 python bootstrap_inland_water.py
+python bootstrap_rivers.py
 python bootstrap_green_score.py
 python bootstrap_nature.py --report
+python reports/generate_rankings.py \
+  --db-url "postgresql:///travel_global?host=/var/run/postgresql&port=5432"
 ```
 
 Requires PostGIS, GDAL `ogr2ogr`, `rasterio` and `requests`.

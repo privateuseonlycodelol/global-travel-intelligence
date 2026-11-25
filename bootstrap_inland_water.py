@@ -3,9 +3,13 @@
 Nearest lake or reservoir from HydroLAKES, as global inland-water context.
 
 HydroLAKES covers lakes and reservoirs of at least 10 ha. For each city this
-stores the nearest lake shore distance, the lake name/area/type and the source.
-Small tarns, rivers and temporary pans are not in this layer; those stay for a
-later GLWD/JRC surface-water step.
+stores the nearest lake shore distance, the lake name/area/type, and separately
+the nearest lake of at least 10 km2. The second is needed because a city's
+nearest water body is often a pond, while the lake that matters for the water
+score may be farther away.
+
+Small tarns, rivers and temporary pans are not in this layer. Rivers are loaded
+by ``bootstrap_rivers.py``; seasonal wetlands remain a later GLWD step.
 
 The original polygon file is imported, queried, and dropped again. Only the
 derived city rows are kept, matching HydroLAKES' request not to redistribute the
@@ -49,11 +53,22 @@ CREATE TABLE IF NOT EXISTS destination_inland_water (
     lake_type       INT,
     lake_area_km2    DOUBLE PRECISION,
     distance_km     DOUBLE PRECISION,
+    large_lake_id       BIGINT,
+    large_lake_name     TEXT,
+    large_lake_type     INT,
+    large_lake_area_km2 DOUBLE PRECISION,
+    large_lake_distance_km DOUBLE PRECISION,
     source          TEXT NOT NULL,
     source_url      TEXT NOT NULL,
     observed_period TEXT NOT NULL,
     updated_at      TIMESTAMPTZ NOT NULL DEFAULT NOW()
 );
+ALTER TABLE destination_inland_water
+    ADD COLUMN IF NOT EXISTS large_lake_id BIGINT,
+    ADD COLUMN IF NOT EXISTS large_lake_name TEXT,
+    ADD COLUMN IF NOT EXISTS large_lake_type INT,
+    ADD COLUMN IF NOT EXISTS large_lake_area_km2 DOUBLE PRECISION,
+    ADD COLUMN IF NOT EXISTS large_lake_distance_km DOUBLE PRECISION;
 """
 
 
@@ -111,12 +126,27 @@ def load(database_url: str) -> dict[str, Any]:
             cur.execute(
                 "CREATE INDEX IF NOT EXISTS idx_hydrolakes_geom ON hydrolakes USING GIST (geom)"
             )
+            # A city's nearest water body is often a pond. The score needs the
+            # nearest lake that is large enough to count, which may be further
+            # away, so query both and keep them separate.
+            cur.execute(
+                """
+                DROP TABLE IF EXISTS hydrolakes_large;
+                CREATE TABLE hydrolakes_large AS
+                SELECT * FROM hydrolakes WHERE lake_area >= 10.0;
+                CREATE INDEX idx_hydrolakes_large_geom
+                    ON hydrolakes_large USING GIST (geom);
+                """
+            )
             cur.execute("DELETE FROM destination_inland_water")
             cur.execute(
                 """
                 INSERT INTO destination_inland_water (
                     destination_id, lake_id, lake_name, lake_type, lake_area_km2,
-                    distance_km, source, source_url, observed_period
+                    distance_km,
+                    large_lake_id, large_lake_name, large_lake_type,
+                    large_lake_area_km2, large_lake_distance_km,
+                    source, source_url, observed_period
                 )
                 SELECT d.destination_id,
                        l.hylak_id::BIGINT,
@@ -126,6 +156,13 @@ def load(database_url: str) -> dict[str, Any]:
                        round((ST_Distance(
                            d.centroid::geography, l.geom::geography
                        ) / 1000.0)::numeric, 2)::DOUBLE PRECISION,
+                       ll.hylak_id::BIGINT,
+                       NULLIF(trim(ll.lake_name), ''),
+                       ll.lake_type::INT,
+                       ll.lake_area::DOUBLE PRECISION,
+                       round((ST_Distance(
+                           d.centroid::geography, ll.geom::geography
+                       ) / 1000.0)::numeric, 2)::DOUBLE PRECISION,
                        %s, %s, %s
                 FROM destinations d
                 CROSS JOIN LATERAL (
@@ -133,6 +170,11 @@ def load(database_url: str) -> dict[str, Any]:
                     ORDER BY geom <-> d.centroid::geometry
                     LIMIT 1
                 ) l
+                LEFT JOIN LATERAL (
+                    SELECT * FROM hydrolakes_large
+                    ORDER BY geom <-> d.centroid::geometry
+                    LIMIT 1
+                ) ll ON TRUE
                 """,
                 (SOURCE, SOURCE_URL, PERIOD),
             )
@@ -140,6 +182,7 @@ def load(database_url: str) -> dict[str, Any]:
             count = cur.fetchone()["n"]
         conn.commit()
         with conn.cursor() as cur:
+            cur.execute("DROP TABLE IF EXISTS hydrolakes_large")
             cur.execute("DROP TABLE IF EXISTS hydrolakes")
         conn.commit()
     return {"cities": count}
