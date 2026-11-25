@@ -1526,9 +1526,12 @@ def place_profile(
     destination_id ("gn-2267057"). Each metric has a label, unit, value, global and
     in-country percentile (100 = best among cities with data) with a plain-words
     ``reading_global``, source and period, or status "not_measured"/"none_listed".
-    Also returns a 12-month climate table with a summary, country context
-    (currency, languages, price level, homicide rate, PM2.5, life expectancy,
-    political stability -- national values), and a list of what is not measured.
+    Also returns 12-month WorldClim and recent NASA POWER climate, monthly and
+    annual PM2.5, official local-currency rent where available, 5 km facility
+    counts, elevation/coast distance/daylight, airport access, monthly EU
+    tourism, metro hazard and health access, country context (currency,
+    languages, price level, homicide, water, sanitation -- national values) and
+    US/UK travel advisories.
     If the name is ambiguous, ``match.other_matches`` lists the alternatives; if it
     is only a fuzzy guess, the result has ``needs_choice: true`` and candidates
     instead of a profile.
