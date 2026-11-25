@@ -545,7 +545,8 @@ def fetch_air_quality_monthly(cur: Any, destination_ids: list[str]) -> dict[str,
         return {}
     cur.execute(
         """
-        SELECT destination_id, year, month, pm25_ugm3, source, observed_period
+        SELECT destination_id, year, month, pm25_ugm3, source, source_url,
+               observed_period
         FROM air_quality_monthly
         WHERE destination_id = ANY(%s)
         ORDER BY destination_id, month
@@ -576,6 +577,8 @@ def air_quality_monthly_summary(rows: list[dict[str, Any]]) -> dict[str, Any]:
              "observed_period": row.get("observed_period")}
             for row in rows
         ],
+        "source": rows[0].get("source"),
+        "source_url": rows[0].get("source_url"),
         "note": AIR_MONTHLY_NOTE,
     }
 
@@ -622,6 +625,7 @@ def fetch_ucdb_themes(cur: Any, destination_ids: list[str]) -> dict[str, dict[st
     hazard_cols = (
         "h.events_2015, h.hazards_2015, h.max_hazards_per_event_2015, "
         + ", ".join(f"h.{key}_2015" for key, _label in HAZARD_TYPES)
+        + ", h.source AS hazard_source, h.source_url AS hazard_source_url"
         if "urban_centre_hazard" in tables else "NULL AS events_2015"
     )
     health_cols = (
@@ -629,7 +633,8 @@ def fetch_ucdb_themes(cur: Any, destination_ids: list[str]) -> dict[str, dict[st
         "hl.pharmacy_density_per_km2, hl.hospitals_per_million, "
         "hl.pharmacies_per_million, hl.population_with_hospital_1km, "
         "hl.population_with_pharmacy_1km, hl.hospital_access_share_pct, "
-        "hl.pharmacy_access_share_pct"
+        "hl.pharmacy_access_share_pct, hl.source AS health_source, "
+        "hl.source_url AS health_source_url"
         if "urban_centre_health" in tables else "NULL AS hospitals_count"
     )
     cur.execute(
@@ -662,6 +667,8 @@ def hazard_summary(row: dict[str, Any] | None) -> dict[str, Any]:
             key: {"label": label, "events": row.get(f"{key}_2015") or 0}
             for key, label in HAZARD_TYPES
         },
+        "source": row.get("hazard_source"),
+        "source_url": row.get("hazard_source_url"),
         "note": HAZARD_NOTE,
     }
 
@@ -681,6 +688,8 @@ def health_access_summary(row: dict[str, Any] | None) -> dict[str, Any]:
         "population_with_pharmacy_1km": row.get("population_with_pharmacy_1km"),
         "hospital_access_share_pct": row.get("hospital_access_share_pct"),
         "pharmacy_access_share_pct": row.get("pharmacy_access_share_pct"),
+        "source": row.get("health_source"),
+        "source_url": row.get("health_source_url"),
         "note": HEALTH_ACCESS_NOTE,
     }
 
@@ -697,7 +706,8 @@ def fetch_tourism_monthly(cur: Any, destination_ids: list[str]) -> dict[str, lis
         return {}
     cur.execute(
         """
-        SELECT destination_id, month, tourist_nights, nights_per_resident
+        SELECT destination_id, month, tourist_nights, nights_per_resident,
+               source, observed_period
         FROM tourism_monthly
         WHERE destination_id = ANY(%s)
         ORDER BY destination_id, month
@@ -738,6 +748,9 @@ def tourism_seasonality(rows: list[dict[str, Any]]) -> dict[str, Any]:
             }
             for row in rows
         ],
+        "source": measured[0].get("source"),
+        "source_url": "https://ec.europa.eu/eurostat/databrowser/view/tour_occ_nin2m/default/table",
+        "observed_period": measured[0].get("observed_period"),
         "note": TOURISM_MONTH_NOTE,
     }
 
