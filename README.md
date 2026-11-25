@@ -379,6 +379,23 @@ this implementation:
   row per centre by default and exposes the shared `metro_group`; the
   percentiles themselves are still computed across all cities. Pass
   `--no-metro-dedupe` only to the city-table build, not to the ranker.
+- **Official rents are local-currency and not a rank input.** Eurostat city
+  averages, ONS local-authority averages and HUD Fair Market Rents have
+  different bases (average tenancy, all tenancies, 40th-percentile voucher
+  benchmark). The profile labels the source, area and period; do not compare
+  the numbers across countries as if they were one statistic.
+- **Recent climate is a separate NASA POWER layer.** It covers a growing subset
+  of cities at roughly 0.5° and does not replace the WorldClim baseline.
+- **Air quality is a model grid.** SatPM PM2.5 is a 0.1° city-point estimate,
+  not a monitor reading; the monthly layer shows seasonality, not a daily alert.
+- **Facilities and health access are presence, not quality.** Overture counts
+  and OSM/healthsites access shares inherit map coverage gaps; a zero is
+  `none_listed`, not proof that nothing exists.
+- **Hazards are recorded metro event counts.** The GHSL/MYRIAD layer covers the
+  2015 window and 11 hazard types, not a forecast or a live alert.
+- **Travel advisories are country-scoped.** US State levels 1–4 and UK FCDO
+  advice are separate official scales, never averaged, and never copied onto a
+  city row.
 - **WorldClim 2.1 is a 1970–2000 climatology**, not recent daily ERA5. The
   `median_temp_max_c` / `median_temp_min_c` columns are monthly **means of daily
   max/min** (the Phase-1 column names are retained); `precip_mm` is the monthly
