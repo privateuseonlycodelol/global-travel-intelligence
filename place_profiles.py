@@ -532,6 +532,63 @@ def fetch_climate(cur: Any, destination_ids: list[str]) -> dict[str, list[dict[s
     return out
 
 
+TOURISM_MONTH_NOTE = (
+    "Eurostat NUTS 2 monthly nights spent at tourist accommodation divided by "
+    "regional population. It is a regional pressure measure, not a city "
+    "count, and it is available only in the EU/EFTA coverage."
+)
+
+
+def fetch_tourism_monthly(cur: Any, destination_ids: list[str]) -> dict[str, list[dict[str, Any]]]:
+    if "tourism_monthly" not in _existing_tables(cur, ["tourism_monthly"]):
+        return {}
+    cur.execute(
+        """
+        SELECT destination_id, month, tourist_nights, nights_per_resident
+        FROM tourism_monthly
+        WHERE destination_id = ANY(%s)
+        ORDER BY destination_id, month
+        """,
+        (destination_ids,),
+    )
+    out: dict[str, list[dict[str, Any]]] = {}
+    for row in cur.fetchall():
+        row = dict(row)
+        out.setdefault(str(row.pop("destination_id")), []).append(row)
+    return out
+
+
+def tourism_seasonality(rows: list[dict[str, Any]]) -> dict[str, Any]:
+    if not rows:
+        return {"status": "not_loaded"}
+    measured = [row for row in rows if row.get("nights_per_resident") is not None]
+    if not measured:
+        return {"status": "not_measured"}
+    peak = max(measured, key=lambda row: row["nights_per_resident"])
+    quiet = min(measured, key=lambda row: row["nights_per_resident"])
+    ratio = (
+        round(float(peak["nights_per_resident"]) / float(quiet["nights_per_resident"]), 2)
+        if quiet["nights_per_resident"] else None
+    )
+    return {
+        "status": "loaded",
+        "peak_month": peak["month"],
+        "peak_nights_per_resident": peak["nights_per_resident"],
+        "quietest_month": quiet["month"],
+        "quietest_nights_per_resident": quiet["nights_per_resident"],
+        "peak_to_quiet_ratio": ratio,
+        "months": [
+            {
+                "month": row["month"],
+                "tourist_nights": row.get("tourist_nights"),
+                "nights_per_resident": row.get("nights_per_resident"),
+            }
+            for row in rows
+        ],
+        "note": TOURISM_MONTH_NOTE,
+    }
+
+
 FACILITY_FIELDS = (
     ("hospital", "hospital_count_5km", "Hospitals"),
     ("pharmacy", "pharmacy_count_5km", "Pharmacies"),
@@ -1508,6 +1565,7 @@ def build_profile(cur: Any, destination_id: str) -> dict[str, Any]:
     geography = fetch_geography(cur, [destination_id]).get(destination_id)
     facilities = fetch_facilities(cur, [destination_id]).get(destination_id)
     airports = fetch_airport_access(cur, [destination_id]).get(destination_id)
+    tourism_monthly = fetch_tourism_monthly(cur, [destination_id]).get(destination_id, [])
     country = fetch_country_context(cur, [basics["country_iso2"]]).get(basics["country_iso2"], {})
 
     groups: dict[str, list[dict[str, Any]]] = {}
@@ -1547,6 +1605,7 @@ def build_profile(cur: Any, destination_id: str) -> dict[str, Any]:
         "geography": geography_summary(geography, basics["lat"]),
         "facilities": facility_summary(facilities),
         "airport_access": airport_summary(airports),
+        "tourism_seasonality": tourism_seasonality(tourism_monthly),
         "country": country,
         "not_measured_for_this_city": not_measured,
         "not_in_database_for_any_city": NOT_IN_DATABASE + not_loaded,
@@ -1563,6 +1622,7 @@ def build_comparison(cur: Any, destination_ids: list[str]) -> dict[str, Any]:
     geography = fetch_geography(cur, ids)
     facilities = fetch_facilities(cur, ids)
     airports = fetch_airport_access(cur, ids)
+    tourism_monthly = fetch_tourism_monthly(cur, ids)
     countries = sorted({basics[i]["country_iso2"] for i in ids})
     country_context = fetch_country_context(cur, countries)
 
@@ -1665,6 +1725,9 @@ def build_comparison(cur: Any, destination_ids: list[str]) -> dict[str, Any]:
         },
         "facilities": {i: facility_summary(facilities.get(i)) for i in ids},
         "airport_access": {i: airport_summary(airports.get(i)) for i in ids},
+        "tourism_seasonality": {
+            i: tourism_seasonality(tourism_monthly.get(i, [])) for i in ids
+        },
         "country_context": country_rows,
         "not_in_database_for_any_city": NOT_IN_DATABASE
         + [label + " (dataset not loaded for any city)" for label in not_loaded],

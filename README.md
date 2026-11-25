@@ -19,7 +19,7 @@ calls:
 | Walkability score (global) | How Walkable city ranking (Overture/OSM) | one CSV, name/alias match |
 | Air quality (global) | SatPM V6.GL.03 annual PM2.5 (0.1°) | one NetCDF, point sample |
 | Housing (optional) | Inside Airbnb city dumps | local CSV scan |
-| Tourism pressure (optional) | Eurostat NUTS 2 tourism + population | one API + GISCO boundary join |
+| Tourism pressure (optional) | Eurostat NUTS 2 tourism + population | one API + GISCO boundary join; annual and monthly |
 
 ## Files
 
@@ -28,7 +28,7 @@ calls:
 | `bootstrap_global_40k.py` | Phase 1 pipeline (cities, airports, climate, POIs) |
 | `bootstrap_phase3.py` | Phase 3 pipeline (broadband, walkability/transit, optional housing) and `rank_destinations_v3` |
 | `bootstrap_transit_stops.py` | Overture Places public-transport facility counts within 5 km |
-| `bootstrap_supplemental.py` | optional official-data loaders (currently Eurostat NUTS 2 tourism pressure) |
+| `bootstrap_supplemental.py` | optional official-data loaders (Eurostat NUTS 2 annual and monthly tourism pressure) |
 | `bootstrap_places.py` | city name aliases (fuzzy search) and country facts/indicators (GeoNames, World Bank) |
 | `bootstrap_walkability.py` | published 0-100 walkability score for 662 cities (How Walkable, CC BY 4.0) |
 | `bootstrap_street_network.py` | urban-form context: street-intersection density and dead-end share (stored, not shown in profiles) |

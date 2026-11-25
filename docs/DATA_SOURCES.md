@@ -534,6 +534,7 @@ means without labelling the approximation.
 | `destination_geography` | GeoNames DEM + Natural Earth 10m coastline | Yes (straight-line distance) | `GeoNames cities15000 (dem, fallback elev)`, `Natural Earth 10m coastline (public domain)` |
 | `airport_access` | OurAirports | Yes (nearest point and 100 km counts) | `OurAirports (scheduled-service airports)` |
 | `tourism_pressure` | Eurostat NUTS 2 tourism + population | Yes (NUTS 2 assignment/division) | `Eurostat tour_occ_nin2m + demo_r_pjangrp3 (NUTS 2)` |
+| `tourism_monthly` | Eurostat NUTS 2 tourism + population | Yes (monthly nights / regional population) | `Eurostat tour_occ_nin2m + demo_r_pjangrp3 (NUTS 2) monthly` |
 | `flight_quote_cache` | SerpApi Google Flights | No (cached response) | `SerpApi Google Flights` |
 | `hotel_quote_cache` | SerpApi Google Hotels | No (cached response) | `SerpApi Google Hotels` |
 | `destination_aliases` | GeoNames alternatenames | Yes (normalized) | n/a |

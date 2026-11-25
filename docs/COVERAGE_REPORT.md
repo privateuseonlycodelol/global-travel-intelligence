@@ -33,6 +33,8 @@ final production numbers.
 | `travel_advisory` | 442 | US State (217) + UK FCDO (225) country advisories, retrieved 2026-11-25 |
 | `facility_metrics` | 13,101 | Overture Places counts within 5 km: hospital, pharmacy, school, grocery, park, beach |
 | `airport_access` | 13,101 | OurAirports nearest scheduled-service airport + 100 km counts |
+| `destination_geography` | 13,101 | GeoNames elevation (13,084) + Natural Earth coastline distance (13,101) |
+| `tourism_monthly` | 16,860 | Eurostat NUTS 2 monthly nights, 1,405 cities × 12 months, 2024 |
 | `flight_quote_cache` / `hotel_quote_cache` | 0 | Populated only by MCP stage 2 with SerpApi key |
 | `destination_aliases` | 188,403 | GeoNames names/alternatenames for all 13,101 cities (`bootstrap_places.py`) |
 | `country_facts` | 252 | GeoNames countryInfo; every destination has a country row |
@@ -46,7 +48,7 @@ final production numbers.
 | Walkability / rail | Partial (1,131 cities) | Overture Transportation is loaded for DE, GB, TR, ES, FR, PT, SE and LU. The global scan hit repeated DNS/OOM failures; run by country/region. |
 | Walkability score | Partial (662 cities) | Published How Walkable 0-100 score for 690 cities of 300,000+; 662 matched to loaded destinations. Mainland China, South Korea and Russia are not ranked; smaller cities stay NULL. |
 | Public transport stops | Broad (9,008 cities) | Overture Places transit facilities; not a complete stop-position/frequency feed. |
-| Tourism pressure | Partial (EU only) | Eurostat publishes NUTS 2 nights; no single global city-level official source found. |
+| Tourism pressure | Partial (EU only) | Eurostat NUTS 2 annual and monthly nights for 1,405 cities; no global city-level official source. |
 | Safety / crime | Country context loaded | US State levels 1-4 and UK FCDO advice for ~220 countries; no global city-level crime rate. |
 | Long-term rent | Partial (42 cities) | Eurostat `prc_colc_rents` official city averages in local currency; HUD/ONS/CMHC/ABS are country-specific and not yet loaded. |
 | Rainy/hot days | Missing | Open-Meteo/ERA5/NASA POWER are candidates; no batch enrichment run. |

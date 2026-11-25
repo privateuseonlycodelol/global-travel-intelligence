@@ -36,6 +36,16 @@ class OfflineTests(unittest.TestCase):
         self.assertEqual(summary["counts"]["pharmacy"]["status"], "measured")
         self.assertEqual(summary["counts"]["pharmacy"]["count"], 3)
 
+    def test_tourism_seasonality_peak_and_ratio(self):
+        rows = [
+            {"month": 1, "tourist_nights": 100, "nights_per_resident": 1.0},
+            {"month": 8, "tourist_nights": 400, "nights_per_resident": 4.0},
+        ]
+        summary = pp.tourism_seasonality(rows)
+        self.assertEqual(summary["peak_month"], 8)
+        self.assertEqual(summary["quietest_month"], 1)
+        self.assertEqual(summary["peak_to_quiet_ratio"], 4.0)
+
     def test_missing_layers_report_not_loaded(self):
         self.assertEqual(pp.facility_summary(None)["status"], "not_loaded")
         self.assertEqual(pp.airport_summary(None)["status"], "not_loaded")
@@ -80,6 +90,16 @@ class LiveContextTests(unittest.TestCase):
         )
         self.assertEqual(profile["airport_access"]["nearest"]["iata"], "LIS")
         self.assertEqual(profile["airport_access"]["nearest"]["type"], "large_airport")
+
+    def test_tourism_monthly_coverage(self):
+        with self.conn.cursor() as cur:
+            cur.execute(
+                "SELECT count(*) rows, count(DISTINCT destination_id) cities "
+                "FROM tourism_monthly"
+            )
+            row = cur.fetchone()
+        self.assertEqual(row["rows"], 16_860)
+        self.assertEqual(row["cities"], 1_405)
 
     def test_geography_when_loaded(self):
         with self.conn.cursor() as cur:

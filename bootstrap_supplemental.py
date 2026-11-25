@@ -131,6 +131,36 @@ def _values_by_geo(payload: dict, dimension: str = "geo") -> dict[str, float]:
     return out
 
 
+def _values_by_geo_month(payload: dict) -> dict[tuple[str, str], float]:
+    """Parse a JSON-stat response with geo and a 12-month dimension."""
+    dims = payload.get("id", [])
+    sizes = payload.get("size", [])
+    if "geo" not in dims or "month" not in dims:
+        return {}
+    categories = {
+        name: {int(index): str(code) for code, index in
+               payload["dimension"][name]["category"]["index"].items()}
+        for name in ("geo", "month")
+    }
+    out: dict[tuple[str, str], float] = {}
+    for flat_index, value in payload.get("value", {}).items():
+        if value is None:
+            continue
+        try:
+            remainder = int(flat_index)
+        except (TypeError, ValueError):
+            continue
+        coords: dict[str, int] = {}
+        for name, size in reversed(list(zip(dims, sizes))):
+            coords[name] = remainder % size
+            remainder //= size
+        geo = categories["geo"].get(coords["geo"])
+        month = categories["month"].get(coords["month"])
+        if geo and month and month.startswith("M"):
+            out[(geo, month)] = float(value)
+    return out
+
+
 def fetch_nuts2_codes(cache_dir: Path) -> set[str]:
     path = download_cached(NUTS2_GEOJSON_URL, cache_dir / "NUTS_RG_01M_2024_4326_LEVL_2.geojson")
     with open(path, encoding="utf-8") as handle:
@@ -226,6 +256,18 @@ def load_eurostat_tourism(
     }
     log(f"  Eurostat {TOURISM_DATASET}: {len(tourism):,} NUTS 2 values for {year}.")
 
+    monthly_payload = fetch_eurostat(
+        TOURISM_DATASET,
+        {
+            "time": str(year),
+            "unit": "NR",
+            "c_resid": "TOTAL",
+            "nace_r2": "I551-I553",
+        },
+    )
+    monthly = _values_by_geo_month(monthly_payload)
+    log(f"  Eurostat {TOURISM_DATASET}: {len(monthly):,} NUTS 2 month values.")
+
     population_payload = fetch_eurostat(
         POPULATION_DATASET,
         {
@@ -261,10 +303,28 @@ def load_eurostat_tourism(
         scope_params.append(countries)
 
     with conn.cursor() as cur:
+        cur.execute("""
+            CREATE TABLE IF NOT EXISTS tourism_monthly (
+                destination_id  TEXT NOT NULL REFERENCES destinations(destination_id) ON DELETE CASCADE,
+                month           INT NOT NULL CHECK (month BETWEEN 1 AND 12),
+                tourist_nights  BIGINT,
+                nights_per_resident DOUBLE PRECISION,
+                source          TEXT NOT NULL,
+                observed_period TEXT NOT NULL,
+                updated_at      TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+                PRIMARY KEY (destination_id, month)
+            );
+        """)
         # The run is authoritative for its scope: remove old tourism rows first
         # so a region that disappeared from the source does not keep stale data.
         cur.execute(
             "DELETE FROM tourism_pressure t USING destinations d "
+            "WHERE t.destination_id = d.destination_id"
+            + scope_sql,
+            scope_params,
+        )
+        cur.execute(
+            "DELETE FROM tourism_monthly t USING destinations d "
             "WHERE t.destination_id = d.destination_id"
             + scope_sql,
             scope_params,
@@ -304,11 +364,52 @@ def load_eurostat_tourism(
                     *scope_params,
                 ),
             )
+    with conn.cursor() as cur:
+        for (code, month), value in monthly.items():
+            if code not in population or code not in nuts2_codes:
+                continue
+            cur.execute(
+                """
+                INSERT INTO tourism_monthly (
+                    destination_id, month, tourist_nights, nights_per_resident,
+                    source, observed_period
+                )
+                SELECT
+                    d.destination_id,
+                    %s::INT,
+                    %s::BIGINT,
+                    ROUND((%s::DOUBLE PRECISION / NULLIF(%s::DOUBLE PRECISION, 0))::NUMERIC, 2),
+                    %s,
+                    %s
+                FROM destinations d
+                WHERE d.nuts2_code = %s
+                """ + scope_sql + """
+                ON CONFLICT (destination_id, month) DO UPDATE SET
+                    tourist_nights = EXCLUDED.tourist_nights,
+                    nights_per_resident = EXCLUDED.nights_per_resident,
+                    source = EXCLUDED.source,
+                    observed_period = EXCLUDED.observed_period,
+                    updated_at = NOW()
+                """,
+                (
+                    int(month[1:]),
+                    int(round(value)),
+                    value,
+                    population[code],
+                    TOURISM_SOURCE + " monthly",
+                    str(year),
+                    code,
+                    *scope_params,
+                ),
+            )
     conn.commit()
     with conn.cursor() as cur:
         cur.execute("SELECT COUNT(*) FROM tourism_pressure")
         total = cur.fetchone()[0]
+        cur.execute("SELECT COUNT(*) FROM tourism_monthly")
+        monthly_total = cur.fetchone()[0]
     log(f"  tourism_pressure rows now: {total:,}.")
+    log(f"  tourism_monthly rows now: {monthly_total:,}.")
 
 
 def print_coverage(conn: psycopg.Connection) -> None:
