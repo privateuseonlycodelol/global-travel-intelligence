@@ -1354,6 +1354,36 @@ def inspect_destination(
                 """,
                 (destination["country_iso2"],),
             )
+            hazard = optional_row(
+                """
+                SELECT h.events_2015, h.hazards_2015,
+                       h.max_hazards_per_event_2015, h.extreme_wind_2015,
+                       h.heatwave_2015, h.drought_2015, h.cold_wave_2015,
+                       h.flood_2015, h.tsunami_2015, h.tropical_cyclone_2015,
+                       h.wildfire_2015, h.landslide_2015, h.earthquake_2015,
+                       h.volcanic_2015, h.source, h.observed_period
+                FROM destination_metro m
+                JOIN urban_centre_hazard h USING (urban_centre_id)
+                WHERE m.destination_id = %s
+                """,
+                (resolved_id,),
+            )
+            health_access = optional_row(
+                """
+                SELECT hl.hospitals_count, hl.pharmacies_count,
+                       hl.hospital_density_per_km2, hl.pharmacy_density_per_km2,
+                       hl.hospitals_per_million, hl.pharmacies_per_million,
+                       hl.population_with_hospital_1km,
+                       hl.population_with_pharmacy_1km,
+                       hl.hospital_access_share_pct,
+                       hl.pharmacy_access_share_pct,
+                       hl.source, hl.observed_period
+                FROM destination_metro m
+                JOIN urban_centre_health hl USING (urban_centre_id)
+                WHERE m.destination_id = %s
+                """,
+                (resolved_id,),
+            )
 
             walkability_scores = None
             cur.execute("SELECT to_regclass('walkability_scores') IS NOT NULL AS present")
@@ -1405,6 +1435,8 @@ def inspect_destination(
         "tourism_monthly": tourism_monthly,
         "metro": metro,
         "travel_advisories": advisories,
+        "hazard_exposure": hazard,
+        "health_access": health_access,
         "poi_metrics": poi_metrics,
         "mobility_metrics": mobility_metrics,
         "broadband_metrics": broadband_metrics,

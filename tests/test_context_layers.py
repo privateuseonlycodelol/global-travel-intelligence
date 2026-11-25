@@ -36,6 +36,24 @@ class OfflineTests(unittest.TestCase):
         self.assertEqual(summary["counts"]["pharmacy"]["status"], "measured")
         self.assertEqual(summary["counts"]["pharmacy"]["count"], 3)
 
+    def test_hazard_summary_counts(self):
+        summary = pp.hazard_summary({
+            "events_2015": 10, "hazards_2015": 3,
+            "max_hazards_per_event_2015": 2, "flood_2015": 4,
+            "heatwave_2015": 2,
+        })
+        self.assertEqual(summary["events"], 10)
+        self.assertEqual(summary["by_type"]["flood"]["events"], 4)
+        self.assertEqual(summary["by_type"]["earthquake"]["events"], 0)
+
+    def test_health_access_summary(self):
+        summary = pp.health_access_summary({
+            "hospitals_count": 12, "pharmacies_count": 6,
+            "hospital_access_share_pct": 41.4, "pharmacy_access_share_pct": 20.0,
+        })
+        self.assertEqual(summary["hospitals_count"], 12)
+        self.assertEqual(summary["hospital_access_share_pct"], 41.4)
+
     def test_tourism_seasonality_peak_and_ratio(self):
         rows = [
             {"month": 1, "tourist_nights": 100, "nights_per_resident": 1.0},
@@ -90,6 +108,17 @@ class LiveContextTests(unittest.TestCase):
         )
         self.assertEqual(profile["airport_access"]["nearest"]["iata"], "LIS")
         self.assertEqual(profile["airport_access"]["nearest"]["type"], "large_airport")
+
+    def test_ucdb_hazard_and_health_coverage(self):
+        with self.conn.cursor() as cur:
+            cur.execute("SELECT count(*) n FROM urban_centre_hazard")
+            self.assertEqual(cur.fetchone()["n"], 11_422)
+            cur.execute("SELECT count(*) n FROM urban_centre_health")
+            self.assertEqual(cur.fetchone()["n"], 11_422)
+            profile = pp.build_profile(cur, "gn-1701668")  # Manila
+        self.assertEqual(profile["hazard_exposure"]["status"], "loaded")
+        self.assertGreater(profile["hazard_exposure"]["events"], 0)
+        self.assertEqual(profile["health_access"]["status"], "loaded")
 
     def test_tourism_monthly_coverage(self):
         with self.conn.cursor() as cur:

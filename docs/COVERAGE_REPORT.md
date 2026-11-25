@@ -34,6 +34,8 @@ final production numbers.
 | `facility_metrics` | 13,101 | Overture Places counts within 5 km: hospital, pharmacy, school, grocery, park, beach |
 | `airport_access` | 13,101 | OurAirports nearest scheduled-service airport + 100 km counts |
 | `destination_geography` | 13,101 | GeoNames elevation (13,084) + Natural Earth coastline distance (13,101) |
+| `urban_centre_hazard` | 11,422 | GHSL UCDB hazard theme: MYRIAD-HES event counts, 2015 window |
+| `urban_centre_health` | 11,422 | GHSL UCDB health theme: hospital/pharmacy counts and 1 km access share |
 | `tourism_monthly` | 16,860 | Eurostat NUTS 2 monthly nights, 1,405 cities × 12 months, 2024 |
 | `flight_quote_cache` / `hotel_quote_cache` | 0 | Populated only by MCP stage 2 with SerpApi key |
 | `destination_aliases` | 188,403 | GeoNames names/alternatenames for all 13,101 cities (`bootstrap_places.py`) |
@@ -55,6 +57,8 @@ final production numbers.
 | Air quality | Loaded, not scored | SatPM V6.GL.03 annual city PM2.5 for 13,101 cities; exposed as a metric and shown in profiles, not in `final_score`. |
 | Facilities | Loaded, not scored | Overture Places presence counts for hospitals, pharmacies, schools, groceries, parks and beaches; zero is `none_listed`. |
 | Airport access | Loaded, not scored | Nearest scheduled-service airport and large/medium counts within 100 km. |
+| Natural hazards | Partial, metro only | Urban-centre event counts for 11 hazard types (MYRIAD-HES, 2015 window); no live alerts. |
+| Healthcare access | Partial, metro only | Hospital/pharmacy counts and 1 km population access share from OSM/healthsites. |
 | Metro clustering | Implemented (9,730 cities) | GHSL UCDB R2024A polygon containment; 3,371 cities below the UCDB cutoff stay individual. Rank dedupe is display-level. |
 
 ## 3. Transport and walkability

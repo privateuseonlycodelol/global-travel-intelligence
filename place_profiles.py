@@ -533,6 +533,111 @@ def fetch_climate(cur: Any, destination_ids: list[str]) -> dict[str, list[dict[s
     return out
 
 
+HAZARD_TYPES = (
+    ("extreme_wind", "Extreme wind"),
+    ("heatwave", "Heatwave"),
+    ("drought", "Drought"),
+    ("cold_wave", "Cold wave"),
+    ("flood", "Flood"),
+    ("tsunami", "Tsunami"),
+    ("tropical_cyclone", "Tropical cyclone"),
+    ("wildfire", "Wildfire"),
+    ("landslide", "Landslide"),
+    ("earthquake", "Earthquake"),
+    ("volcanic", "Volcanic eruption"),
+)
+HAZARD_NOTE = (
+    "MYRIAD-HES multi-hazard events overlaid on the GHSL urban centre for the "
+    "2015 window (2014-2016). These are recorded event counts, not a "
+    "probability or a forecast, and they cover the metro, not one street."
+)
+HEALTH_ACCESS_NOTE = (
+    "Urban-centre healthsites.io/OSM counts and the share of metro population "
+    "within 1 km of a hospital or pharmacy. This is physical access, not "
+    "quality of care, and it inherits OSM coverage gaps."
+)
+
+
+def fetch_ucdb_themes(cur: Any, destination_ids: list[str]) -> dict[str, dict[str, Any]]:
+    tables = _existing_tables(
+        cur, ["destination_metro", "urban_centre_hazard", "urban_centre_health"]
+    )
+    if "destination_metro" not in tables:
+        return {}
+    hazard_join = (
+        "LEFT JOIN urban_centre_hazard h ON h.urban_centre_id = m.urban_centre_id"
+        if "urban_centre_hazard" in tables else ""
+    )
+    health_join = (
+        "LEFT JOIN urban_centre_health hl ON hl.urban_centre_id = m.urban_centre_id"
+        if "urban_centre_health" in tables else ""
+    )
+    hazard_cols = (
+        "h.events_2015, h.hazards_2015, h.max_hazards_per_event_2015, "
+        + ", ".join(f"h.{key}_2015" for key, _label in HAZARD_TYPES)
+        if "urban_centre_hazard" in tables else "NULL AS events_2015"
+    )
+    health_cols = (
+        "hl.hospitals_count, hl.pharmacies_count, hl.hospital_density_per_km2, "
+        "hl.pharmacy_density_per_km2, hl.hospitals_per_million, "
+        "hl.pharmacies_per_million, hl.population_with_hospital_1km, "
+        "hl.population_with_pharmacy_1km, hl.hospital_access_share_pct, "
+        "hl.pharmacy_access_share_pct"
+        if "urban_centre_health" in tables else "NULL AS hospitals_count"
+    )
+    cur.execute(
+        f"""
+        SELECT m.destination_id, {hazard_cols}, {health_cols}
+        FROM destination_metro m
+        {hazard_join}
+        {health_join}
+        WHERE m.destination_id = ANY(%s)
+        """,
+        (destination_ids,),
+    )
+    out: dict[str, dict[str, Any]] = {}
+    for row in cur.fetchall():
+        row = dict(row)
+        out[str(row.pop("destination_id"))] = row
+    return out
+
+
+def hazard_summary(row: dict[str, Any] | None) -> dict[str, Any]:
+    if not row or row.get("events_2015") is None:
+        return {"status": "not_loaded"}
+    return {
+        "status": "loaded",
+        "period": "2015 (2014-2016 window)",
+        "events": row.get("events_2015"),
+        "hazards": row.get("hazards_2015"),
+        "max_hazards_per_event": row.get("max_hazards_per_event_2015"),
+        "by_type": {
+            key: {"label": label, "events": row.get(f"{key}_2015") or 0}
+            for key, label in HAZARD_TYPES
+        },
+        "note": HAZARD_NOTE,
+    }
+
+
+def health_access_summary(row: dict[str, Any] | None) -> dict[str, Any]:
+    if not row or row.get("hospitals_count") is None:
+        return {"status": "not_loaded"}
+    return {
+        "status": "loaded",
+        "hospitals_count": row.get("hospitals_count"),
+        "pharmacies_count": row.get("pharmacies_count"),
+        "hospital_density_per_km2": row.get("hospital_density_per_km2"),
+        "pharmacy_density_per_km2": row.get("pharmacy_density_per_km2"),
+        "hospitals_per_million": row.get("hospitals_per_million"),
+        "pharmacies_per_million": row.get("pharmacies_per_million"),
+        "population_with_hospital_1km": row.get("population_with_hospital_1km"),
+        "population_with_pharmacy_1km": row.get("population_with_pharmacy_1km"),
+        "hospital_access_share_pct": row.get("hospital_access_share_pct"),
+        "pharmacy_access_share_pct": row.get("pharmacy_access_share_pct"),
+        "note": HEALTH_ACCESS_NOTE,
+    }
+
+
 TOURISM_MONTH_NOTE = (
     "Eurostat NUTS 2 monthly nights spent at tourist accommodation divided by "
     "regional population. It is a regional pressure measure, not a city "
@@ -1576,6 +1681,7 @@ def build_profile(cur: Any, destination_id: str) -> dict[str, Any]:
     facilities = fetch_facilities(cur, [destination_id]).get(destination_id)
     airports = fetch_airport_access(cur, [destination_id]).get(destination_id)
     tourism_monthly = fetch_tourism_monthly(cur, [destination_id]).get(destination_id, [])
+    ucdb = fetch_ucdb_themes(cur, [destination_id]).get(destination_id)
     country = fetch_country_context(cur, [basics["country_iso2"]]).get(basics["country_iso2"], {})
 
     groups: dict[str, list[dict[str, Any]]] = {}
@@ -1616,6 +1722,8 @@ def build_profile(cur: Any, destination_id: str) -> dict[str, Any]:
         "facilities": facility_summary(facilities),
         "airport_access": airport_summary(airports),
         "tourism_seasonality": tourism_seasonality(tourism_monthly),
+        "hazard_exposure": hazard_summary(ucdb),
+        "health_access": health_access_summary(ucdb),
         "country": country,
         "not_measured_for_this_city": not_measured,
         "not_in_database_for_any_city": NOT_IN_DATABASE + not_loaded,
@@ -1633,6 +1741,7 @@ def build_comparison(cur: Any, destination_ids: list[str]) -> dict[str, Any]:
     facilities = fetch_facilities(cur, ids)
     airports = fetch_airport_access(cur, ids)
     tourism_monthly = fetch_tourism_monthly(cur, ids)
+    ucdb = fetch_ucdb_themes(cur, ids)
     countries = sorted({basics[i]["country_iso2"] for i in ids})
     country_context = fetch_country_context(cur, countries)
 
@@ -1738,6 +1847,8 @@ def build_comparison(cur: Any, destination_ids: list[str]) -> dict[str, Any]:
         "tourism_seasonality": {
             i: tourism_seasonality(tourism_monthly.get(i, [])) for i in ids
         },
+        "hazard_exposure": {i: hazard_summary(ucdb.get(i)) for i in ids},
+        "health_access": {i: health_access_summary(ucdb.get(i)) for i in ids},
         "country_context": country_rows,
         "not_in_database_for_any_city": NOT_IN_DATABASE
         + [label + " (dataset not loaded for any city)" for label in not_loaded],

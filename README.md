@@ -41,6 +41,7 @@ calls:
 | `bootstrap_facilities.py` | Overture Places daily-life facility counts within 5 km |
 | `bootstrap_geography.py` | GeoNames elevation and Natural Earth coastline distance |
 | `bootstrap_airport_access.py` | nearest scheduled-service airport and 100 km counts |
+| `bootstrap_ucdb_themes.py` | GHSL urban-centre hazard and health-access themes |
 | `place_profiles.py` | place search, plain-language profiles and comparison used by the MCP server |
 | `mcp_server.py` | Phase 4 FastMCP server (Streamable HTTP, optional SerpApi live pricing) |
 | `Dockerfile` | container image for the pipeline and MCP server |
@@ -802,6 +803,8 @@ Implemented third-party sources:
 | Travel advisories | US State Department + UK FCDO | Public domain / OGL v3.0 | ~220 countries each; two separate scales, not averaged |
 | Facilities | Overture Maps Places | CDLA-Permissive 2.0 | 13,101 cities within 5 km: hospital, pharmacy, school, grocery, park, beach |
 | Airport access | OurAirports | Public domain | 13,101 cities; nearest scheduled airport and 100 km counts |
+| Hazard exposure | GHSL UCDB / MYRIAD-HES | CC BY 4.0 | 11,422 urban centres; event counts by hazard type, 2015 window |
+| Health access | GHSL UCDB / healthsites.io | ODbL / EC reuse | 11,422 urban centres; hospital and pharmacy access |
 | Broadband | Ookla Open Data | **CC BY-NC-SA 4.0; non-commercial; attribution required** | global tiles |
 | GTFS coverage | Mobility Database | catalog metadata CC0 1.0; individual feeds retain provider licences | global catalog |
 | Public transport stops | Overture Places transit facilities | CDLA-Permissive 2.0 / per-provider terms | global where Overture Places has facilities |

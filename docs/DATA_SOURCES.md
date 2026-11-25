@@ -398,6 +398,36 @@ exists; cities without it are neutral (0.5) and are reported via
 | Status | **Implemented** |
 | Notes | Straight-line distance, not drive time. A nearby small field can be closer than the useful commercial hub, so both distance and type are shown. |
 
+### 3.21 Urban-centre hazard exposure
+
+| Field | Value |
+| --- | --- |
+| Party | Third-party |
+| Publisher | European Commission JRC, GHS-UCDB R2024A |
+| Dataset | Hazard theme: MYRIAD-HES multi-hazard event counts, 2015 window (2014-2016) |
+| URL | https://human-settlement.emergency.copernicus.eu/ ; Zenodo record 8269680 |
+| Licence | CC BY 4.0 (MYRIAD-HES); EC reuse notice for the UCDB compilation |
+| Coverage | 11,422 urban centres, global |
+| Granularity | Urban centre, by hazard type |
+| Used by | `bootstrap_ucdb_themes.py` → `urban_centre_hazard`; `place_profile.hazard_exposure` |
+| Status | **Implemented** |
+| Notes | Recorded event counts, not a probability or forecast. Conflict columns in the same UCDB file are not loaded because their ACLED/UCDP provenance has separate redistribution terms. A city without a GHSL metro match has no row. |
+
+### 3.22 Urban-centre health access
+
+| Field | Value |
+| --- | --- |
+| Party | Third-party |
+| Publisher | European Commission JRC, GHS-UCDB R2024A; underlying healthsites.io/OSM |
+| Dataset | Health theme: hospital and pharmacy counts, density, per-capita and 1 km access share |
+| URL | https://human-settlement.emergency.copernicus.eu/ ; https://healthsites.io/ |
+| Licence | EC reuse notice; OSM/healthsites data inherit ODbL |
+| Coverage | 11,422 urban centres, global |
+| Granularity | Urban centre |
+| Used by | `bootstrap_ucdb_themes.py` → `urban_centre_health`; `place_profile.health_access` |
+| Status | **Implemented** |
+| Notes | Physical access, not quality of care. Inherits OSM coverage gaps; a low share can mean sparse mapping rather than no hospital. |
+
 ## 4. Missing dimensions and verified candidate sources
 
 These sources were checked but are **not** loaded. They are listed so a
@@ -534,6 +564,8 @@ means without labelling the approximation.
 | `facility_metrics` | Overture Places | Yes (5 km counts) | `Overture Maps Places (facility counts)` |
 | `destination_geography` | GeoNames DEM + Natural Earth 10m coastline | Yes (straight-line distance) | `GeoNames cities15000 (dem, fallback elev)`, `Natural Earth 10m coastline (public domain)` |
 | `airport_access` | OurAirports | Yes (nearest point and 100 km counts) | `OurAirports (scheduled-service airports)` |
+| `urban_centre_hazard` | GHS-UCDB hazard theme (MYRIAD-HES) | No (zonal counts) | `GHS-UCDB R2024A hazard theme (MYRIAD-HES, CC BY 4.0)` |
+| `urban_centre_health` | GHS-UCDB health theme (healthsites.io/OSM) | Yes (counts, density, access share) | `GHS-UCDB R2024A health theme (healthsites.io/OSM)` |
 | `tourism_pressure` | Eurostat NUTS 2 tourism + population | Yes (NUTS 2 assignment/division) | `Eurostat tour_occ_nin2m + demo_r_pjangrp3 (NUTS 2)` |
 | `tourism_monthly` | Eurostat NUTS 2 tourism + population | Yes (monthly nights / regional population) | `Eurostat tour_occ_nin2m + demo_r_pjangrp3 (NUTS 2) monthly` |
 | `flight_quote_cache` | SerpApi Google Flights | No (cached response) | `SerpApi Google Flights` |
