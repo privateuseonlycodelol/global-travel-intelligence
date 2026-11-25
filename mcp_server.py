@@ -1447,6 +1447,7 @@ def inspect_destination(
         "travel_advisories": advisories,
         "hazard_exposure": hazard,
         "health_access": health_access,
+        "work_overlap": place_profiles.work_overlap(destination.get("timezone")),
         "poi_metrics": poi_metrics,
         "mobility_metrics": mobility_metrics,
         "broadband_metrics": broadband_metrics,
