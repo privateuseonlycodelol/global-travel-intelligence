@@ -471,7 +471,7 @@ US/UK-only city-crime mode is added, it must be labelled as such.
 | --- | --- | --- | --- |
 | Inside Airbnb | City/regional; global coverage varies | CC BY 4.0; verified | Implemented optional; short-term-rental price, local currency, not long-term rent. |
 | HUD Fair Market Rents | Metro/county polygons; US | US government public domain; ArcGIS service verified 2026-11 | **Implemented**: FY2026 0-4 bedroom FMRs for 1,087 US cities. |
-| UK ONS private rent | Local authority; UK | Open Government Licence v3.0; XLSX verified 2026-11 | **Implemented**: 119 GB local-authority areas, 2026-10, GBP. |
+| UK ONS private rent | Local authority; UK | Open Government Licence v3.0; XLSX verified 2026-11 | **Implemented**: 121 GB local-authority areas, 2026-10, GBP. |
 | Canada CMHC Rental Market | CMA; Canada | CMHC terms; verify | Candidate for Canada. |
 | Australia ABS rent | State/city; Australia | ABS terms; verify | Candidate for Australia. |
 | Eurostat `prc_colc_rents` | 42 cities; EU/EFTA/UK/TR/Balkans | Eurostat reuse with attribution; API verified | **Implemented**: average monthly rent by dwelling type, 2025, local currency. |
@@ -479,10 +479,11 @@ US/UK-only city-crime mode is added, it must be labelled as such.
 | OECD Affordable Housing Database | Country; OECD | OECD terms; verify | Country-level only. |
 
 **Decision:** `rent_monthly` stores official rents in local currency for about
-160 cities: Eurostat city averages (41) and ONS local-authority averages (119
-GB areas). There is still no global city-level long-term rent source in the
-checked set, and values are not FX-converted or put into the rank.
-`housing_monthly` remains the separate optional Inside Airbnb table.
+1,250 cities: Eurostat city averages (41), ONS local-authority averages (121 GB
+areas) and HUD Fair Market Rents (1,087 US cities). There is still no global
+city-level long-term rent source in the checked set, and values are not
+FX-converted or put into the rank. `housing_monthly` remains the separate
+optional Inside Airbnb table.
 
 ### 4.4 Walkability / rail
 

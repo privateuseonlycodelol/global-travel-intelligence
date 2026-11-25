@@ -30,7 +30,7 @@ final production numbers.
 | `mobility_metrics` with transit stops | 9,008 | Overture Places transit facilities within 5 km |
 | `tourism_pressure` | 1,405 | Eurostat NUTS 2 2024; EU/EFTA only |
 | `housing_monthly` | 0 | Optional Inside Airbnb load not run globally |
-| `rent_monthly` | 6,707 | Eurostat 41 cities (2025) + ONS 119 GB areas (2026-10) + HUD 1,087 US cities (FY2026), local currency |
+| `rent_monthly` | 6,725 | Eurostat 41 cities (2025) + ONS 121 GB areas (2026-10) + HUD 1,087 US cities (FY2026), local currency |
 | `travel_advisory` | 439 | US State (214) + UK FCDO (225) country advisories, retrieved 2026-11-25 |
 | `facility_metrics` | 13,101 | Overture Places counts within 5 km: hospital, pharmacy, school, grocery, park, beach |
 | `airport_access` | 13,101 | OurAirports nearest scheduled-service airport + 100 km counts |
@@ -53,7 +53,7 @@ final production numbers.
 | Public transport stops | Broad (9,008 cities) | Overture Places transit facilities; not a complete stop-position/frequency feed. |
 | Tourism pressure | Partial (EU only) | Eurostat NUTS 2 annual and monthly nights for 1,405 cities; no global city-level official source. |
 | Safety / crime | Country context loaded | US State levels 1-4 and UK FCDO advice for ~220 countries; no global city-level crime rate. |
-| Long-term rent | Partial (~1,250 cities) | Eurostat city averages (41), ONS GB local-authority averages (119) and HUD US FMRs (1,087), in local currency. |
+| Long-term rent | Partial (~1,250 cities) | Eurostat city averages (41), ONS GB local-authority averages (121) and HUD US FMRs (1,087), in local currency. |
 | Rainy/hot days | Partial (1,679 cities) | NASA POWER 2015-2024 monthly counts in `climate_recent`; the rest are not yet fetched. |
 | Air quality | Loaded, not scored | SatPM V6.GL.03 annual and monthly city PM2.5 for 13,101 cities; exposed as a metric and seasonal block, not in `final_score`. |
 | Facilities | Loaded, not scored | Overture Places presence counts for hospitals, pharmacies, schools, groceries, parks and beaches; zero is `none_listed`. |

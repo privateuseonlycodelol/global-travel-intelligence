@@ -51,6 +51,10 @@ BASIS = (
 )
 CURRENCY = "GBP"
 
+AREA_ALIASES = {
+    "lothian": "edinburgh",
+}
+
 # (key, bedrooms, column index of the published rent)
 TYPES = (
     ("ALL", None, 7),
@@ -176,19 +180,34 @@ def match_destinations(cur: Any, areas: dict[str, dict[str, Any]]) -> tuple[dict
     )
     by_name: dict[str, list[dict[str, Any]]] = defaultdict(list)
     for row in cur.fetchall():
-        by_name[pp.normalize_name(row["name"])].append(dict(row))
+        record = dict(row)
+        normalized = pp.normalize_name(record["name"])
+        by_name[normalized].append(record)
+        for prefix in (
+            "city of ", "london borough of ", "royal borough of ", "the city of ",
+        ):
+            if normalized.startswith(prefix):
+                by_name[normalized[len(prefix):]].append(record)
+                break
     matches: dict[str, str] = {}
     unmatched: list[str] = []
     for code, area in sorted(areas.items()):
         best: tuple[int, dict[str, Any]] | None = None
-        for score, candidate in candidate_names(area["area_name"]):
-            options = by_name.get(candidate)
-            if not options:
-                continue
-            pick = max(options, key=lambda row: row["population"] or 0)
-            if best is None or score < best[0]:
-                best = (score, pick)
-            if score == 0:
+        names = [area["area_name"]]
+        alias = AREA_ALIASES.get(pp.normalize_name(area["area_name"]))
+        if alias:
+            names.append(alias)
+        for name in names:
+            for score, candidate in candidate_names(name):
+                options = by_name.get(candidate)
+                if not options:
+                    continue
+                pick = max(options, key=lambda row: row["population"] or 0)
+                if best is None or score < best[0]:
+                    best = (score, pick)
+                if score == 0:
+                    break
+            if best is not None and best[0] == 0:
                 break
         if best is None:
             unmatched.append(area["area_name"])
