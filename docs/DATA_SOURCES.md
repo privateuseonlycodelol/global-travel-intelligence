@@ -411,7 +411,7 @@ exists; cities without it are neutral (0.5) and are reported via
 | Granularity | Urban centre, by hazard type |
 | Used by | `bootstrap_ucdb_themes.py` → `urban_centre_hazard`; `place_profile.hazard_exposure` |
 | Status | **Implemented** |
-| Notes | Recorded event counts, not a probability or forecast. Conflict columns in the same UCDB file are not loaded because their ACLED/UCDP provenance has separate redistribution terms. A city without a GHSL metro match has no row. |
+| Notes | Recorded event counts, not a probability or forecast. A dash in the source is stored as zero events. Conflict columns in the same UCDB file are not loaded because their ACLED/UCDP provenance has separate redistribution terms. A city without a GHSL metro match has no row. |
 
 ### 3.22 Urban-centre health access
 

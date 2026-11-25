@@ -599,7 +599,8 @@ HAZARD_TYPES = (
 HAZARD_NOTE = (
     "MYRIAD-HES multi-hazard events overlaid on the GHSL urban centre for the "
     "2015 window (2014-2016). These are recorded event counts, not a "
-    "probability or a forecast, and they cover the metro, not one street."
+    "probability or a forecast, and they cover the metro, not one street. A "
+    "dash in the source is stored as zero events."
 )
 HEALTH_ACCESS_NOTE = (
     "Urban-centre healthsites.io/OSM counts and the share of metro population "
