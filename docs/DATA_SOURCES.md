@@ -278,9 +278,9 @@ Islington (449), Osaka (428), Paris (408), Geneva (392) and New York City
 | --- | --- |
 | Party | Third-party |
 | Publisher | World Bank WDI and WGI (homicide series sourced from UNODC) |
-| Dataset | `VC.IHR.PSRC.P5` homicides per 100k, `EN.ATM.PM25.MC.M3` PM2.5 exposure, `SP.DYN.LE00.IN` life expectancy, `NY.GDP.PCAP.PP.CD` GDP per capita PPP, `GOV_WGI_PV.EST` political stability, and the published GDP price level index `PA.NUS.GDP.PLI` stored as a ratio (index / 100; 1.0 = US prices). Deriving PPP / exchange rate was rejected: it breaks on currency redenominations (Bulgaria, Liberia) and official pegs (Iran). |
+| Dataset | `VC.IHR.PSRC.P5` homicides per 100k, `EN.ATM.PM25.MC.M3` PM2.5 exposure, `SP.DYN.LE00.IN` life expectancy, `NY.GDP.PCAP.PP.CD` GDP per capita PPP, `GOV_WGI_PV.EST` political stability, `PA.NUS.GDP.PLI` price level (stored as a ratio), `SH.MED.PHYS.ZS` physicians per 1,000, `SH.MED.BEDS.ZS` hospital beds per 1,000, `SH.STA.TRAF.P5` road traffic deaths per 100k, and `SH.XPD.OOPC.CH.ZS` out-of-pocket health spending share. Deriving PPP / exchange rate was rejected: it breaks on currency redenominations (Bulgaria, Liberia) and official pegs (Iran). |
 | Licence | CC BY 4.0 |
-| Coverage | 177-216 countries per indicator; latest non-null year from 2012-2026 is kept and its year stored |
+| Coverage | 164-216 countries per indicator; latest non-null year is kept and its year stored |
 | Granularity | **Country** |
 | Used by | `bootstrap_places.py` → `country_indicators`; `place_profile` / `compare_places` |
 | Status | **Implemented** |

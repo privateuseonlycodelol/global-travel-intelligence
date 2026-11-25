@@ -93,6 +93,23 @@ WORLD_BANK_INDICATORS: dict[str, tuple[str, int | None, str, str, str | None, fl
         "Price level vs USA (World Bank GDP price level index; 1.0 = US prices)",
         "ratio to US", "lower", 0.01,
     ),
+    "physicians_per_1000": (
+        "SH.MED.PHYS.ZS", None,
+        "Physicians per 1,000 people", "per 1,000 people", "higher", 1.0,
+    ),
+    "hospital_beds_per_1000": (
+        "SH.MED.BEDS.ZS", None,
+        "Hospital beds per 1,000 people", "per 1,000 people", "higher", 1.0,
+    ),
+    "road_traffic_deaths_per_100k": (
+        "SH.STA.TRAF.P5", None,
+        "Estimated road traffic deaths per 100,000 people", "per 100k people", "lower", 1.0,
+    ),
+    "out_of_pocket_health_pct": (
+        "SH.XPD.OOPC.CH.ZS", None,
+        "Out-of-pocket health spending as a share of current health expenditure",
+        "% of health spending", "lower", 1.0,
+    ),
 }
 INDICATOR_YEARS = "2012:2026"
 
