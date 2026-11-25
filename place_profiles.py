@@ -97,6 +97,7 @@ TABLES = {
     "v": "walkability_scores",
     "g": "ghsci_city_indicators",
     "a": "air_quality_annual",
+    "s": "transit_city_weekday_peak",
 }
 
 METRICS: tuple[Metric, ...] = (
@@ -205,6 +206,18 @@ METRICS: tuple[Metric, ...] = (
            "Bus, rail and metro stations within 5 km", "stations", "higher",
            "getting_around", "m.transit_stops_source", "m.transit_stops_period",
            note="Station/facility count, not service frequency."),
+    Metric("transit_peak_headway_min", "s", "median_headway_min",
+           "Weekday peak median scheduled wait between vehicles", "minutes", "lower",
+           "getting_around", "'Mobility Database GTFS'", "s.service_date::text",
+           note=("Median of each mapped stop's best route-level headway in "
+                 "07:00-09:00, from static GTFS. It is scheduled service, not "
+                 "real-time reliability or a journey time. Cities without a "
+                 "mapped feed stay unmeasured. Only cities with at least 50 "
+                 "mapped stops are scored. Coverage is currently partial "
+                 "(initial Italy/France batch)."),
+           sample_sql="s.stops",
+           cohort="cities with at least 50 mapped stops (partial coverage)",
+           source_url_expr="s.license_url"),
     Metric("transit_timetable_feeds", "m", "gtfs_active_feeds",
            "Public-transport timetable (GTFS) feeds whose area includes the city "
            "(potential coverage)", "feeds", "higher", "getting_around",
@@ -529,6 +542,121 @@ def fetch_climate(cur: Any, destination_ids: list[str]) -> dict[str, list[dict[s
         row = dict(row)
         out.setdefault(str(row.pop("destination_id")), []).append(row)
     return out
+
+
+ROUTE_TYPE_LABELS = {
+    0: "Tram",
+    1: "Subway/metro",
+    2: "Rail",
+    3: "Bus",
+    4: "Ferry",
+    5: "Cable tram",
+    6: "Aerial lift",
+    7: "Funicular",
+    11: "Trolleybus",
+    12: "Monorail",
+}
+TRANSIT_NOTE = (
+    "Scheduled service from static GTFS. Headway is the median of each stop's "
+    "best route-level headway in the time band; it is not real-time reliability "
+    "or a journey time. GTFS coverage varies by operator and country. "
+    "The denominator is mapped stops, not population. Route-type counts are "
+    "distinct route IDs, not departures. Coverage is currently partial."
+)
+
+
+def format_gtfs_minute(value: Any) -> str | None:
+    if value is None:
+        return None
+    try:
+        minutes = int(value)
+    except (TypeError, ValueError):
+        return None
+    return f"{minutes // 60:02d}:{minutes % 60:02d}"
+
+
+def fetch_transit_service(cur: Any, destination_ids: list[str]) -> dict[str, list[dict[str, Any]]]:
+    if "transit_city_service" not in _existing_tables(cur, ["transit_city_service"]):
+        return {}
+    cur.execute(
+        """
+        SELECT t.destination_id, t.feed_id, t.day_type, t.time_band,
+               t.radius_rule, t.service_date, t.stops, t.median_headway_min,
+               t.pct_stops_headway_le_10, t.pct_stops_headway_le_15,
+               t.pct_stops_headway_le_30, t.first_departure_min,
+               t.last_departure_min, t.departures_at_busiest_stop,
+               t.route_type_counts, t.wheelchair_coded_pct,
+               t.wheelchair_boardable_pct, f.provider, f.license_url
+        FROM transit_city_service t
+        LEFT JOIN gtfs_feed f USING (feed_id)
+        WHERE t.destination_id = ANY(%s)
+        ORDER BY t.destination_id, t.day_type, t.time_band
+        """,
+        (destination_ids,),
+    )
+    out: dict[str, list[dict[str, Any]]] = {}
+    for row in cur.fetchall():
+        row = dict(row)
+        out.setdefault(str(row.pop("destination_id")), []).append(row)
+    return out
+
+
+def _transit_block(row: dict[str, Any]) -> dict[str, Any]:
+    route_counts = row.get("route_type_counts") or {}
+    route_types = {}
+    if isinstance(route_counts, dict):
+        for key, count in route_counts.items():
+            try:
+                label = ROUTE_TYPE_LABELS.get(int(key), f"Type {key}")
+            except (TypeError, ValueError):
+                label = str(key)
+            route_types[label] = count
+    return {
+        "service_date": str(row.get("service_date")),
+        "radius_rule": row.get("radius_rule"),
+        "stops": row.get("stops"),
+        "coverage": "low" if (row.get("stops") or 0) < 50 else "ok",
+        "median_headway_min": row.get("median_headway_min"),
+        "pct_stops_within_10_min": round(float(row["pct_stops_headway_le_10"]) * 100, 1)
+        if row.get("pct_stops_headway_le_10") is not None else None,
+        "pct_stops_within_15_min": round(float(row["pct_stops_headway_le_15"]) * 100, 1)
+        if row.get("pct_stops_headway_le_15") is not None else None,
+        "pct_stops_within_30_min": round(float(row["pct_stops_headway_le_30"]) * 100, 1)
+        if row.get("pct_stops_headway_le_30") is not None else None,
+        "first_departure": format_gtfs_minute(row.get("first_departure_min")),
+        "last_departure": format_gtfs_minute(row.get("last_departure_min")),
+        "departures_at_busiest_stop": row.get("departures_at_busiest_stop"),
+        "route_types": route_types,
+        "wheelchair_coded_pct": round(float(row["wheelchair_coded_pct"]) * 100, 1)
+        if row.get("wheelchair_coded_pct") is not None else None,
+        "wheelchair_boardable_pct": round(float(row["wheelchair_boardable_pct"]) * 100, 1)
+        if row.get("wheelchair_boardable_pct") is not None else None,
+        "feed_id": row.get("feed_id"),
+        "provider": row.get("provider"),
+        "license_url": row.get("license_url"),
+    }
+
+
+def transit_summary(rows: list[dict[str, Any]]) -> dict[str, Any]:
+    if not rows:
+        return {"status": "not_loaded"}
+    blocks = {}
+    for row in rows:
+        key = f"{row['day_type']}_{row['time_band']}"
+        blocks[key] = _transit_block(row)
+    max_stops = max((row.get("stops") or 0) for row in rows)
+    return {
+        "status": "loaded",
+        "coverage_warning": (
+            None if max_stops >= 50 else
+            f"Only {max_stops} mapped stop(s) with scheduled departures; this "
+            "may be a rail-only or partial feed, not the city network."
+        ),
+        "weekday_peak": blocks.get("weekday_peak"),
+        "weekday_midday": blocks.get("weekday_midday"),
+        "sunday_midday": blocks.get("sunday_midday"),
+        "note": TRANSIT_NOTE,
+    }
 
 
 AIR_MONTHLY_NOTE = (
@@ -1806,6 +1934,7 @@ def build_profile(cur: Any, destination_id: str) -> dict[str, Any]:
     tourism_monthly = fetch_tourism_monthly(cur, [destination_id]).get(destination_id, [])
     ucdb = fetch_ucdb_themes(cur, [destination_id]).get(destination_id)
     air_monthly = fetch_air_quality_monthly(cur, [destination_id]).get(destination_id, [])
+    transit = fetch_transit_service(cur, [destination_id]).get(destination_id, [])
     country = fetch_country_context(cur, [basics["country_iso2"]]).get(basics["country_iso2"], {})
 
     groups: dict[str, list[dict[str, Any]]] = {}
@@ -1851,6 +1980,7 @@ def build_profile(cur: Any, destination_id: str) -> dict[str, Any]:
         "hazard_exposure": hazard_summary(ucdb),
         "health_access": health_access_summary(ucdb),
         "air_quality_monthly": air_quality_monthly_summary(air_monthly),
+        "public_transport": transit_summary(transit),
         "country": country,
         "not_measured_for_this_city": not_measured,
         "not_in_database_for_any_city": NOT_IN_DATABASE + not_loaded,
@@ -1870,6 +2000,7 @@ def build_comparison(cur: Any, destination_ids: list[str]) -> dict[str, Any]:
     tourism_monthly = fetch_tourism_monthly(cur, ids)
     ucdb = fetch_ucdb_themes(cur, ids)
     air_monthly = fetch_air_quality_monthly(cur, ids)
+    transit = fetch_transit_service(cur, ids)
     countries = sorted({basics[i]["country_iso2"] for i in ids})
     country_context = fetch_country_context(cur, countries)
 
@@ -1982,6 +2113,9 @@ def build_comparison(cur: Any, destination_ids: list[str]) -> dict[str, Any]:
         "health_access": {i: health_access_summary(ucdb.get(i)) for i in ids},
         "air_quality_monthly": {
             i: air_quality_monthly_summary(air_monthly.get(i, [])) for i in ids
+        },
+        "public_transport": {
+            i: transit_summary(transit.get(i, [])) for i in ids
         },
         "country_context": country_rows,
         "not_in_database_for_any_city": NOT_IN_DATABASE

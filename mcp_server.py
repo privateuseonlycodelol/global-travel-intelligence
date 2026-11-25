@@ -1137,6 +1137,11 @@ def rank_destinations(
                 "dropped": metro_dropped,
             },
             "zero_result_reason": zero_result_reason,
+            "transit_basis": (
+                "The transit score still uses stop, feed and rail availability "
+                "proxies. Scheduled GTFS headways are in place_profile and "
+                "compare_places, not yet in final_score."
+            ),
             "walkability_basis": (
                 "walkability_score is How Walkable 0-100 (5 km area average) for "
                 "662 large cities; cities without it are neutral (0.5), and "
@@ -1151,6 +1156,7 @@ def rank_destinations(
                 "transit_stops_5km is an Overture Places facility count, not service frequency",
                 "rent_monthly holds official local-currency rents for about 1,250 cities; it is not a rank input",
                 "facility counts, hazard exposure, health access, geography and airport access are profile context, not scored",
+                "scheduled GTFS headways are profile context; the rank transit score still uses availability proxies",
                 "housing_monthly is empty unless Inside Airbnb has been loaded",
                 "climate is WorldClim 2.1 (1970-2000 averages); recent monthly normals are a separate NASA POWER layer for a growing subset",
                 "missing dimensions are NULL; see docs/DATA_SOURCES.md",
@@ -1443,6 +1449,38 @@ def inspect_destination(
                 )
                 ghsci_indicators = cur.fetchone()
 
+            gtfs_feeds = optional_rows(
+                """
+                SELECT p.feed_id, f.provider, f.feed_name, f.license_url,
+                       p.urban_centre_id, p.stops_in_centre, p.stops_mapped,
+                       p.radius_rule
+                FROM gtfs_feed_place p
+                LEFT JOIN gtfs_feed f USING (feed_id)
+                WHERE p.destination_id = %s
+                ORDER BY p.stops_mapped DESC
+                """,
+                (resolved_id,),
+                ("gtfs_feed_place", "gtfs_feed"),
+            )
+            transit_service = optional_rows(
+                """
+                SELECT t.day_type, t.time_band, t.radius_rule, t.service_date,
+                       t.stops, t.median_headway_min,
+                       t.pct_stops_headway_le_10, t.pct_stops_headway_le_15,
+                       t.pct_stops_headway_le_30, t.first_departure_min,
+                       t.last_departure_min, t.departures_at_busiest_stop,
+                       t.route_type_counts, t.wheelchair_coded_pct,
+                       t.wheelchair_boardable_pct, t.feed_id, f.provider,
+                       f.license_url
+                FROM transit_city_service t
+                LEFT JOIN gtfs_feed f USING (feed_id)
+                WHERE t.destination_id = %s
+                ORDER BY t.day_type, t.time_band
+                """,
+                (resolved_id,),
+                ("transit_city_service", "gtfs_feed"),
+            )
+
     payload = {
         "destination": destination,
         "name_resolution": resolution,
@@ -1460,6 +1498,8 @@ def inspect_destination(
         "hazard_exposure": hazard,
         "health_access": health_access,
         "work_overlap": place_profiles.work_overlap(destination.get("timezone")),
+        "gtfs_feeds": gtfs_feeds,
+        "transit_service": transit_service,
         "poi_metrics": poi_metrics,
         "mobility_metrics": mobility_metrics,
         "broadband_metrics": broadband_metrics,
@@ -1541,10 +1581,10 @@ def place_profile(
     ``reading_global``, source and period, or status "not_measured"/"none_listed".
     Also returns 12-month WorldClim and recent NASA POWER climate, monthly and
     annual PM2.5, official local-currency rent where available, 5 km facility
-    counts, elevation/coast distance/daylight, airport access, monthly EU
-    tourism, metro hazard and health access, country context (currency,
-    languages, price level, homicide, water, sanitation -- national values) and
-    US/UK travel advisories.
+    counts, elevation/coast distance/daylight, airport access, scheduled GTFS
+    headways and service span, monthly EU tourism, metro hazard and health
+    access, country context (currency, languages, price level, homicide, water,
+    sanitation -- national values) and US/UK travel advisories.
     If the name is ambiguous, ``match.other_matches`` lists the alternatives; if it
     is only a fuzzy guess, the result has ``needs_choice: true`` and candidates
     instead of a profile.

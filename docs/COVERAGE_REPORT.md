@@ -38,6 +38,10 @@ final production numbers.
 | `urban_centre_hazard` | 11,422 | GHSL UCDB hazard theme: MYRIAD-HES event counts, 2015 window |
 | `urban_centre_health` | 11,422 | GHSL UCDB health theme: hospital/pharmacy counts and 1 km access share |
 | `tourism_monthly` | 16,860 | Eurostat NUTS 2 monthly nights, 1,405 cities × 12 months, 2024 |
+| `gtfs_feed` | 571 | Active GTFS feeds processed; initial Italy/France batch, growing |
+| `gtfs_feed_place` | 2,101 | Feeds with stops mapped to a city, not bbox-only |
+| `transit_headway` | 3,952 | City × feed × day type × time band headway/span rows; 544 cities |
+| `transit_city_weekday_peak` (view) | 155 | Cities with a weekday 07:00–09:00 headway and at least 50 mapped stops |
 | `flight_quote_cache` / `hotel_quote_cache` | 0 | Populated only by MCP stage 2 with SerpApi key |
 | `destination_aliases` | 188,403 | GeoNames names/alternatenames for all 13,101 cities (`bootstrap_places.py`) |
 | `country_facts` | 252 | GeoNames countryInfo; every destination has a country row |
@@ -51,6 +55,7 @@ final production numbers.
 | Walkability / rail | Partial (1,131 cities) | Overture Transportation is loaded for DE, GB, TR, ES, FR, PT, SE and LU. The global scan hit repeated DNS/OOM failures; run by country/region. |
 | Walkability score | Partial (662 cities) | Published How Walkable 0-100 score for 690 cities of 300,000+; 662 matched to loaded destinations. Mainland China, South Korea and Russia are not ranked; smaller cities stay NULL. |
 | Public transport stops | Broad (9,008 cities) | Overture Places transit facilities; not a complete stop-position/frequency feed. |
+| Scheduled transit | Partial (Italy/France initial) | GTFS weekday peak, midday and Sunday headways; grows with country batches. |
 | Tourism pressure | Partial (EU only) | Eurostat NUTS 2 annual and monthly nights for 1,405 cities; no global city-level official source. |
 | Safety / crime | Country context loaded | US State levels 1-4 and UK FCDO advice for ~220 countries; no global city-level crime rate. |
 | Long-term rent | Partial (~1,250 cities) | Eurostat city averages (41), ONS GB local-authority averages (121) and HUD US FMRs (1,087), in local currency. |

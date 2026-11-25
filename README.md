@@ -48,6 +48,7 @@ calls:
 | `bootstrap_facilities.py` | Overture Places daily-life facility counts within 5 km |
 | `bootstrap_geography.py` | GeoNames elevation and Natural Earth coastline distance |
 | `bootstrap_airport_access.py` | nearest scheduled-service airport and 100 km counts |
+| `bootstrap_gtfs.py` | global GTFS scheduled headways and service span |
 | `bootstrap_ucdb_themes.py` | GHSL urban-centre hazard and health-access themes |
 | `place_profiles.py` | place search, plain-language profiles and comparison used by the MCP server |
 | `mcp_server.py` | Phase 4 FastMCP server (Streamable HTTP, optional SerpApi live pricing) |
@@ -58,6 +59,7 @@ calls:
 | `mcp.client.example.json` | example HTTP MCP client entry for the local server |
 | `docs/DATA_SOURCES.md` | source-by-source provenance, licences, coverage and candidate sources |
 | `docs/COVERAGE_REPORT.md` | measured coverage snapshot for the global run |
+| `docs/PUBLIC_TRANSPORT.md` | GTFS scheduled-service method, coverage, limits and commands |
 | `sql/rank_examples.sql` | Phase 1/v2 scorer examples |
 | `sql/rank_examples_v3.sql` | Phase 3/v3 scorer examples |
 | `tests/` | offline unit tests for the Phase 1, Phase 3 and MCP helpers |
@@ -397,6 +399,9 @@ this implementation:
 - **Travel advisories are country-scoped.** US State levels 1–4 and UK FCDO
   advice are separate official scales, never averaged, and never copied onto a
   city row.
+- **Scheduled transit is not real-time reliability.** Headways come from static
+  GTFS. They do not measure delays, cancellations, journey times, fares or
+  ridership, and coverage is only where an operator publishes GTFS.
 - **WorldClim 2.1 is a 1970–2000 climatology**, not recent daily ERA5. The
   `median_temp_max_c` / `median_temp_min_c` columns are monthly **means of daily
   max/min** (the Phase-1 column names are retained); `precip_mm` is the monthly
@@ -830,6 +835,7 @@ Implemented third-party sources:
 | Travel advisories | US State Department + UK FCDO | Public domain / OGL v3.0 | ~220 countries each; two separate scales, not averaged |
 | Facilities | Overture Maps Places | CDLA-Permissive 2.0 | 13,101 cities within 5 km: hospital, pharmacy, school, grocery, park, beach |
 | Airport access | OurAirports | Public domain | 13,101 cities; nearest scheduled airport and 100 km counts |
+| Scheduled transit | Mobility Database GTFS | CC0 catalogue; producer licences | weekday peak, midday and Sunday headways/span; initial Italy/France load |
 | Hazard exposure | GHSL UCDB / MYRIAD-HES | CC BY 4.0 | 11,422 urban centres; event counts by hazard type, 2015 window |
 | Health access | GHSL UCDB / healthsites.io | ODbL / EC reuse | 11,422 urban centres; hospital and pharmacy access |
 | Broadband | Ookla Open Data | **CC BY-NC-SA 4.0; non-commercial; attribution required** | global tiles |

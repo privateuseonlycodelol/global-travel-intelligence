@@ -428,6 +428,21 @@ exists; cities without it are neutral (0.5) and are reported via
 | Status | **Implemented** |
 | Notes | Physical access, not quality of care. Inherits OSM coverage gaps; a low share can mean sparse mapping rather than no hospital. |
 
+### 3.23 Scheduled public transport (GTFS)
+
+| Field | Value |
+| --- | --- |
+| Party | Third-party |
+| Publisher | Mobility Database catalogue; each feed's transit operator |
+| Dataset | Active static GTFS feeds, reached through `feeds_v2.csv` and the Mobility Database `latest.zip` mirrors |
+| URL | https://files.mobilitydatabase.org/feeds_v2.csv ; https://mobilitydatabase.org/ |
+| Licence | Catalogue metadata CC0; each GTFS zip keeps its producer licence (`gtfs_feed.license_url`) |
+| Coverage | Global where an active feed has stops inside a GHSL urban centre; initial run for Italy and France |
+| Granularity | City × feed × day type × time band × geography band |
+| Used by | `bootstrap_gtfs.py` → `gtfs_feed`, `gtfs_feed_place`, `transit_headway`; `place_profile.public_transport`; `transit_peak_headway_min` metric |
+| Status | **Implemented; partial country coverage** |
+| Notes | Computes weekday peak, weekday midday and Sunday midday headways and span from `stop_times` + calendar. A feed counts only when its stops serve the city, not when its bbox contains the point. No real-time reliability, journey times or fares. See `docs/PUBLIC_TRANSPORT.md`. |
+
 ## 4. Missing dimensions and verified candidate sources
 
 These sources were checked but are **not** loaded. They are listed so a
@@ -572,6 +587,9 @@ means without labelling the approximation.
 | `urban_centre_health` | GHS-UCDB health theme (healthsites.io/OSM) | Yes (counts, density, access share) | `GHS-UCDB R2024A health theme (healthsites.io/OSM)` |
 | `tourism_pressure` | Eurostat NUTS 2 tourism + population | Yes (NUTS 2 assignment/division) | `Eurostat tour_occ_nin2m + demo_r_pjangrp3 (NUTS 2)` |
 | `tourism_monthly` | Eurostat NUTS 2 tourism + population | Yes (monthly nights / regional population) | `Eurostat tour_occ_nin2m + demo_r_pjangrp3 (NUTS 2) monthly` |
+| `gtfs_feed` | Mobility Database GTFS catalogue + operator zip | No (metadata + content hash) | `Mobility Database feeds_v2.csv (CC0 metadata)` |
+| `gtfs_feed_place` | GTFS stops + GHSL urban centres | Yes (stop-in-centre join) | `Mobility Database GTFS + operator timetable` |
+| `transit_headway` | GTFS stop_times + calendar | Yes (headway/span aggregates) | `Mobility Database GTFS + operator timetable` |
 | `flight_quote_cache` | SerpApi Google Flights | No (cached response) | `SerpApi Google Flights` |
 | `hotel_quote_cache` | SerpApi Google Hotels | No (cached response) | `SerpApi Google Hotels` |
 | `destination_aliases` | GeoNames alternatenames | Yes (normalized) | n/a |
