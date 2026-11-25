@@ -1,6 +1,6 @@
 # Data Sources, Licences and Third-Party Provenance
 
-Status date: **2026-11-21**. All external datasets below are **third-party
+Status date: **2026-11-25**. All external datasets below are **third-party
 data**. The only first-party artifacts in this repository are the loader code,
 the derived scores/percentiles, `data_completeness`, and the ranking SQL. No
 missing city-level value is invented; see [Missing data policy](#missing-data-policy).
