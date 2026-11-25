@@ -13,7 +13,8 @@ calls:
 | --- | --- | --- |
 | Cities | GeoNames `cities15000.zip` | one download, one `COPY` |
 | Airports | OurAirports `airports.csv` | one download, one PostGIS join |
-| Climate | WorldClim 2.1 `5m` GeoTIFFs | one local raster sample per variable, one `COPY` |
+| Climate baseline | WorldClim 2.1 `5m` GeoTIFFs | one local raster sample per variable, one `COPY` |
+| Recent climate | NASA POWER daily API | one API call per city, monthly normals |
 | POIs | Overture Maps Places (S3 Parquet) | one DuckDB scan + grid hash join, one `COPY` |
 | Broadband | Ookla Open Data (S3 Parquet) | one DuckDB scan + grid hash join |
 | Walkability/transit | Overture Maps Transportation + Mobility Database GTFS | one transport scan + one CSV join |
