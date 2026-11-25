@@ -308,6 +308,21 @@ neighbouring core city. `rank_destinations_v3` uses the 0–100 score where it
 exists; cities without it are neutral (0.5) and are reported via
 `excluded_for_no_evidence` when no active dimension has evidence.
 
+### 3.15 GHSCI pilot and 25-city study
+
+| Field | Value |
+| --- | --- |
+| Party | Third-party |
+| Publisher | Global Healthy and Sustainable City Indicators collaboration |
+| Dataset | 25-city spatial indicator package (2022-05-02), plus a local Trento pilot run with GHSCI R2024A inputs |
+| URL | https://doi.org/10.25439/rmt.15072009.v3 |
+| Licence | Open Database License (ODbL) for the study outputs; GHSCI code MIT |
+| Coverage | 24 loaded study cities (Vic is below the 40k cutoff) + Trento |
+| Granularity | Urban study region; population-weighted 500 m network access + 1 km neighbourhood means |
+| Used by | `bootstrap_ghsci_study.py` / `bootstrap_ghsci.py` → `ghsci_city_indicators`; `place_profile` / `compare_places` / `inspect_destination` |
+| Status | **Pilot only; no on-demand worker.** The 2021 study and 2026 Trento rows are separate `observed_period` values. |
+| Notes | The study index is the published `all_cities_walkability`; Trento's is the 25-city-reference z-score. Neither is 0–100 and neither is merged with How Walkable. |
+
 ## 4. Missing dimensions and verified candidate sources
 
 These sources were checked but are **not** loaded. They are listed so a
