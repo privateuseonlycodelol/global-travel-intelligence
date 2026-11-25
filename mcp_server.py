@@ -1166,7 +1166,7 @@ def inspect_destination(
     city_name: str | None = None,
     country_iso2: str | None = None,
 ) -> dict[str, Any]:
-    """Return a destination's full climate, POI, mobility, walkability, broadband, housing and crowding evidence."""
+    """Return a destination's full raw evidence: climate, air, rent, facilities, geography, airport access, metro, POIs, mobility, walkability, broadband, housing, tourism and country advisories."""
     if not destination_id and not city_name:
         raise ValueError("Provide destination_id or city_name.")
 
@@ -1270,6 +1270,91 @@ def inspect_destination(
             )
             tourism_pressure = cur.fetchone()
 
+            def optional_rows(sql: str, params: tuple = ()) -> list[dict[str, Any]]:
+                table = sql.split("FROM ", 1)[1].split()[0]
+                cur.execute("SELECT to_regclass(%s) IS NOT NULL AS present", (table,))
+                if not cur.fetchone()["present"]:
+                    return []
+                cur.execute(sql, params)
+                return [dict(row) for row in cur.fetchall()]
+
+            def optional_row(sql: str, params: tuple = ()) -> dict[str, Any] | None:
+                rows = optional_rows(sql, params)
+                return rows[0] if rows else None
+
+            recent_climate = optional_rows(
+                """
+                SELECT month, avg_high_c, avg_low_c, precip_mm, rainy_days,
+                       hot_days_30c, warm_nights, years, source, observed_period
+                FROM climate_recent WHERE destination_id = %s ORDER BY month
+                """,
+                (resolved_id,),
+            )
+            air_quality = optional_row(
+                """
+                SELECT pm25_ugm3, year, source, source_url, observed_period
+                FROM air_quality_annual WHERE destination_id = %s
+                """,
+                (resolved_id,),
+            )
+            rent = optional_rows(
+                """
+                SELECT dwelling_type, bedrooms, rent_local, currency_code,
+                       rent_basis, area_name, area_code, year, source, source_url
+                FROM rent_monthly WHERE destination_id = %s ORDER BY dwelling_type
+                """,
+                (resolved_id,),
+            )
+            facilities = optional_row(
+                """
+                SELECT hospital_count_5km, pharmacy_count_5km, school_count_5km,
+                       grocery_count_5km, park_count_5km, beach_count_5km,
+                       source, observed_period
+                FROM facility_metrics WHERE destination_id = %s
+                """,
+                (resolved_id,),
+            )
+            geography = optional_row(
+                """
+                SELECT elevation_m, coast_distance_km, elevation_source,
+                       elevation_period, coast_source, coast_period
+                FROM destination_geography WHERE destination_id = %s
+                """,
+                (resolved_id,),
+            )
+            airport_access = optional_row(
+                """
+                SELECT nearest_iata, nearest_name, nearest_type,
+                       nearest_distance_km, large_airports_100km,
+                       medium_airports_100km, source, observed_period
+                FROM airport_access WHERE destination_id = %s
+                """,
+                (resolved_id,),
+            )
+            tourism_monthly = optional_rows(
+                """
+                SELECT month, tourist_nights, nights_per_resident
+                FROM tourism_monthly WHERE destination_id = %s ORDER BY month
+                """,
+                (resolved_id,),
+            )
+            metro = optional_row(
+                """
+                SELECT urban_centre_id, urban_centre_name, urban_centre_country,
+                       match_kind, match_distance_km, centre_area_km2,
+                       centre_population, source, observed_period
+                FROM destination_metro WHERE destination_id = %s
+                """,
+                (resolved_id,),
+            )
+            advisories = optional_rows(
+                """
+                SELECT source, level, level_label, headline, url, advisory_date
+                FROM travel_advisory WHERE country_iso2 = %s ORDER BY source
+                """,
+                (destination["country_iso2"],),
+            )
+
             walkability_scores = None
             cur.execute("SELECT to_regclass('walkability_scores') IS NOT NULL AS present")
             if cur.fetchone()["present"]:
@@ -1311,6 +1396,15 @@ def inspect_destination(
         "destination": destination,
         "name_resolution": resolution,
         "climate": climate,
+        "recent_climate": recent_climate,
+        "air_quality": air_quality,
+        "rent": rent,
+        "facilities": facilities,
+        "geography": geography,
+        "airport_access": airport_access,
+        "tourism_monthly": tourism_monthly,
+        "metro": metro,
+        "travel_advisories": advisories,
         "poi_metrics": poi_metrics,
         "mobility_metrics": mobility_metrics,
         "broadband_metrics": broadband_metrics,
