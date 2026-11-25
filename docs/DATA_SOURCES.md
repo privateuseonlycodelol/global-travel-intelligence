@@ -397,12 +397,14 @@ it must be labelled as such.
 | UK ONS private rent | Local authority; UK | Open Government Licence; verify current release | Candidate for UK. |
 | Canada CMHC Rental Market | CMA; Canada | CMHC terms; verify | Candidate for Canada. |
 | Australia ABS rent | State/city; Australia | ABS terms; verify | Candidate for Australia. |
+| Eurostat `prc_colc_rents` | 42 cities; EU/EFTA/UK/TR/Balkans | Eurostat reuse with attribution; API verified | **Implemented**: average monthly rent by dwelling type, 2025, local currency. |
 | Eurostat housing price/rent indices | NUTS; EU | Eurostat reuse with attribution; verify dataset | Candidate regional context, not city rent. |
 | OECD Affordable Housing Database | Country; OECD | OECD terms; verify | Country-level only. |
 
-**Decision:** `housing_monthly` is optional and local-currency; there is no
-global city-level long-term rent source in the checked set. Do not FX-convert
-without an explicit rate table and date.
+**Decision:** `rent_monthly` stores official Eurostat city rents in local
+currency for 42 cities. There is still no global city-level long-term rent
+source in the checked set, and the values are not FX-converted or put into the
+rank. `housing_monthly` remains the separate optional Inside Airbnb table.
 
 ### 4.4 Walkability / rail
 
@@ -479,6 +481,7 @@ means without labelling the approximation.
 | `destination_metro` | GHSL UCDB R2024A urban-centre polygons | Yes (point-in-polygon; ≤5 km edge fallback) | `GHSL UCDB R2024A urban-centre boundary (European Commission JRC)` |
 | `ghsl_urban_centres` | GHSL UCDB R2024A geography theme | No (geometry converted to WGS84) | n/a |
 | `housing_monthly` | Inside Airbnb | Yes (median, nearest city) | `Inside Airbnb (local currency, 30+ night listings)` |
+| `rent_monthly` | Eurostat `prc_colc_rents` | No (latest annual value per dwelling type) | `Eurostat prc_colc_rents (average rent per month in cities)` |
 | `tourism_pressure` | Eurostat NUTS 2 tourism + population | Yes (NUTS 2 assignment/division) | `Eurostat tour_occ_nin2m + demo_r_pjangrp3 (NUTS 2)` |
 | `flight_quote_cache` | SerpApi Google Flights | No (cached response) | `SerpApi Google Flights` |
 | `hotel_quote_cache` | SerpApi Google Hotels | No (cached response) | `SerpApi Google Hotels` |

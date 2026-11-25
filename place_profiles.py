@@ -254,18 +254,16 @@ METRIC_GROUP_LABELS = {
 }
 
 NOT_IN_DATABASE = [
-    "Long-term residential rent (no global city-level open source loaded)",
+    "Long-term rent outside the 42 Eurostat cities (no global city-level open "
+    "source loaded)",
     "City-level crime or safety (only the national homicide rate is loaded)",
-    "Visa and residence rules (only an EU/Schengen 90-day flag is used in ranking)",
-    "Rainy days and hot days per month (Open-Meteo/ERA5 enrichment not run)",
-    "City-level air quality (only the national PM2.5 exposure is loaded)",
     "Neighbourhood-level walkability, sidewalk quality and crossing safety "
     "(the published score covers the city centre, not a neighbourhood)",
     "GHSCI scoring for cities without a completed run (Trento and the 24 "
     "published 25-city study cities only)",
     "Street-network form (intersections, dead ends) is stored for analysis but "
     "deliberately not shown as walkability",
-    "Beaches, parks, healthcare and schools",
+    "Beaches, parks, healthcare and schools as city metrics",
 ]
 
 HOW_TO_READ = (
@@ -531,6 +529,76 @@ def fetch_climate(cur: Any, destination_ids: list[str]) -> dict[str, list[dict[s
         row = dict(row)
         out.setdefault(str(row.pop("destination_id")), []).append(row)
     return out
+
+
+DWELLING_LABELS = {
+    "HOUSE_D": "Detached house",
+    "HOUSE_ND": "Non-detached house",
+    "FLAT1": "1-bedroom flat",
+    "FLAT2": "2-bedroom flat",
+    "FLAT3": "3-bedroom flat",
+}
+HEADLINE_DWELLING = "FLAT2"
+RENT_NOTE = (
+    "Official average monthly rent in the local currency. Not FX-converted and "
+    "not comparable across countries; rent bases differ between national sources. "
+    "This is city context, not a rank input."
+)
+
+
+def fetch_rents(cur: Any, destination_ids: list[str]) -> dict[str, list[dict[str, Any]]]:
+    """Official city rents in local currency, if ``rent_monthly`` is loaded."""
+    if "rent_monthly" not in _existing_tables(cur, ["rent_monthly"]):
+        return {}
+    cur.execute(
+        """
+        SELECT destination_id, dwelling_type, bedrooms, rent_local, currency_code,
+               rent_basis, year, source, source_url, observed_period
+        FROM rent_monthly
+        WHERE destination_id = ANY(%s)
+        ORDER BY destination_id, dwelling_type
+        """,
+        (destination_ids,),
+    )
+    out: dict[str, list[dict[str, Any]]] = {}
+    for row in cur.fetchall():
+        row = dict(row)
+        row["label"] = DWELLING_LABELS.get(row["dwelling_type"], row["dwelling_type"])
+        out.setdefault(str(row.pop("destination_id")), []).append(row)
+    return out
+
+
+def rent_summary(rows: list[dict[str, Any]]) -> dict[str, Any]:
+    if not rows:
+        return {"status": "not_loaded"}
+    headline = next(
+        (row for row in rows if row["dwelling_type"] == HEADLINE_DWELLING), rows[0]
+    )
+    return {
+        "status": "loaded",
+        "currency_code": headline["currency_code"],
+        "headline": {
+            "dwelling_type": headline["dwelling_type"],
+            "label": headline["label"],
+            "bedrooms": headline["bedrooms"],
+            "rent_local": headline["rent_local"],
+            "year": headline["year"],
+        },
+        "options": [
+            {
+                "dwelling_type": row["dwelling_type"],
+                "label": row["label"],
+                "bedrooms": row["bedrooms"],
+                "rent_local": row["rent_local"],
+            }
+            for row in rows
+        ],
+        "rent_basis": headline["rent_basis"],
+        "observed_period": headline["observed_period"],
+        "source": headline["source"],
+        "source_url": headline["source_url"],
+        "note": RENT_NOTE,
+    }
 
 
 def fetch_recent_climate(cur: Any, destination_ids: list[str]) -> dict[str, list[dict[str, Any]]]:
@@ -1244,6 +1312,7 @@ def build_profile(cur: Any, destination_id: str) -> dict[str, Any]:
     metric_row = fetch_metric_rows(cur, [destination_id]).get(destination_id, {})
     climate = fetch_climate(cur, [destination_id]).get(destination_id, [])
     recent_climate = fetch_recent_climate(cur, [destination_id]).get(destination_id, [])
+    rents = fetch_rents(cur, [destination_id]).get(destination_id, [])
     country = fetch_country_context(cur, [basics["country_iso2"]]).get(basics["country_iso2"], {})
 
     groups: dict[str, list[dict[str, Any]]] = {}
@@ -1279,6 +1348,7 @@ def build_profile(cur: Any, destination_id: str) -> dict[str, Any]:
             "summary": recent_climate_summary(recent_climate),
             "months": recent_climate,
         },
+        "housing": rent_summary(rents),
         "country": country,
         "not_measured_for_this_city": not_measured,
         "not_in_database_for_any_city": NOT_IN_DATABASE + not_loaded,
@@ -1291,6 +1361,7 @@ def build_comparison(cur: Any, destination_ids: list[str]) -> dict[str, Any]:
     ids = [i for i in destination_ids if i in basics]
     metric_rows = fetch_metric_rows(cur, ids)
     climate = fetch_climate(cur, ids)
+    rents = fetch_rents(cur, ids)
     countries = sorted({basics[i]["country_iso2"] for i in ids})
     country_context = fetch_country_context(cur, countries)
 
@@ -1387,6 +1458,7 @@ def build_comparison(cur: Any, destination_ids: list[str]) -> dict[str, Any]:
             for i in ids
         },
         "climate_note": CLIMATE_NOTE,
+        "housing": {i: rent_summary(rents.get(i, [])) for i in ids},
         "country_context": country_rows,
         "not_in_database_for_any_city": NOT_IN_DATABASE
         + [label + " (dataset not loaded for any city)" for label in not_loaded],

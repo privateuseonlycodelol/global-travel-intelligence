@@ -29,6 +29,7 @@ final production numbers.
 | `mobility_metrics` with transit stops | 9,008 | Overture Places transit facilities within 5 km |
 | `tourism_pressure` | 1,405 | Eurostat NUTS 2 2024; EU/EFTA only |
 | `housing_monthly` | 0 | Optional Inside Airbnb load not run globally |
+| `rent_monthly` | 206 | Eurostat official average city rents, 42 cities × 5 dwelling types, 2025, local currency |
 | `flight_quote_cache` / `hotel_quote_cache` | 0 | Populated only by MCP stage 2 with SerpApi key |
 | `destination_aliases` | 188,403 | GeoNames names/alternatenames for all 13,101 cities (`bootstrap_places.py`) |
 | `country_facts` | 252 | GeoNames countryInfo; every destination has a country row |
@@ -44,7 +45,7 @@ final production numbers.
 | Public transport stops | Broad (9,008 cities) | Overture Places transit facilities; not a complete stop-position/frequency feed. |
 | Tourism pressure | Partial (EU only) | Eurostat publishes NUTS 2 nights; no single global city-level official source found. |
 | Safety / crime | Missing | Eurostat crime is country-level; FBI/UK Police are country-specific. No global city-level source. |
-| Long-term rent | Missing | Inside Airbnb is short-term/local-currency; HUD/ONS/CMHC/ABS are country-specific. |
+| Long-term rent | Partial (42 cities) | Eurostat `prc_colc_rents` official city averages in local currency; HUD/ONS/CMHC/ABS are country-specific and not yet loaded. |
 | Rainy/hot days | Missing | Open-Meteo/ERA5/NASA POWER are candidates; no batch enrichment run. |
 | Air quality | Loaded, not scored | SatPM V6.GL.03 annual city PM2.5 for 13,101 cities; exposed as a metric and shown in profiles, not in `final_score`. |
 | Metro clustering | Implemented (9,730 cities) | GHSL UCDB R2024A polygon containment; 3,371 cities below the UCDB cutoff stay individual. Rank dedupe is display-level. |

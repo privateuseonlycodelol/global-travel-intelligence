@@ -32,6 +32,10 @@ calls:
 | `bootstrap_places.py` | city name aliases (fuzzy search) and country facts/indicators (GeoNames, World Bank) |
 | `bootstrap_walkability.py` | published 0-100 walkability score for 662 cities (How Walkable, CC BY 4.0) |
 | `bootstrap_street_network.py` | urban-form context: street-intersection density and dead-end share (stored, not shown in profiles) |
+| `bootstrap_metro.py` | authoritative GHSL UCDB polygon containment for metro grouping |
+| `bootstrap_climate_recent.py` | recent monthly climate normals from NASA POWER (2015-2024) |
+| `bootstrap_air_quality.py` | global annual city PM2.5 from SatPM V6.GL.03 |
+| `bootstrap_rent.py` | official Eurostat city rents in local currency |
 | `place_profiles.py` | place search, plain-language profiles and comparison used by the MCP server |
 | `mcp_server.py` | Phase 4 FastMCP server (Streamable HTTP, optional SerpApi live pricing) |
 | `Dockerfile` | container image for the pipeline and MCP server |
@@ -789,6 +793,7 @@ Implemented third-party sources:
 | Walkability/rail | Overture Maps Transportation | **ODbL; © OpenStreetMap contributors; share-alike for derived databases** | partial: 1,131 cities across DE/GB/TR/ES/FR/PT/SE/LU |
 | Walkability score (0-100) | How Walkable city ranking (Overture Maps + OpenStreetMap) | CC BY 4.0; attribution and link required | 690 cities ranked, 662 matched to loaded destinations |
 | Annual PM2.5 | SatPM V6.GL.03 (CNN) | CC BY 4.0; attribution required | 13,101 cities, 0.1° city-point sample |
+| City rent | Eurostat `prc_colc_rents` | Eurostat reuse with attribution | 42 cities, 2025, local currency; not a rank input |
 | Broadband | Ookla Open Data | **CC BY-NC-SA 4.0; non-commercial; attribution required** | global tiles |
 | GTFS coverage | Mobility Database | catalog metadata CC0 1.0; individual feeds retain provider licences | global catalog |
 | Public transport stops | Overture Places transit facilities | CDLA-Permissive 2.0 / per-provider terms | global where Overture Places has facilities |
