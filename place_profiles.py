@@ -1055,7 +1055,7 @@ def rent_summary(rows: list[dict[str, Any]]) -> dict[str, Any]:
 
 
 def fetch_recent_climate(cur: Any, destination_ids: list[str]) -> dict[str, list[dict[str, Any]]]:
-    """Recent monthly normals (ERA5 via Open-Meteo), if that table is loaded."""
+    """Recent monthly normals (NASA POWER/MERRA-2), if that table is loaded."""
     if "climate_recent" not in _existing_tables(cur, ["climate_recent"]):
         return {}
     cur.execute(
@@ -1098,7 +1098,10 @@ def recent_climate_summary(months: list[dict[str, Any]]) -> dict[str, Any]:
         "annual_warm_nights": round(sum(
             float(m["warm_nights"]) for m in months if m.get("warm_nights") is not None
         ), 1),
-        "note": "Recent monthly normals from ERA5; separate from the 1970-2000 WorldClim baseline.",
+        "note": (
+            "Recent monthly normals from NASA POWER (MERRA-2); separate from "
+            "the 1970-2000 WorldClim baseline."
+        ),
     }
 
 
