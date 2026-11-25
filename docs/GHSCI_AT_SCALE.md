@@ -1,7 +1,7 @@
 # Running GHSCI for every city
 
-> **Design only — no GHSCI values are served by the MCP server.** The pilot
-> exists; the queue, tables and on-demand worker do not.
+> **Design only — no on-demand worker.** The Trento pilot is loaded; the
+> queue and worker do not exist, and no other city has GHSCI values.
 
 Status: **plan, with a working single-city pilot** (Trento, see
 [GHSCI_PILOT.md](GHSCI_PILOT.md)). This is how to get from 1 city to ~11,400.

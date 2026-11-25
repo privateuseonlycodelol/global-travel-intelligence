@@ -94,6 +94,7 @@ TABLES = {
     "t": "tourism_pressure",
     "h": "housing_monthly",
     "v": "walkability_scores",
+    "g": "ghsci_city_indicators",
 }
 
 METRICS: tuple[Metric, ...] = (
@@ -137,6 +138,49 @@ METRICS: tuple[Metric, ...] = (
                  "5 km area average to see how far walkability extends beyond the core."),
            cohort="scored cities (300k+, 95 countries)",
            source_url_expr="v.url"),
+    Metric("ghsci_walkability_index", "g", "ghsci_walkability_index",
+           "GHSCI walkability index (25-city-reference z-score)",
+           "z-score sum", None, "walkability_ghsci", "g.source", "g.observed_period",
+           note=("GHSCI components: population density, intersection density and daily living "
+                 "access, standardised against the published 25-city reference. It is not 0-100 "
+                 "and not comparable with the How Walkable score."),
+           cohort="cities with a GHSCI run",
+           source_url_expr="g.source_url"),
+    Metric("ghsci_pct_fresh_food_500m", "g", "pct_fresh_food_500m",
+           "Residents within a 500 m walk of a fresh-food market", "%", "higher",
+           "walkability_ghsci", "g.source", "g.observed_period",
+           note="GHSCI population-weighted network access; OSM destinations.",
+           cohort="cities with a GHSCI run", source_url_expr="g.source_url"),
+    Metric("ghsci_pct_convenience_500m", "g", "pct_convenience_500m",
+           "Residents within a 500 m walk of a convenience store", "%", "higher",
+           "walkability_ghsci", "g.source", "g.observed_period",
+           note="GHSCI population-weighted network access; OSM destinations.",
+           cohort="cities with a GHSCI run", source_url_expr="g.source_url"),
+    Metric("ghsci_pct_transit_500m", "g", "pct_transit_500m",
+           "Residents within a 500 m walk of a mapped public-transport stop", "%", "higher",
+           "walkability_ghsci", "g.source", "g.observed_period",
+           note="Any mapped OSM stop, not service frequency.",
+           cohort="cities with a GHSCI run", source_url_expr="g.source_url"),
+    Metric("ghsci_pct_open_space_500m", "g", "pct_open_space_500m",
+           "Residents within a 500 m walk of public open space", "%", "higher",
+           "walkability_ghsci", "g.source", "g.observed_period",
+           note="GHSCI population-weighted network access.",
+           cohort="cities with a GHSCI run", source_url_expr="g.source_url"),
+    Metric("ghsci_local_population_density", "g", "local_nh_population_density",
+           "GHSCI neighbourhood population density", "people/km²", None,
+           "walkability_ghsci", "g.source", "g.observed_period",
+           note="Unweighted mean across 1 km neighbourhoods; one of the index inputs.",
+           cohort="cities with a GHSCI run", source_url_expr="g.source_url"),
+    Metric("ghsci_local_intersection_density", "g", "local_nh_intersection_density",
+           "GHSCI neighbourhood intersection density", "intersections/km²", None,
+           "walkability_ghsci", "g.source", "g.observed_period",
+           note="Unweighted mean across 1 km neighbourhoods; one of the index inputs.",
+           cohort="cities with a GHSCI run", source_url_expr="g.source_url"),
+    Metric("ghsci_daily_living", "g", "local_daily_living",
+           "GHSCI daily-living score", "score 0-3", "higher",
+           "walkability_ghsci", "g.source", "g.observed_period",
+           note="Sum of access to fresh food, convenience and public transport; one of the index inputs.",
+           cohort="cities with a GHSCI run", source_url_expr="g.source_url"),
     Metric("transit_stations_5km", "m", "transit_stops_5km",
            "Bus, rail and metro stations within 5 km", "stations", "higher",
            "getting_around", "m.transit_stops_source", "m.transit_stops_period",
@@ -185,6 +229,7 @@ METRIC_GROUP_LABELS = {
     "internet": "Internet",
     "crowding": "Tourist crowding",
     "cost": "Cost",
+    "walkability_ghsci": "Walkability (GHSCI)",
 }
 
 NOT_IN_DATABASE = [
@@ -195,8 +240,8 @@ NOT_IN_DATABASE = [
     "City-level air quality (only the national PM2.5 exposure is loaded)",
     "Neighbourhood-level walkability, sidewalk quality and crossing safety "
     "(the published score covers the city centre, not a neighbourhood)",
-    "GHSCI on-demand scoring for cities outside the 690-city How Walkable "
-    "ranking (design only; not enabled)",
+    "GHSCI scoring for cities without a completed run (pilot value exists for "
+    "Trento only)",
     "Street-network form (intersections, dead ends) is stored for analysis but "
     "deliberately not shown as walkability",
     "Beaches, parks, healthcare and schools",

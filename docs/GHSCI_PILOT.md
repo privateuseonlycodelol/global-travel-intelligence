@@ -1,6 +1,7 @@
 # GHSCI pilot: Trento
 
-Status: **working pilot, not production data**. Date: 2026-11-22.
+Status: **working pilot; the Trento row is loaded in `ghsci_city_indicators`,
+but there is no on-demand worker and no other city has GHSCI values.** Date: 2026-11-22.
 
 ## Why
 
