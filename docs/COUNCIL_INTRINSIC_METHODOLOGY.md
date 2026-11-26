@@ -10,21 +10,21 @@ Measure the **intrinsic quality of an urban centre regardless of its cost**. Aff
 
 Every active indicator uses **fixed 0–100 physical or epidemiological anchors** (no cohort percentiles in the score, no median imputation, and no silent renormalization across missing pillars). A point rank is published **only inside a declared cohort whose members share the exact same observed pillar set**.
 
-### Full 100% Reference Vector vs Phase 2B Active Cohort (74%)
+### Full 100% Reference Vector (94% Global Cohort + 6% Gated Transit = 100%)
 
-| # | Pillar | Board | Ref Weight | Phase 2B Status | Anchor / Rule |
+| # | Pillar | Board | Ref Weight | Status | Anchor / Rule |
 | --- | --- | --- | ---: | --- | --- |
-| 1 | Air quality | Biophysical | 15% | **Active** | SatPM PM2.5 log scale (`100` ≤5 µg/m³, `0` ≥75 µg/m³) |
-| 2 | Thermal safety | Biophysical | 12% | **Active (all 13,101 cities)** | 5-year daily UTCI (Bröde 2012 from NASA POWER MERRA-2 S3 Zarr, 2020–2024): `0.45·heat(>32/120) + 0.30·cold(<0/150) + 0.25·severe((>38 + <-13)/30)` |
-| 3 | Urban greenery | Biophysical | 14% | **Active (all 7,018 GHSL polygons)** | ESA WorldCover 2021 10 m on GHSL polygon `(tree+shrub)/land / 0.40 × canopy_mult`; GHSL NDVI stored as diagnostic only |
-| 4 | Waterfront & hinterland | Biophysical | 7% | **Active (shore)** | 1–15 km decay to coast, lake ≥10 km², or Strahler ≥5 river (retiring the saturated 50 km decay) |
-| 5 | Urban form | Biophysical | 7% | **Named hole** | Awaits GHS-POP 100 m + pre-registered validation |
-| 6 | Personal safety (violence prior) | Country-labelled | 9% | **Active** | UNODC/WHO homicide piecewise (`100` ≤1, `80` @3, `50` @10, `20` @25, `0` ≥50 per 100k); never reorders within country |
-| 7 | Water & sanitation (WASH) | Country-labelled | 6% | **Active** | Mean of WHO/UNICEF JMP safely managed water & sanitation ONLY when both exist (no basic-water fallback) |
-| 8 | Healthcare access | City | 7% | **Named hole** | Awaits Weiss motorized hospital travel-time friction raster |
-| 9 | Natural hazards (non-heat) | Exposure | 6% | **Named hole** | Awaits JRC flood + GEM seismic + cyclone rasters (2015 MYRIAD kept as context only) |
-| 10 | Public transport | Services (gated) | 6% | **Named hole** | Awaits coach-excluded local GTFS headway / road-gated OSM guideway |
-| 11 | Cultural heritage | Services | 6% | **Active (all 11,422 GHSL centres)** | Official UNESCO `whc001` Cultural & Mixed sites (including serial components) intersected with GHSL polygons (`0→40, 1→70, 2→85, 3+→100`) |
+| 1 | Air quality | Biophysical | 15% | **Active (100%)** | SatPM PM2.5 log scale (`100` ≤5 µg/m³, `0` ≥75 µg/m³) |
+| 2 | Thermal safety | Biophysical | 12% | **Active (100%)** | Daily UTCI (Bröde 2012, NASA POWER MERRA-2 S3 Zarr 2022–2024; `r=0.938` vs GHSL): `0.45·heat + 0.30·cold + 0.25·severe` |
+| 3 | Urban greenery | Biophysical | 14% | **Active (all 7,018 GHSL polygons)** | ESA WorldCover 2021 10 m on GHSL polygon `(tree+shrub)/land / 0.40 × canopy_mult`; GHSL NDVI diagnostic only |
+| 4 | Waterfront & hinterland | Biophysical | 7% | **Active (100%)** | 1–15 km decay to coast, lake ≥10 km², or Strahler ≥5 river |
+| 5 | Urban form | Biophysical | 7% | **Active (all 11,422 GHSL centres)** | GHSL UCDB morphology (`0.50·density_curve [5k–18k/km²] + 0.25·compactness + 0.25·verticality`); validated against restaurant bias (`Spearman +0.047`) |
+| 6 | Personal safety (violence prior) | Country-labelled | 9% | **Active (+ Taiwan)** | UNODC/WHO homicide piecewise (`100` ≤1, `80` @3, `50` @10, `20` @25, `0` ≥50 per 100k) + official Taiwan MOI |
+| 7 | Water & sanitation (WASH) | Country-labelled | 6% | **Active (+ Taiwan)** | Mean of WHO/UNICEF JMP safely managed water & sanitation (both required) + official Taiwan Water/NLMA |
+| 8 | Healthcare access | City | 7% | **Active (99.98%)** | Weiss et al. (2020) MAP 1 km global motorized hospital travel-time median (`100` ≤10 min, `0` ≥60 min) |
+| 9 | Natural hazards (non-heat) | Exposure | 6% | **Active (99.93% GHSL)** | GHSL UCDB `EXPOSURE`: 100-yr river/coastal flood + pop-weighted MMI seismic + 100-yr cyclone (heat & ACLED excluded) |
+| 10 | Public transport | Services (gated) | 6% | **Gated (no imputation)** | Coach-excluded local GTFS peak headway (`≥50 stops`) or road-gated rail access (`≥300k` centres); `NULL` when unmapped |
+| 11 | Cultural heritage | Services | 6% | **Active (all 11,422 GHSL centres)** | Official UNESCO `whc001` Cultural & Mixed sites intersected with GHSL polygons (`0→40, 1→70, 2→85, 3+→100`) |
 | 12 | Digital connectivity | Services | 5% | **Active** | Ookla fixed absolute blend (`50% down [10–150] + 20% up [5–50] + 30% lat [80–10]`), `≥10 tests & ≥2 tiles` (`10–49` capped at Tier B) |
 
 ## Settlement Classification & Satellite Suppression

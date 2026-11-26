@@ -108,8 +108,12 @@ CENTRE_FIELDS = [
     ("worldcover_green_score", lambda r: _r(r.get("worldcover_green_score"))),
     ("green_method", lambda r: r.get("green_method")),
     ("ghsl_ndvi_score", lambda r: _r(r.get("ghsl_ndvi_score"))),
+    ("urban_form_score", lambda r: _r(r.get("urban_form_score"))),
     ("safety_prior_score", lambda r: _r(r.get("safety_prior_score"))),
     ("wash_prior_score", lambda r: _r(r.get("wash_prior_score"))),
+    ("care_access_score", lambda r: _r(r.get("care_access_score"))),
+    ("hazard_score", lambda r: _r(r.get("hazard_score"))),
+    ("transit_score", lambda r: _r(r.get("transit_score"))),
     ("heritage_score", lambda r: _r(r.get("heritage_score"))),
     ("broadband_score", lambda r: _r(r.get("broadband_score"))),
     ("construct_coverage", lambda r: _r(r.get("construct_coverage"))),
@@ -255,8 +259,11 @@ def compute_profiles_and_pareto(centres: list[dict[str, Any]]) -> list[dict[str,
         "thermal_safety_score": 0.12,
         "worldcover_green_score": 0.14,
         "waterfront_score": 0.07,
+        "urban_form_score": 0.07,
         "safety_prior_score": 0.09,
         "wash_prior_score": 0.06,
+        "care_access_score": 0.07,
+        "hazard_score": 0.06,
         "heritage_score": 0.06,
         "broadband_score": 0.05,
     }
@@ -267,17 +274,23 @@ def compute_profiles_and_pareto(centres: list[dict[str, Any]]) -> list[dict[str,
         item["health_profile"] = _weighted_exact(
             r,
             {
-                "air_score": 0.35,
-                "thermal_safety_score": 0.25,
-                "safety_prior_score": 0.25,
-                "wash_prior_score": 0.15,
+                "air_score": 0.28,
+                "thermal_safety_score": 0.22,
+                "safety_prior_score": 0.20,
+                "care_access_score": 0.18,
+                "wash_prior_score": 0.12,
             },
         )
         item["nature_profile"] = _weighted_exact(
             r, {"worldcover_green_score": 0.67, "waterfront_score": 0.33}
         )
         item["urban_profile"] = _weighted_exact(
-            r, {"heritage_score": 0.45, "broadband_score": 0.35, "worldcover_green_score": 0.20}
+            r,
+            {
+                "urban_form_score": 0.35,
+                "heritage_score": 0.35,
+                "broadband_score": 0.30,
+            },
         )
         base_q = r.get("quality_score")
         if base_q is not None and all(r.get(k) is not None for k in lopo_weights):
@@ -345,10 +358,10 @@ def render_markdown(
     checks = compute_pathological_checks(centres, tier_a)
 
     lines = [
-        "# Intrinsic City Quality Index — Phase 2 Tier A Top 100",
+        "# Intrinsic City Quality Index — Full 12-Pillar Tier A Top 100",
         "",
         "Three-board, absolute-anchor, no-imputation GHSL urban-centre cohort (cost/affordability, airports, life expectancy, physicians, road deaths, and WorldClim precipitation excluded). "
-        f"Phase 2B active construct coverage = **0.74** of the 100% intrinsic reference vector (Air 15%, Daily UTCI Thermal Safety 12%, WorldCover 10 m Greenery 14%, Waterfront 7%, Homicide 9%, JMP WASH 6%, UNESCO Heritage 6%, Broadband 5%; 26% named holes: urban form, hospital care friction, non-heat hazards, gated transit). "
+        f"Global active construct coverage = **0.94** (11 of 12 pillars: Air 15%, Daily UTCI Thermal Safety 12%, WorldCover 10 m Greenery 14%, Waterfront 7%, Urban Form 7%, Homicide 9%, JMP WASH 6%, Weiss Care Access 7%, Non-Heat Hazards 6%, UNESCO Heritage 6%, Broadband 5%; plus **6% Gated Transit** reaching **1.00** where local GTFS or road-gated rail is observed, never imputed). "
         f"GHSL urban centres: **{len(centres):,}** (Tier A: **{len(tier_a):,}**); suppressed 15 km satellites: **{suppressed_satellites:,}**; separate unmatched towns: **{unmatched_towns:,}**.",
         "",
         "## Continent distribution vs GHSL centre base rates",

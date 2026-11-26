@@ -86,20 +86,28 @@ REFERENCE_WEIGHTS = {
     "broadband": 0.05,
 }
 
-# Phase 2B active cohort pillars (74% of the 100% intrinsic reference vector:
-# air 15 + thermal_safety 12 + urban_greenery 14 + waterfront 7 +
-# safety_prior 9 + wash_prior 6 + heritage 6 + broadband 5 = 0.74).
+# Phase 3 active global cohort pillars (94% of the 100% intrinsic reference
+# vector — 11 of 12 pillars globally measurable without imputation!):
+#   Board 1 — Biophysical (55% of 55% — 100% COMPLETE):
+#     air 15 + thermal_safety 12 + urban_greenery 14 + waterfront 7 + urban_form 7 = 0.55
+#   Board 2 — Country-Labelled Institutional (15% of 15% — 100% COMPLETE):
+#     safety_prior 9 + wash_prior 6 = 0.15
+#   Board 3 — City Care, Hazards & Gated Services (24% of 30% global + 6% gated transit):
+#     care_access 7 + hazards 6 + heritage 6 + broadband 5 = 0.24 (+ transit 6 = 0.30)
 PHASE1_BIOPHYSICAL_WEIGHTS = {
     "air": 0.15,
     "thermal_safety": 0.12,
     "urban_greenery": 0.14,
     "waterfront": 0.07,
+    "urban_form": 0.07,
 }
 PHASE1_INSTITUTIONAL_WEIGHTS = {
     "safety_prior": 0.09,
     "wash_prior": 0.06,
 }
 PHASE1_SERVICES_WEIGHTS = {
+    "care_access": 0.07,
+    "hazards": 0.06,
     "heritage": 0.06,
     "broadband": 0.05,
 }
@@ -108,7 +116,7 @@ PHASE1_COHORT_WEIGHTS = {
     **PHASE1_INSTITUTIONAL_WEIGHTS,
     **PHASE1_SERVICES_WEIGHTS,
 }
-PHASE1_COHORT_WEIGHT_SUM = round(sum(PHASE1_COHORT_WEIGHTS.values()), 6)  # 0.74
+PHASE1_COHORT_WEIGHT_SUM = round(sum(PHASE1_COHORT_WEIGHTS.values()), 6)  # 0.94
 
 HOMICIDE_ANCHORS: tuple[tuple[float, float], ...] = (
     (1.0, 100.0),
@@ -497,7 +505,8 @@ def score_rows(rows: list[dict[str, Any]]) -> list[dict[str, Any]]:
         )
         row["worldcover_green_score"] = wc_green
         row["green_method"] = green_method
-        row["urban_form_score"] = None  # Named hole: awaits GHS-POP + validation
+        uf = row.get("ghsl_urban_form_score")
+        row["urban_form_score"] = float(uf) if uf is not None else None
 
         # Board 2: Country-labelled Institutional
         safety_prior = compute_homicide_score(row.get("homicide_per_100k"))
@@ -510,9 +519,12 @@ def score_rows(rows: list[dict[str, Any]]) -> list[dict[str, Any]]:
         row["wash_prior_score"] = wash_prior
 
         # Board 3: Care, Hazards & Gated Services
-        row["care_access_score"] = None  # Named hole: awaits Weiss friction
-        row["hazard_score"] = None  # Named hole: awaits flood+seismic+cyclone
-        row["transit_score"] = None  # Named hole: awaits gated rail / local GTFS
+        ca = row.get("weiss_care_access_score")
+        row["care_access_score"] = float(ca) if ca is not None else None
+        hz = row.get("ghsl_hazard_safety_score")
+        row["hazard_score"] = float(hz) if hz is not None else None
+        tr = row.get("gated_transit_score")
+        row["transit_score"] = float(tr) if tr is not None else None
         heritage_score = row.get("unesco_heritage_score")
         row["heritage_score"] = (
             float(heritage_score) if heritage_score is not None else None
@@ -535,8 +547,11 @@ def score_rows(rows: list[dict[str, Any]]) -> list[dict[str, Any]]:
             "thermal_safety": row["thermal_safety_score"],
             "urban_greenery": wc_green,
             "waterfront": waterfront_score,
+            "urban_form": row["urban_form_score"],
             "safety_prior": safety_prior,
             "wash_prior": wash_prior,
+            "care_access": row["care_access_score"],
+            "hazards": row["hazard_score"],
             "heritage": row["heritage_score"],
             "broadband": broadband_score,
         }
@@ -555,9 +570,11 @@ def score_rows(rows: list[dict[str, Any]]) -> list[dict[str, Any]]:
         for key, w in PHASE1_COHORT_WEIGHTS.items():
             if pillar_vals[key] is not None:
                 observed_ref_weight += w
+        if row["transit_score"] is not None:
+            observed_ref_weight += REFERENCE_WEIGHTS["transit"]
         construct_coverage = round(observed_ref_weight, 4)
 
-        # Cohort composite ONLY when all active Phase 2 cohort pillars are observed
+        # Global 94% cohort composite ONLY when all 11 global pillars are observed
         # AND the locality is a GHSL urban centre (never pool unmatched towns!)
         if settlement_class == "ghsl_centre":
             cohort_score = _exact_cohort_weighted(pillar_vals, PHASE1_COHORT_WEIGHTS)
@@ -589,10 +606,14 @@ def score_rows(rows: list[dict[str, Any]]) -> list[dict[str, Any]]:
             flags.append("ookla_tier_b_sample")
 
         if cohort_score is not None:
-            cohort_name = "phase1_intrinsic_ghsl_centre"
+            cohort_name = (
+                "intrinsic_full_100_ghsl_centre"
+                if row["transit_score"] is not None
+                else "intrinsic_global_94_ghsl_centre"
+            )
             if int(total_tests) >= BROADBAND_TIER_A_TESTS:
                 tier = "A"
-                uncertainty_tier = "medium"  # Phase 1 construct_coverage is 0.54 (<1.0)
+                uncertainty_tier = "low" if construct_coverage >= 0.94 else "medium"
             else:
                 tier = "B"
                 uncertainty_tier = "medium"
@@ -615,7 +636,8 @@ def score_rows(rows: list[dict[str, Any]]) -> list[dict[str, Any]]:
         row["uncertainty_flags"] = ",".join(flags)
 
         missing = [k for k, v in pillar_vals.items() if v is None]
-        missing.extend(["urban_form", "care_access", "hazards", "transit"])
+        if row["transit_score"] is None:
+            missing.append("transit")
         row["missing_dimensions"] = ",".join(missing)
 
         # Experimental zero-vs-unobserved observation statuses
@@ -703,6 +725,28 @@ def _load_ghsl_themes(cur: psycopg.Cursor) -> dict[int, dict[str, Any]]:
             themes.setdefault(int(r["urban_centre_id"]), {})[
                 "unesco_heritage_score"
             ] = r["unesco_heritage_score"]
+
+    f_cols = _table_columns(cur, "urban_centre_form")
+    if "urban_form_score" in f_cols:
+        cur.execute(
+            "SELECT urban_centre_id, urban_form_score AS ghsl_urban_form_score "
+            "FROM public.urban_centre_form"
+        )
+        for r in cur.fetchall():
+            themes.setdefault(int(r["urban_centre_id"]), {})[
+                "ghsl_urban_form_score"
+            ] = r["ghsl_urban_form_score"]
+
+    hz_cols = _table_columns(cur, "urban_centre_hazard_exposure")
+    if "hazard_safety_score" in hz_cols:
+        cur.execute(
+            "SELECT urban_centre_id, hazard_safety_score AS ghsl_hazard_safety_score "
+            "FROM public.urban_centre_hazard_exposure"
+        )
+        for r in cur.fetchall():
+            themes.setdefault(int(r["urban_centre_id"]), {})[
+                "ghsl_hazard_safety_score"
+            ] = r["ghsl_hazard_safety_score"]
     return themes
 
 
@@ -771,26 +815,27 @@ INSERT_COLUMNS = [
 ]
 
 
-def _load_thermal_utci(cur: psycopg.Cursor) -> dict[str, float]:
-    cols = _table_columns(cur, "destination_thermal_utci")
-    if "thermal_safety_score" not in cols:
-        return {}
-    cur.execute(
-        "SELECT destination_id, thermal_safety_score "
-        "FROM public.destination_thermal_utci"
-    )
-    return {
-        r["destination_id"]: float(r["thermal_safety_score"])
-        for r in cur.fetchall()
-        if r["thermal_safety_score"] is not None
-    }
+def _load_destination_layers(cur: psycopg.Cursor) -> dict[str, dict[str, float]]:
+    layers: dict[str, dict[str, float]] = {}
+    for table, col, out_key in (
+        ("destination_thermal_utci", "thermal_safety_score", "utci_thermal_safety_score"),
+        ("destination_care_access", "care_access_score", "weiss_care_access_score"),
+        ("destination_gated_transit", "transit_score", "gated_transit_score"),
+    ):
+        cols = _table_columns(cur, table)
+        if col in cols:
+            cur.execute(f'SELECT destination_id, "{col}" AS val FROM public.{table}')
+            for r in cur.fetchall():
+                if r["val"] is not None:
+                    layers.setdefault(r["destination_id"], {})[out_key] = float(r["val"])
+    return layers
 
 
 def load(database_url: str) -> dict[str, Any]:
     with psycopg.connect(database_url, row_factory=dict_row) as conn:
         with conn.cursor() as cur:
             themes = _load_ghsl_themes(cur)
-            utci_map = _load_thermal_utci(cur)
+            dest_layers = _load_destination_layers(cur)
             cur.execute(BASE_QUERY)
             raw_rows = [dict(r) for r in cur.fetchall()]
 
@@ -798,8 +843,8 @@ def load(database_url: str) -> dict[str, Any]:
             uc_id = r.get("urban_centre_id")
             if uc_id is not None and int(uc_id) in themes:
                 r.update(themes[int(uc_id)])
-            if r["destination_id"] in utci_map:
-                r["utci_thermal_safety_score"] = utci_map[r["destination_id"]]
+            if r["destination_id"] in dest_layers:
+                r.update(dest_layers[r["destination_id"]])
 
         scored = score_rows(raw_rows)
 
