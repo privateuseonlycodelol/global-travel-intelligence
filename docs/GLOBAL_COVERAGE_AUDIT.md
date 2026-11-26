@@ -7,6 +7,8 @@
 
 > **Denominator warning.** The product target "10,389 urban centres" is **10,389 principal cities**, a destination-level dedupe, not 10,389 GHSL polygons. GHSL UCDB R2024A contains **11,422 urban centres**. Only **7,018** principal cities are matched to a centre. Every percentage in this document states its denominator.
 
+> **Ranking update (2026-11-26).** The all-city headline index was reweighted to seven dimensions: culture/food 25%, public transport 15%, walkability 15%, climate 15%, environment 10%, safety/health 10% and connectivity 10%. Affordability was removed from the score. All 10,389 principal cities are ranked; 544 have at least 0.90 coverage. The 2,316/22.3% completeness figures below describe the earlier eight-dimension CQI and are retained as an audit of that version. See [QUALITY_INDEX.md](QUALITY_INDEX.md).
+
 ## Contents
 
 - [Executive Summary](#executive-summary)

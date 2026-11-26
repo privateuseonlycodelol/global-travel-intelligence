@@ -53,11 +53,19 @@ final production numbers.
 | `destination_environment_score` (view) | 4,038 scored | Environmental quality: 50% greenery, 35% air, 15% water access |
 | `destination_combined_score` (view) | 4,038 scored | Combined: 50% greenery + 50% environment (effective 75/17.5/7.5) |
 | `destination_all_green_score` (view) | 4,038 scored | All-encompassing: vegetation 40%, parks 20%, air 20%, water 20% |
-| `destination_urban_land_cover` | 516 | WorldCover fractions inside the GHSL urban-centre polygon |
-| `destination_urban_greenery` (view) | 516 | Urban tree/green scores inside the GHSL polygon, native 10 m |
-| `destination_ghsl_greenery` (view) | 516 | GHSL-only physical greenery, nature flags, environment |
+| `destination_urban_land_cover` | 7,018 | WorldCover 2021 10 m fractions inside all 7,018 matched GHSL urban-centre polygons |
+| `destination_urban_greenery` (view) | 7,018 | Urban tree/green scores inside the GHSL polygon, native 10 m |
+| `destination_ghsl_greenery` (view) | 516 | GHSL-only physical greenery, nature flags, environment (≥1M cohort) |
+| `urban_centre_greenness` | 11,422 | GHSL UCDB R2024A V1.2 Landsat NDVI (`GR_AVG_GRN_2025`) & canopy height (`GR_CTH_AVG_2020`) |
+| `urban_centre_climate` | 11,422 | GHSL UCDB R2024A V1.2 UTCI>32 heat days, BIO1, BIO12, Köppen |
+| `urban_centre_hazard_exposure` | 11,422 | GHSL UCDB R2024A V1.2 non-heat flood, MMI seismic & cyclone exposure (11,414 scored) |
+| `urban_centre_form` | 11,422 | GHSL UCDB R2024A V1.2 morphological density/compactness/verticality + road ratio |
+| `urban_centre_heritage` | 11,422 | Official UNESCO `whc001` Cultural & Mixed site intersections (517 centres with ≥1 site) |
+| `destination_thermal_utci` | 13,101 | 3-year daily Bröde (2012) UTCI from NASA POWER MERRA-2 S3 Zarr (`r = 0.938` vs GHSL) |
+| `destination_care_access` | 13,101 | Weiss et al. (2020) MAP 1 km motorized travel time to healthcare (13,099 valid) |
+| `destination_gated_transit` | 9,780 | Coach-excluded local GTFS peak headway (171) + road-gated rail access (3,417); no imputation |
 | `city_quality_index` | 516 | GHSL >=1M objective quality index; 445 with completeness >= 0.90 |
-| `city_quality_index_all` | 13,101 | All-destination quality index; 10,389 principal cities, 2,316 completeness >= 0.90 |
+| `city_quality_index_all` | 13,101 | 12-pillar Council Intrinsic City Quality Index: 7,018 GHSL centres (3,927 Tier A; 962 at 1.00 coverage), 865 suppressed satellites, 2,506 unmatched towns |
 | `destination_surrounding_nature` (view) | 5,000 | 1–15 km annulus tree+shrub shares |
 | `flight_quote_cache` / `hotel_quote_cache` | 0 | Populated only by MCP stage 2 with SerpApi key |
 | `destination_aliases` | 188,403 | GeoNames names/alternatenames for all 13,101 cities (`bootstrap_places.py`) |

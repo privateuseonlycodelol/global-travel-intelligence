@@ -52,10 +52,17 @@ calls:
 | `bootstrap_nature.py` | ecoregion landscape, Köppen class and 10 km terrain |
 | `bootstrap_land_cover.py` | ESA WorldCover land-cover fractions at 1 km and 15 km |
 | `bootstrap_green_score.py` | optional physical-greenery, environmental-quality and combined scores |
-| `bootstrap_urban_land_cover.py` | WorldCover native 10 m inside the GHSL urban-centre polygon |
+| `bootstrap_urban_land_cover.py` | WorldCover native 10 m inside all 7,018 GHSL urban-centre polygons (`--min-pop 0 --resume --workers 12`) |
 | `bootstrap_ghsl_scores.py` | GHSL-only physical greenery, nature-access flags and environmental views |
+| `bootstrap_ucdb_greenness_climate.py` | GHSL UCDB R2024A V1.2 greenness (NDVI, canopy height) and climate (UTCI>32, BIO1/12, Köppen) themes |
+| `bootstrap_ucdb_hazards_exposure.py` | GHSL UCDB R2024A V1.2 non-heat hazard exposure (100-yr flood, MMI seismic, 100-yr cyclone) |
+| `bootstrap_urban_form.py` | GHSL UCDB morphological urban form + road-completeness ratio + Walkability/POI validation |
+| `bootstrap_unesco_heritage.py` | UNESCO World Heritage (`whc001`) Cultural & Mixed sites intersected with all 11,422 GHSL centres |
+| `bootstrap_thermal_utci.py` | Global daily Bröde (2012) UTCI thermal safety from NASA POWER MERRA-2 AWS S3 Zarr |
+| `bootstrap_care_access.py` | Weiss et al. (2020) MAP 1 km global motorized hospital travel time |
+| `bootstrap_gated_transit.py` | Coach-excluded local GTFS headway + road-gated rail access + Taiwan official national indicators |
 | `bootstrap_quality_index.py` | objective city quality index for GHSL centres >= 1M |
-| `bootstrap_quality_index_all.py` | all-city extension of the quality index |
+| `bootstrap_quality_index_all.py` | 12-pillar Council Intrinsic City Quality Index (three-board, absolute anchors, cost excluded) |
 | `bootstrap_inland_water.py` | nearest HydroLAKES lake/reservoir and nearest lake ≥10 km² per city |
 | `bootstrap_rivers.py` | nearest HydroRIVERS major river per city |
 | `bootstrap_ucdb_themes.py` | GHSL urban-centre hazard and health-access themes |
@@ -75,7 +82,9 @@ calls:
 | `docs/ALL_GREEN_RANKING.md` | all-encompassing vegetation + parks + air + water top 100 |
 | `docs/URBAN_AREA_AUDIT.md` | urban-area greenery and surrounding-nature audit, two rankings |
 | `docs/GHSL_METHOD_AUDIT.md` | GHSL-only methodology audit, bugs, native 10 m fixes and new rankings |
-| `docs/QUALITY_INDEX.md` | objective quality index, weights, coverage and sensitivity |
+| `docs/QUALITY_INDEX.md` | objective quality index, 12-pillar intrinsic redesign, weights, coverage and sensitivity |
+| `docs/COUNCIL_INTRINSIC_METHODOLOGY.md` | consolidated two-round council methodology for the 12-pillar Intrinsic City Quality Index |
+| `docs/GLOBAL_COVERAGE_AUDIT.md` | 7-criteria global coverage audit, Core/Supplementary/Experimental classification and gap register |
 | `reports/generate_rankings.py` | reproducible million-plus greenery and environment rankings |
 | `sql/rank_examples.sql` | Phase 1/v2 scorer examples |
 | `sql/rank_examples_v3.sql` | Phase 3/v3 scorer examples |

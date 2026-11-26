@@ -219,33 +219,60 @@ python reports/generate_quality_rankings.py \
   --db-url "postgresql:///travel_global?host=/var/run/postgresql&port=5432"
 ```
 
-## All-city extension
+## All-city Intrinsic City Quality Index (12-Pillar Council Redesign)
 
-The same dimensions are also scored for **all 13,101 destinations**. After
-deduplicating to one principal city per GHSL urban centre (or the city itself
-when no centre is mapped), **10,389 principal cities** have a score. **2,316**
-meet the 0.90 completeness threshold.
+The all-destination index ([`bootstrap_quality_index_all.py`](../bootstrap_quality_index_all.py)) was rebuilt on **2026-11-26** following a two-round independent council methodology ([`COUNCIL_INTRINSIC_METHODOLOGY.md`](COUNCIL_INTRINSIC_METHODOLOGY.md)) and global coverage audit ([`GLOBAL_COVERAGE_AUDIT.md`](GLOBAL_COVERAGE_AUDIT.md)).
 
-Top of the all-city list:
+It measures **intrinsic urban quality regardless of cost**, strictly excluding affordability, price level, out-of-pocket health spending, airport access, life expectancy, physicians, road traffic deaths, and WorldClim precipitation-as-comfort (weight **0%**). Every active pillar uses **fixed 0–100 physical or epidemiological anchors** (no cohort percentiles, no median imputation, and no silent renormalization across missing pillars).
 
-| # | City | Country | Quality | Environment | Culture/food | Safety/health | Affordability | Walkability | Public transport | Climate | Connectivity |
-|---:|---|---:|---:|---:|---:|---:|---:|---:|---:|---:|---:|
-| 1 | Barcelona | ES | 80.6 | 64.1 | 99.7 | 87.5 | 37.7 | 91.0 | 99.8 | 89.2 | 84.0 |
-| 2 | Madrid | ES | 80.5 | 62.8 | 99.2 | 87.5 | 37.7 | 92.0 | 99.6 | 90.1 | 88.2 |
-| 3 | Paris | FR | 80.1 | 69.2 | 98.2 | 77.5 | 41.4 | 99.0 | 99.9 | 57.7 | 92.9 |
-| 4 | Hong Kong | HK | 80.0 | 70.9 | 96.4 | 96.2 | 17.9 | 84.0 | 99.8 | 75.0 | 92.6 |
-| 5 | Brisbane | AU | 79.9 | 77.9 | 98.5 | 84.2 | 29.4 | 82.0 | 98.4 | 84.5 | 58.6 |
+### Three-Board Reference Vector (94% Global Cohort + 6% Gated Transit = 100%)
 
-**Malmö:** quality **69.5**, rank **376 of 2,316** cities with completeness
-≥0.90 (completeness 1.00). Its dimensions are environment 52.1, culture/food
-95.8, walkability 66, public transport 93.3 and climate 25.2.
+| # | Pillar | Board | Weight | Source |
+|---:|---|---|---:|---|
+| 1 | Air quality | Biophysical (55%) | 15% | SatPM V6.GL.03 annual PM2.5 log scale (`100` ≤5 µg/m³, `0` ≥75) |
+| 2 | Thermal safety | Biophysical | 12% | Daily UTCI (Bröde 2012 from NASA POWER MERRA-2 S3 Zarr, 2022–2024; `r = 0.938` vs GHSL): `0.45·heat + 0.30·cold + 0.25·severe` |
+| 3 | Urban greenery | Biophysical | 14% | ESA WorldCover 2021 10 m on all 7,018 GHSL polygons (`tree+shrub / land`, canopy-height multiplier) |
+| 4 | Waterfront | Biophysical | 7% | 1–15 km shore proximity (coast, lake ≥10 km², Strahler ≥5 river) |
+| 5 | Urban form | Biophysical | 7% | GHSL UCDB morphology (density plateau 5k–18k/km², compactness, verticality; restaurant Spearman `+0.047`) |
+| 6 | Safety (violence prior) | Institutional (15%, country) | 9% | UNODC/WHO homicide piecewise anchor + official Taiwan MOI |
+| 7 | Water & sanitation (WASH) | Institutional (country) | 6% | WHO/UNICEF JMP safely managed water & sanitation (both required) + Taiwan Water/NLMA |
+| 8 | Healthcare access | City / Services (30%) | 7% | Weiss et al. (2020) MAP 1 km motorized hospital travel time (`100` ≤10 min, `0` ≥60 min) |
+| 9 | Natural hazards (non-heat) | City / Services | 6% | GHSL UCDB `EXPOSURE`: 100-yr flood + MMI seismic + 100-yr cyclone (heat & ACLED excluded) |
+| 10 | Public transport (gated) | City / Services | 6% | Coach-excluded local GTFS weekday peak headway (`≥50` stops) or road-gated rail (`≥300k` centres); `NULL` when unmapped |
+| 11 | Cultural heritage | City / Services | 6% | Official UNESCO `whc001` Cultural & Mixed sites (`0→40, 1→70, 2→85, 3+→100`) |
+| 12 | Digital connectivity | City / Services | 5% | Ookla fixed broadband absolute blend (`≥10` tests & `≥2` tiles; `10–49` capped at Tier B) |
 
-The all-city environment is a mixed source: GHSL polygon physical greenery
-for 516 centres, the point-based environmental score for the 5,000 cities that
-have it, and null otherwise. It is not directly comparable to the 516-centre
-index above. The all-city list is context for smaller cities, not a claim that
-a 200k city has the same data quality as a 2M centre.
+### Universe, Tiers & Release Diagnostics
 
-Files: `reports/quality_all_cities.csv`,
-`reports/quality_all_cities_top100.csv`,
-`reports/quality_all_cities_low_completeness.csv`.
+- **GHSL urban centres:** **7,018** principal cities (one per GHSL polygon). **865** nearby localities within 15 km are suppressed as satellites, and **2,506** unmatched towns (>15 km) are exported separately in `reports/quality_unmatched_towns.csv`.
+- **Tier A (`3,927` centres):** Complete 11-pillar global cohort (`construct_coverage ≥ 0.94`; **962** centres reach `1.00` with gated transit) and Ookla `≥50` tests across `≥2` tiles. Only Tier A receives an ordered point rank.
+- **Tier B (`166` centres):** Complete global cohort with Ookla `10–49` tests.
+- **Tier C (`2,940` centres):** Missing at least one official pillar (e.g. JMP WASH gaps in China, Turkey, Argentina, Indonesia, Pakistan, or Ookla gaps in Russia); individual pillars are published without inventing a composite rank.
+- **Release gate:** Log-GDP/capita correlation `r = 0.685` (biophysical `0.528`, institutional `0.469`, broadband `0.689`); `0` China zero-POI rows falsely marked observed; `100` unique GHSL centres in top 100; **82** population-band Pareto-optimal centres exported in `reports/quality_profiles_and_pareto.csv`.
+
+Top of the Tier A GHSL urban-centre list:
+
+| # | City | Country | Quality | Biophysical | Institutional | Services | Air | Thermal | Green | Shore | Heritage | Broadband |
+|---:|---|---|---:|---:|---:|---:|---:|---:|---:|---:|---:|---:|
+| 1 | Funchal | PT | 90.0 | 90.7 | 97.8 | 83.3 | 83.1 | 99.5 | 100.0 | 89.7 | 40.0 | 100.0 |
+| 2 | Stockholm | SE | 89.5 | 84.3 | 98.1 | 96.2 | 93.1 | 44.6 | 100.0 | 100.0 | 85.0 | 100.0 |
+| 3 | Nice | FR | 89.3 | 87.4 | 95.9 | 89.3 | 70.9 | 87.9 | 100.0 | 98.6 | 70.0 | 98.3 |
+| 4 | Jyväskylä | FI | 88.5 | 84.3 | 98.0 | 92.3 | 100.0 | 44.8 | 100.0 | 97.8 | 70.0 | 99.5 |
+| 5 | Bilbao | ES | 87.9 | 82.8 | 97.5 | 93.4 | 79.4 | 77.2 | 77.4 | 100.0 | 85.0 | 99.2 |
+
+- **#1 Megacity (≥10M):** **London** (`87.0`, #7 overall), followed by **New York City** (`83.6`), **Seoul** (`72.7`), **Osaka** (`70.3`), and **Tokyo** (`67.9`).
+- **Lyon:** quality **79.3**, rank **#249 of 3,927** globally (**#26 of 243** in 1M–5M, `1.00` coverage).
+- **Malmö:** quality **75.9**, rank **#486 of 3,927** globally (**#82 of 675** in 300k–1M, `1.00` coverage).
+
+Files:
+- `reports/quality_all_cities.csv` — all 7,018 GHSL urban centres (Tier A/B/C)
+- `reports/quality_all_cities_top100.csv` / `.md` — Tier A top 100 + release diagnostics
+- `reports/quality_all_cities_low_completeness.csv` — Tier B/C GHSL urban centres
+- `reports/quality_unmatched_towns.csv` — 2,506 unmatched towns (>15 km from any GHSL centre)
+- `reports/quality_profiles_and_pareto.csv` — Health/Nature/Urban profiles, LOPO sensitivity, and population-band Pareto sets
+- `reports/quality_experimental_indicators.csv` — experimental & travel-context columns (walkability, Overture POIs/transit/parks with `unobserved` status, affordability, airports)
+
+```bash
+python bootstrap_quality_index_all.py --db-url "postgresql:///travel_global?host=/var/run/postgresql&port=5432"
+python reports/generate_quality_rankings_all.py --db-url "postgresql:///travel_global?host=/var/run/postgresql&port=5432"
+```
