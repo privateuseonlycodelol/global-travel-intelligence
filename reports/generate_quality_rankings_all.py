@@ -109,6 +109,7 @@ CENTRE_FIELDS = [
     ("ghsl_ndvi_score", lambda r: _r(r.get("ghsl_ndvi_score"))),
     ("safety_prior_score", lambda r: _r(r.get("safety_prior_score"))),
     ("wash_prior_score", lambda r: _r(r.get("wash_prior_score"))),
+    ("heritage_score", lambda r: _r(r.get("heritage_score"))),
     ("broadband_score", lambda r: _r(r.get("broadband_score"))),
     ("construct_coverage", lambda r: _r(r.get("construct_coverage"))),
     ("data_completeness", lambda r: _r(r.get("data_completeness"))),
@@ -116,6 +117,21 @@ CENTRE_FIELDS = [
     ("uncertainty_flags", lambda r: r.get("uncertainty_flags")),
     ("missing_dimensions", lambda r: r.get("missing_dimensions")),
     ("provenance_summary", lambda r: r.get("provenance_summary")),
+]
+
+PROFILE_FIELDS = [
+    ("city", lambda r: r["name"]),
+    ("country", lambda r: r["country_iso2"]),
+    ("continent", lambda r: r.get("continent")),
+    ("population_band", lambda r: r.get("population_band")),
+    ("centre_population", lambda r: r.get("centre_population")),
+    ("tier", lambda r: r["tier"]),
+    ("quality_score", lambda r: _r(r.get("quality_score"))),
+    ("health_profile", lambda r: _r(r.get("health_profile"))),
+    ("nature_profile", lambda r: _r(r.get("nature_profile"))),
+    ("urban_profile", lambda r: _r(r.get("urban_profile"))),
+    ("is_pareto_optimal", lambda r: r.get("is_pareto_optimal")),
+    ("lopo_max_delta", lambda r: _r(r.get("lopo_max_delta"))),
 ]
 
 EXPERIMENTAL_FIELDS = [
@@ -212,6 +228,89 @@ def compute_pathological_checks(
     }
 
 
+def population_band(pop: int | float | None) -> str:
+    if pop is None or pop < 100_000:
+        return "<100k"
+    if pop < 300_000:
+        return "100k-300k"
+    if pop < 1_000_000:
+        return "300k-1M"
+    if pop < 5_000_000:
+        return "1M-5M"
+    return ">=5M"
+
+
+def _weighted_exact(row: dict[str, Any], weights: dict[str, float]) -> float | None:
+    if any(row.get(k) is None for k in weights):
+        return None
+    total = sum(weights.values())
+    return sum(float(row[k]) * w for k, w in weights.items()) / total
+
+
+def compute_profiles_and_pareto(centres: list[dict[str, Any]]) -> list[dict[str, Any]]:
+    """Compute Health/Nature/Urban profiles, LOPO sensitivity, and population-band Pareto sets."""
+    lopo_weights = {
+        "air_score": 0.15,
+        "worldcover_green_score": 0.14,
+        "waterfront_score": 0.07,
+        "safety_prior_score": 0.09,
+        "wash_prior_score": 0.06,
+        "heritage_score": 0.06,
+        "broadband_score": 0.05,
+    }
+    enriched: list[dict[str, Any]] = []
+    for r in centres:
+        item = dict(r)
+        item["population_band"] = population_band(r.get("centre_population"))
+        item["health_profile"] = _weighted_exact(
+            r, {"air_score": 0.50, "safety_prior_score": 0.30, "wash_prior_score": 0.20}
+        )
+        item["nature_profile"] = _weighted_exact(
+            r, {"worldcover_green_score": 0.67, "waterfront_score": 0.33}
+        )
+        item["urban_profile"] = _weighted_exact(
+            r, {"heritage_score": 0.45, "broadband_score": 0.35, "worldcover_green_score": 0.20}
+        )
+        base_q = r.get("quality_score")
+        if base_q is not None and all(r.get(k) is not None for k in lopo_weights):
+            deltas = []
+            for drop_k in lopo_weights:
+                sub = {k: w for k, w in lopo_weights.items() if k != drop_k}
+                alt = _weighted_exact(r, sub)
+                if alt is not None:
+                    deltas.append(abs(float(base_q) - alt))
+            item["lopo_max_delta"] = max(deltas) if deltas else None
+        else:
+            item["lopo_max_delta"] = None
+        item["is_pareto_optimal"] = False
+        enriched.append(item)
+
+    # Population-band Pareto frontier over (health_profile, nature_profile, urban_profile)
+    by_band: dict[str, list[dict[str, Any]]] = {}
+    for item in enriched:
+        if (
+            item["tier"] == "A"
+            and item["health_profile"] is not None
+            and item["nature_profile"] is not None
+            and item["urban_profile"] is not None
+        ):
+            by_band.setdefault(item["population_band"], []).append(item)
+
+    for band_rows in by_band.values():
+        for cand in band_rows:
+            ch, cn, cu = cand["health_profile"], cand["nature_profile"], cand["urban_profile"]
+            dominated = False
+            for other in band_rows:
+                if other is cand:
+                    continue
+                oh, on, ou = other["health_profile"], other["nature_profile"], other["urban_profile"]
+                if (oh >= ch and on >= cn and ou >= cu) and (oh > ch or on > cn or ou > cu):
+                    dominated = True
+                    break
+            cand["is_pareto_optimal"] = not dominated
+    return enriched
+
+
 def write_csv(path: Path, rows: list[dict[str, Any]], fields: list[tuple[str, Any]]) -> None:
     with path.open("w", newline="", encoding="utf-8") as handle:
         writer = csv.writer(handle, lineterminator="\n")
@@ -238,10 +337,10 @@ def render_markdown(
     checks = compute_pathological_checks(centres, tier_a)
 
     lines = [
-        "# Intrinsic City Quality Index — Phase 1 Tier A Top 100",
+        "# Intrinsic City Quality Index — Phase 2 Tier A Top 100",
         "",
         "Three-board, absolute-anchor, no-imputation GHSL urban-centre cohort (cost/affordability, airports, life expectancy, physicians, road deaths, and WorldClim precipitation excluded). "
-        f"Phase 1 active construct coverage = **0.42** of the 100% intrinsic reference vector (58% named holes: full thermal UTCI, full WorldCover polygons, urban form, hospital care friction, non-heat hazards, gated transit, UNESCO heritage; GHSL UTCI>32 heat days are shown as a diagnostic column only). "
+        f"Phase 2 active construct coverage = **0.62** of the 100% intrinsic reference vector (Air 15%, WorldCover 10 m Greenery 14%, Waterfront 7%, Homicide 9%, JMP WASH 6%, UNESCO Heritage 6%, Broadband 5%; 38% named holes: full thermal UTCI, urban form, hospital care friction, non-heat hazards, gated transit). "
         f"GHSL urban centres: **{len(centres):,}** (Tier A: **{len(tier_a):,}**); suppressed 15 km satellites: **{suppressed_satellites:,}**; separate unmatched towns: **{unmatched_towns:,}**.",
         "",
         "## Continent distribution vs GHSL centre base rates",
@@ -266,8 +365,8 @@ def render_markdown(
             "",
             "## Top 100 (Tier A GHSL urban centres)",
             "",
-            "| # | City | Country | Continent | Quality | Biophysical | Institutional | Broadband | Air | Shore | Heat | Construct Cov |",
-            "|---:|---|---|---|---:|---:|---:|---:|---:|---:|---:|---:|",
+            "| # | City | Country | Continent | Quality | Biophysical | Institutional | Services | Air | Green | Shore | Heritage | Broadband |",
+            "|---:|---|---|---|---:|---:|---:|---:|---:|---:|---:|---:|---:|",
         ]
     )
 
@@ -279,9 +378,10 @@ def render_markdown(
         lines.append(
             f"| {i} | {row['name']} | {row['country_iso2']} | {cont} | "
             f"{fmt(row.get('quality_score'))} | {fmt(row.get('biophysical_board_score'))} | "
-            f"{fmt(row.get('institutional_board_score'))} | {fmt(row.get('broadband_score'))} | "
-            f"{fmt(row.get('air_score'))} | {fmt(row.get('waterfront_score'))} | "
-            f"{fmt(row.get('thermal_heat_score'))} | {float(row.get('construct_coverage') or 0):.2f} |"
+            f"{fmt(row.get('institutional_board_score'))} | {fmt(row.get('services_board_score'))} | "
+            f"{fmt(row.get('air_score'))} | {fmt(row.get('worldcover_green_score'))} | "
+            f"{fmt(row.get('waterfront_score'))} | {fmt(row.get('heritage_score'))} | "
+            f"{fmt(row.get('broadband_score'))} |"
         )
     return "\n".join(lines) + "\n"
 
@@ -315,10 +415,14 @@ def main() -> int:
     for i, row in enumerate(tier_a, 1):
         row["_rank"] = i
 
+    profiles = compute_profiles_and_pareto(centres)
+    pareto_count = sum(1 for r in profiles if r["is_pareto_optimal"])
+
     write_csv(OUT / "quality_all_cities.csv", centres, CENTRE_FIELDS)
     write_csv(OUT / "quality_all_cities_top100.csv", tier_a[:100], CENTRE_FIELDS)
     write_csv(OUT / "quality_all_cities_low_completeness.csv", tier_bc, CENTRE_FIELDS)
     write_csv(OUT / "quality_unmatched_towns.csv", towns, CENTRE_FIELDS)
+    write_csv(OUT / "quality_profiles_and_pareto.csv", profiles, PROFILE_FIELDS)
     write_csv(
         OUT / "quality_experimental_indicators.csv",
         centres + towns,
@@ -338,6 +442,7 @@ def main() -> int:
             "ghsl_centres": len(centres),
             "tier_a": len(tier_a),
             "tier_bc": len(tier_bc),
+            "pareto_optimal_centres": pareto_count,
             "unmatched_towns": len(towns),
             "suppressed_satellites": suppressed,
             "top": tier_a[0]["name"] if tier_a else None,

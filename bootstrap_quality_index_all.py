@@ -86,12 +86,14 @@ REFERENCE_WEIGHTS = {
     "broadband": 0.05,
 }
 
-# Phase 1 currently observable cohort pillars (42% of the 100% reference vector:
-# air 15 + waterfront 7 + safety_prior 9 + wash_prior 6 + broadband 5 = 0.42).
-# Thermal heat days are published as a diagnostic column, NOT ranked without
-# the cold and severe UTCI tails (prevents sub-Arctic cities winning on zero heat).
+# Phase 2 active cohort pillars (62% of the 100% intrinsic reference vector:
+# air 15 + urban_greenery 14 + waterfront 7 + safety_prior 9 + wash_prior 6 +
+# heritage 6 + broadband 5 = 0.62).
+# Thermal heat days remain a diagnostic column until cold + severe UTCI tails
+# are loaded (prevents sub-Arctic cities winning on zero heat).
 PHASE1_BIOPHYSICAL_WEIGHTS = {
     "air": 0.15,
+    "urban_greenery": 0.14,
     "waterfront": 0.07,
 }
 PHASE1_INSTITUTIONAL_WEIGHTS = {
@@ -99,6 +101,7 @@ PHASE1_INSTITUTIONAL_WEIGHTS = {
     "wash_prior": 0.06,
 }
 PHASE1_SERVICES_WEIGHTS = {
+    "heritage": 0.06,
     "broadband": 0.05,
 }
 PHASE1_COHORT_WEIGHTS = {
@@ -106,7 +109,7 @@ PHASE1_COHORT_WEIGHTS = {
     **PHASE1_INSTITUTIONAL_WEIGHTS,
     **PHASE1_SERVICES_WEIGHTS,
 }
-PHASE1_COHORT_WEIGHT_SUM = round(sum(PHASE1_COHORT_WEIGHTS.values()), 6)  # 0.42
+PHASE1_COHORT_WEIGHT_SUM = round(sum(PHASE1_COHORT_WEIGHTS.values()), 6)  # 0.62
 
 HOMICIDE_ANCHORS: tuple[tuple[float, float], ...] = (
     (1.0, 100.0),
@@ -277,7 +280,7 @@ LEFT JOIN air_quality_annual a ON a.destination_id = d.destination_id
 LEFT JOIN destination_geography ge ON ge.destination_id = d.destination_id
 LEFT JOIN destination_inland_water iw ON iw.destination_id = d.destination_id
 LEFT JOIN destination_river_access r ON r.destination_id = d.destination_id
-LEFT JOIN destination_urban_land_cover ulc ON ulc.destination_id = d.destination_id
+LEFT JOIN destination_urban_land_cover ulc ON ulc.urban_centre_id = m.urban_centre_id
 LEFT JOIN urban_centre_hazard hz ON hz.urban_centre_id = m.urban_centre_id
 LEFT JOIN broadband_metrics bb ON bb.destination_id = d.destination_id
 LEFT JOIN walkability_scores w ON w.destination_id = d.destination_id
@@ -508,7 +511,10 @@ def score_rows(rows: list[dict[str, Any]]) -> list[dict[str, Any]]:
         row["care_access_score"] = None  # Named hole: awaits Weiss friction
         row["hazard_score"] = None  # Named hole: awaits flood+seismic+cyclone
         row["transit_score"] = None  # Named hole: awaits gated rail / local GTFS
-        row["heritage_score"] = None  # Named hole: awaits UNESCO core polygons
+        heritage_score = row.get("unesco_heritage_score")
+        row["heritage_score"] = (
+            float(heritage_score) if heritage_score is not None else None
+        )
 
         total_tests = row.get("broadband_total_tests")
         tile_count = row.get("broadband_tile_count")
@@ -524,9 +530,11 @@ def score_rows(rows: list[dict[str, Any]]) -> list[dict[str, Any]]:
         # Exact board aggregates (NO silent renormalization!)
         pillar_vals = {
             "air": air_score,
+            "urban_greenery": wc_green,
             "waterfront": waterfront_score,
             "safety_prior": safety_prior,
             "wash_prior": wash_prior,
+            "heritage": row["heritage_score"],
             "broadband": broadband_score,
         }
         row["biophysical_board_score"] = _exact_cohort_weighted(
@@ -544,11 +552,9 @@ def score_rows(rows: list[dict[str, Any]]) -> list[dict[str, Any]]:
         for key, w in PHASE1_COHORT_WEIGHTS.items():
             if pillar_vals[key] is not None:
                 observed_ref_weight += w
-        if wc_green is not None:
-            observed_ref_weight += REFERENCE_WEIGHTS["urban_greenery"]
         construct_coverage = round(observed_ref_weight, 4)
 
-        # Cohort composite ONLY when all 6 Phase 1 cohort pillars are observed
+        # Cohort composite ONLY when all active Phase 2 cohort pillars are observed
         # AND the locality is a GHSL urban centre (never pool unmatched towns!)
         if settlement_class == "ghsl_centre":
             cohort_score = _exact_cohort_weighted(pillar_vals, PHASE1_COHORT_WEIGHTS)
@@ -607,10 +613,8 @@ def score_rows(rows: list[dict[str, Any]]) -> list[dict[str, Any]]:
 
         missing = [k for k, v in pillar_vals.items() if v is None]
         missing.extend(
-            ["thermal_cold_severe", "urban_form", "care_access", "hazards", "transit", "heritage"]
+            ["thermal_cold_severe", "urban_form", "care_access", "hazards", "transit"]
         )
-        if wc_green is None:
-            missing.append("worldcover_green")
         row["missing_dimensions"] = ",".join(missing)
 
         # Experimental zero-vs-unobserved observation statuses
@@ -687,6 +691,17 @@ def _load_ghsl_themes(cur: psycopg.Cursor) -> dict[int, dict[str, Any]]:
             themes.setdefault(int(r["urban_centre_id"]), {})[
                 "ghsl_heat_stress_days"
             ] = r["ghsl_heat_stress_days"]
+
+    h_cols = _table_columns(cur, "urban_centre_heritage")
+    if "heritage_score_0_100" in h_cols:
+        cur.execute(
+            "SELECT urban_centre_id, heritage_score_0_100 AS unesco_heritage_score "
+            "FROM public.urban_centre_heritage"
+        )
+        for r in cur.fetchall():
+            themes.setdefault(int(r["urban_centre_id"]), {})[
+                "unesco_heritage_score"
+            ] = r["unesco_heritage_score"]
     return themes
 
 

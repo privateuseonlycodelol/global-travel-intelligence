@@ -26,8 +26,10 @@ import argparse
 import json
 import math
 import os
+import threading
 import time
 from collections import Counter
+from concurrent.futures import ThreadPoolExecutor, as_completed
 from pathlib import Path
 from typing import Any
 
@@ -183,7 +185,7 @@ SELECT p.destination_id, p.name, p.urban_centre_id,
        ST_YMax(Box2D(g.geom)) AS max_lat
 FROM principal p
 JOIN ghsl_urban_centres g USING (urban_centre_id)
-WHERE p.centre_population >= 1000000
+WHERE p.centre_population >= %s
 ORDER BY p.urban_centre_id
 """
 
@@ -277,54 +279,145 @@ def polygon_counts(
     return counts, valid_total, weight_total
 
 
+def _compute_row(
+    row: dict[str, Any], local: threading.local
+) -> tuple[dict[str, Any], dict[str, float | None], int]:
+    cache = getattr(local, "cache", None)
+    if cache is None:
+        cache = TileCache()
+        local.cache = cache
+    geom = json.loads(row["geojson"])
+    bounds = (
+        row["min_lon"],
+        row["min_lat"],
+        row["max_lon"],
+        row["max_lat"],
+    )
+    counts, valid, weight_total = polygon_counts(cache, geom, bounds)
+    fractions = {
+        column: (counts[code] / weight_total if weight_total else None)
+        for code, column in CLASS_COLUMNS.items()
+    }
+    return row, fractions, valid
+
+
 def load(
-    database_url: str, limit: int | None = None,
+    database_url: str,
+    limit: int | None = None,
     cities: list[str] | None = None,
+    *,
+    min_pop: int = 1000000,
+    resume: bool = False,
+    workers: int = 1,
 ) -> dict[str, Any]:
     with psycopg.connect(database_url, row_factory=dict_row) as conn:
         with conn.cursor() as cur:
-            cur.execute(SCHEMA_SQL)
-            cur.execute(PRINCIPAL_QUERY)
+            if not resume:
+                cur.execute(SCHEMA_SQL)
+            cur.execute(PRINCIPAL_QUERY, (min_pop,))
             rows = [dict(row) for row in cur.fetchall()]
+            existing: set[str] = set()
+            if resume:
+                cur.execute("SELECT destination_id FROM destination_urban_land_cover")
+                existing = {r["destination_id"] for r in cur.fetchall()}
         conn.commit()
+
         if cities:
             rows = [row for row in rows if row["name"] in cities]
+        if resume and existing:
+            rows = [row for row in rows if row["destination_id"] not in existing]
         if limit:
             rows = rows[:limit]
-        log(f"computing urban-centre land cover for {len(rows)} cities")
-        cache = TileCache()
-        features = []
+        log(
+            f"computing urban-centre land cover for {len(rows)} cities "
+            f"(min_pop={min_pop}, resume={resume}, workers={workers})"
+        )
         started = time.time()
-        try:
+        insert_sql = """
+            INSERT INTO destination_urban_land_cover (
+                destination_id, urban_centre_id, area_km2,
+                tree_fraction, shrub_fraction, grassland_fraction,
+                cropland_fraction, built_up_fraction, bare_fraction,
+                snow_fraction, water_fraction, wetland_fraction,
+                mangrove_fraction, moss_fraction,
+                valid_pixel_count, source, source_url, observed_period
+            ) VALUES (
+                %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s,
+                %s, %s, %s, %s, %s, %s
+            )
+            ON CONFLICT (destination_id) DO UPDATE SET
+                urban_centre_id = EXCLUDED.urban_centre_id,
+                area_km2 = EXCLUDED.area_km2,
+                tree_fraction = EXCLUDED.tree_fraction,
+                shrub_fraction = EXCLUDED.shrub_fraction,
+                grassland_fraction = EXCLUDED.grassland_fraction,
+                cropland_fraction = EXCLUDED.cropland_fraction,
+                built_up_fraction = EXCLUDED.built_up_fraction,
+                bare_fraction = EXCLUDED.bare_fraction,
+                snow_fraction = EXCLUDED.snow_fraction,
+                water_fraction = EXCLUDED.water_fraction,
+                wetland_fraction = EXCLUDED.wetland_fraction,
+                mangrove_fraction = EXCLUDED.mangrove_fraction,
+                moss_fraction = EXCLUDED.moss_fraction,
+                valid_pixel_count = EXCLUDED.valid_pixel_count,
+                updated_at = NOW()
+        """
+
+        local = threading.local()
+        written = 0
+        batch: list[tuple[Any, ...]] = []
+
+        def flush_batch() -> None:
+            nonlocal batch
+            if not batch:
+                return
+            with conn.cursor() as cur:
+                cur.executemany(insert_sql, batch)
+            conn.commit()
+            batch = []
+
+        if workers <= 1:
             for index, row in enumerate(rows, 1):
-                geom = json.loads(row["geojson"])
-                bounds = (
-                    row["min_lon"], row["min_lat"],
-                    row["max_lon"], row["max_lat"],
+                r, fractions, valid = _compute_row(row, local)
+                batch.append(
+                    (
+                        r["destination_id"],
+                        r["urban_centre_id"],
+                        r["area_km2"],
+                        fractions["tree_fraction"],
+                        fractions["shrub_fraction"],
+                        fractions["grassland_fraction"],
+                        fractions["cropland_fraction"],
+                        fractions["built_up_fraction"],
+                        fractions["bare_fraction"],
+                        fractions["snow_fraction"],
+                        fractions["water_fraction"],
+                        fractions["wetland_fraction"],
+                        fractions["mangrove_fraction"],
+                        fractions["moss_fraction"],
+                        valid,
+                        SOURCE,
+                        SOURCE_URL,
+                        PERIOD,
+                    )
                 )
-                counts, valid, weight_total = polygon_counts(cache, geom, bounds)
-                fractions = {
-                    column: (counts[code] / weight_total if weight_total else None)
-                    for code, column in CLASS_COLUMNS.items()
-                }
-                with conn.cursor() as cur:
-                    cur.execute(
-                        """
-                        INSERT INTO destination_urban_land_cover (
-                            destination_id, urban_centre_id, area_km2,
-                            tree_fraction, shrub_fraction, grassland_fraction,
-                            cropland_fraction, built_up_fraction, bare_fraction,
-                            snow_fraction, water_fraction, wetland_fraction,
-                            mangrove_fraction, moss_fraction,
-                            valid_pixel_count, source, source_url, observed_period
-                        ) VALUES (
-                            %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s,
-                            %s, %s, %s, %s, %s, %s
-                        )
-                        """,
+                written += 1
+                if len(batch) >= 25:
+                    flush_batch()
+                if index % 50 == 0 or index == len(rows):
+                    elapsed = time.time() - started
+                    log(f"{index}/{len(rows)} cities, {elapsed:.0f}s, last valid px {valid}")
+            flush_batch()
+        else:
+            with ThreadPoolExecutor(max_workers=workers) as pool:
+                futures = [pool.submit(_compute_row, row, local) for row in rows]
+                for index, fut in enumerate(as_completed(futures), 1):
+                    r, fractions, valid = fut.result()
+                    batch.append(
                         (
-                            row["destination_id"], row["urban_centre_id"],
-                            row["area_km2"],
+                            r["destination_id"],
+                            r["urban_centre_id"],
+                            r["area_km2"],
                             fractions["tree_fraction"],
                             fractions["shrub_fraction"],
                             fractions["grassland_fraction"],
@@ -336,37 +429,22 @@ def load(
                             fractions["wetland_fraction"],
                             fractions["mangrove_fraction"],
                             fractions["moss_fraction"],
-                            valid, SOURCE, SOURCE_URL, PERIOD,
-                        ),
+                            valid,
+                            SOURCE,
+                            SOURCE_URL,
+                            PERIOD,
+                        )
                     )
-                conn.commit()
-                features.append(
-                    {
-                        "type": "Feature",
-                        "properties": {
-                            "destination_id": row["destination_id"],
-                            "city": row["name"],
-                            "urban_centre_id": row["urban_centre_id"],
-                            "centre_name": row["centre_name"],
-                            "area_km2": row["area_km2"],
-                        },
-                        "geometry": geom,
-                    }
-                )
-                if index % 25 == 0 or index == len(rows):
-                    elapsed = time.time() - started
-                    log(
-                        f"{index}/{len(rows)} cities, {elapsed:.0f}s, "
-                        f"last valid pixels {valid}"
-                    )
-        finally:
-            cache.close()
-    OUT.mkdir(exist_ok=True)
-    (OUT / "urban_centres_516.geojson").write_text(
-        json.dumps({"type": "FeatureCollection", "features": features}),
-        encoding="utf-8",
-    )
-    return {"cities": len(rows), "geojson": str(OUT / "urban_centres_516.geojson")}
+                    written += 1
+                    if len(batch) >= 50:
+                        flush_batch()
+                    if index % 200 == 0 or index == len(rows):
+                        elapsed = time.time() - started
+                        rate = index / max(0.1, elapsed)
+                        log(f"{index}/{len(rows)} cities ({rate:.1f}/s), {elapsed:.0f}s")
+            flush_batch()
+
+    return {"written": written, "min_pop": min_pop, "resume": resume, "workers": workers}
 
 
 def report(database_url: str) -> None:
@@ -408,6 +486,9 @@ def main() -> int:
     parser.add_argument("--db-url", default=os.environ.get("SUPABASE_DB_URL"))
     parser.add_argument("--limit", type=int)
     parser.add_argument("--city", action="append", default=[])
+    parser.add_argument("--min-pop", type=int, default=1000000)
+    parser.add_argument("--resume", action="store_true")
+    parser.add_argument("--workers", type=int, default=1)
     parser.add_argument("--report", action="store_true")
     args = parser.parse_args()
     if not args.db_url:
@@ -415,7 +496,16 @@ def main() -> int:
     if args.report:
         report(args.db_url)
         return 0
-    print(load(args.db_url, args.limit, args.city or None))
+    print(
+        load(
+            args.db_url,
+            args.limit,
+            args.city or None,
+            min_pop=args.min_pop,
+            resume=args.resume,
+            workers=args.workers,
+        )
+    )
     return 0
 
 

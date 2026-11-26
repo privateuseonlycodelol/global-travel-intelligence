@@ -28,13 +28,14 @@ def make_centre(**overrides):
         "waterfront_score": 90.0,
         "thermal_heat_score": 88.3,
         "ghsl_heat_stress_days": 14.0,
-        "worldcover_green_score": None,
-        "green_method": "ghsl_ndvi_diagnostic_only",
+        "worldcover_green_score": 72.0,
+        "green_method": "worldcover_10m_polygon",
         "ghsl_ndvi_score": 48.0,
         "safety_prior_score": 100.0,
         "wash_prior_score": 94.0,
+        "heritage_score": 70.0,
         "broadband_score": 78.0,
-        "construct_coverage": 0.54,
+        "construct_coverage": 0.62,
         "data_completeness": 1.0,
         "tier": "A",
         "uncertainty_tier": "medium",
@@ -111,6 +112,37 @@ class RankingDiagnosticsTests(unittest.TestCase):
             self.assertNotIn("walkability_score", main_header)
             self.assertIn("price_level_vs_usd", exp_header)
             self.assertIn("poi_observation_status", exp_header)
+
+    def test_profiles_pareto_and_lopo_sensitivity(self):
+        dom = make_centre(
+            name="Dominator",
+            centre_population=400_000,
+            air_score=95.0,
+            worldcover_green_score=90.0,
+            waterfront_score=95.0,
+            safety_prior_score=100.0,
+            wash_prior_score=98.0,
+            heritage_score=100.0,
+            broadband_score=95.0,
+            quality_score=96.0,
+        )
+        sub = make_centre(
+            name="Dominated",
+            centre_population=450_000,
+            air_score=60.0,
+            worldcover_green_score=40.0,
+            waterfront_score=50.0,
+            safety_prior_score=60.0,
+            wash_prior_score=60.0,
+            heritage_score=40.0,
+            broadband_score=50.0,
+            quality_score=52.0,
+        )
+        out = gq.compute_profiles_and_pareto([dom, sub])
+        self.assertTrue(out[0]["is_pareto_optimal"])
+        self.assertFalse(out[1]["is_pareto_optimal"])
+        self.assertEqual(out[0]["population_band"], "300k-1M")
+        self.assertIsNotNone(out[0]["lopo_max_delta"])
 
 
 if __name__ == "__main__":

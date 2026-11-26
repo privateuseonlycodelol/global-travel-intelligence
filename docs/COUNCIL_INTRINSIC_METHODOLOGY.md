@@ -10,13 +10,13 @@ Measure the **intrinsic quality of an urban centre regardless of its cost**. Aff
 
 Every active indicator uses **fixed 0–100 physical or epidemiological anchors** (no cohort percentiles in the score, no median imputation, and no silent renormalization across missing pillars). A point rank is published **only inside a declared cohort whose members share the exact same observed pillar set**.
 
-### Full 100% Reference Vector vs Phase 1 Active Cohort (42%)
+### Full 100% Reference Vector vs Phase 2 Active Cohort (62%)
 
-| # | Pillar | Board | Ref Weight | Phase 1 Status | Anchor / Rule |
+| # | Pillar | Board | Ref Weight | Phase 2 Status | Anchor / Rule |
 | --- | --- | --- | ---: | --- | --- |
 | 1 | Air quality | Biophysical | 15% | **Active** | SatPM PM2.5 log scale (`100` ≤5 µg/m³, `0` ≥75 µg/m³) |
 | 2 | Thermal safety | Biophysical | 12% | **Heat term only** | GHSL UTCI >32°C days (`100` at 0d, `0` ≥120d); full UTCI (cold + severe) stays `NULL` until ERA5-HEAT / validated UTCI |
-| 3 | Urban greenery | Biophysical | 14% | **516 centres only** | WorldCover 10 m polygon `(tree+shrub)/land / 0.40 × canopy_mult`; GHSL NDVI published as diagnostic only |
+| 3 | Urban greenery | Biophysical | 14% | **Active (all 7,018 GHSL polygons)** | ESA WorldCover 2021 10 m on GHSL polygon `(tree+shrub)/land / 0.40 × canopy_mult`; GHSL NDVI stored as diagnostic only |
 | 4 | Waterfront & hinterland | Biophysical | 7% | **Active (shore)** | 1–15 km decay to coast, lake ≥10 km², or Strahler ≥5 river (retiring the saturated 50 km decay) |
 | 5 | Urban form | Biophysical | 7% | **Named hole** | Awaits GHS-POP 100 m + pre-registered validation |
 | 6 | Personal safety (violence prior) | Country-labelled | 9% | **Active** | UNODC/WHO homicide piecewise (`100` ≤1, `80` @3, `50` @10, `20` @25, `0` ≥50 per 100k); never reorders within country |
@@ -24,7 +24,7 @@ Every active indicator uses **fixed 0–100 physical or epidemiological anchors*
 | 8 | Healthcare access | City | 7% | **Named hole** | Awaits Weiss motorized hospital travel-time friction raster |
 | 9 | Natural hazards (non-heat) | Exposure | 6% | **Named hole** | Awaits JRC flood + GEM seismic + cyclone rasters (2015 MYRIAD kept as context only) |
 | 10 | Public transport | Services (gated) | 6% | **Named hole** | Awaits coach-excluded local GTFS headway / road-gated OSM guideway |
-| 11 | Cultural heritage | Services | 6% | **Named hole** | Awaits UNESCO core polygon intersection |
+| 11 | Cultural heritage | Services | 6% | **Active (all 11,422 GHSL centres)** | Official UNESCO `whc001` Cultural & Mixed sites (including serial components) intersected with GHSL polygons (`0→40, 1→70, 2→85, 3+→100`) |
 | 12 | Digital connectivity | Services | 5% | **Active** | Ookla fixed absolute blend (`50% down [10–150] + 20% up [5–50] + 30% lat [80–10]`), `≥10 tests & ≥2 tiles` (`10–49` capped at Tier B) |
 
 ## Settlement Classification & Satellite Suppression
