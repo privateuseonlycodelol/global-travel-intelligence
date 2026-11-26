@@ -27,6 +27,7 @@ def make_centre(**overrides):
         "air_score": 88.0,
         "waterfront_score": 90.0,
         "thermal_heat_score": 88.3,
+        "thermal_safety_score": 86.0,
         "ghsl_heat_stress_days": 14.0,
         "worldcover_green_score": 72.0,
         "green_method": "worldcover_10m_polygon",

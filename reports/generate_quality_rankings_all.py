@@ -103,6 +103,7 @@ CENTRE_FIELDS = [
     ("air_score", lambda r: _r(r.get("air_score"))),
     ("waterfront_score", lambda r: _r(r.get("waterfront_score"))),
     ("thermal_heat_score", lambda r: _r(r.get("thermal_heat_score"))),
+    ("thermal_safety_score", lambda r: _r(r.get("thermal_safety_score"))),
     ("ghsl_heat_stress_days", lambda r: _r(r.get("ghsl_heat_stress_days"), 1)),
     ("worldcover_green_score", lambda r: _r(r.get("worldcover_green_score"))),
     ("green_method", lambda r: r.get("green_method")),
@@ -251,6 +252,7 @@ def compute_profiles_and_pareto(centres: list[dict[str, Any]]) -> list[dict[str,
     """Compute Health/Nature/Urban profiles, LOPO sensitivity, and population-band Pareto sets."""
     lopo_weights = {
         "air_score": 0.15,
+        "thermal_safety_score": 0.12,
         "worldcover_green_score": 0.14,
         "waterfront_score": 0.07,
         "safety_prior_score": 0.09,
@@ -263,7 +265,13 @@ def compute_profiles_and_pareto(centres: list[dict[str, Any]]) -> list[dict[str,
         item = dict(r)
         item["population_band"] = population_band(r.get("centre_population"))
         item["health_profile"] = _weighted_exact(
-            r, {"air_score": 0.50, "safety_prior_score": 0.30, "wash_prior_score": 0.20}
+            r,
+            {
+                "air_score": 0.35,
+                "thermal_safety_score": 0.25,
+                "safety_prior_score": 0.25,
+                "wash_prior_score": 0.15,
+            },
         )
         item["nature_profile"] = _weighted_exact(
             r, {"worldcover_green_score": 0.67, "waterfront_score": 0.33}
@@ -340,7 +348,7 @@ def render_markdown(
         "# Intrinsic City Quality Index — Phase 2 Tier A Top 100",
         "",
         "Three-board, absolute-anchor, no-imputation GHSL urban-centre cohort (cost/affordability, airports, life expectancy, physicians, road deaths, and WorldClim precipitation excluded). "
-        f"Phase 2 active construct coverage = **0.62** of the 100% intrinsic reference vector (Air 15%, WorldCover 10 m Greenery 14%, Waterfront 7%, Homicide 9%, JMP WASH 6%, UNESCO Heritage 6%, Broadband 5%; 38% named holes: full thermal UTCI, urban form, hospital care friction, non-heat hazards, gated transit). "
+        f"Phase 2B active construct coverage = **0.74** of the 100% intrinsic reference vector (Air 15%, Daily UTCI Thermal Safety 12%, WorldCover 10 m Greenery 14%, Waterfront 7%, Homicide 9%, JMP WASH 6%, UNESCO Heritage 6%, Broadband 5%; 26% named holes: urban form, hospital care friction, non-heat hazards, gated transit). "
         f"GHSL urban centres: **{len(centres):,}** (Tier A: **{len(tier_a):,}**); suppressed 15 km satellites: **{suppressed_satellites:,}**; separate unmatched towns: **{unmatched_towns:,}**.",
         "",
         "## Continent distribution vs GHSL centre base rates",
@@ -365,8 +373,8 @@ def render_markdown(
             "",
             "## Top 100 (Tier A GHSL urban centres)",
             "",
-            "| # | City | Country | Continent | Quality | Biophysical | Institutional | Services | Air | Green | Shore | Heritage | Broadband |",
-            "|---:|---|---|---|---:|---:|---:|---:|---:|---:|---:|---:|---:|",
+            "| # | City | Country | Continent | Quality | Biophysical | Institutional | Services | Air | Thermal | Green | Shore | Heritage | Broadband |",
+            "|---:|---|---|---|---:|---:|---:|---:|---:|---:|---:|---:|---:|---:|",
         ]
     )
 
@@ -379,9 +387,9 @@ def render_markdown(
             f"| {i} | {row['name']} | {row['country_iso2']} | {cont} | "
             f"{fmt(row.get('quality_score'))} | {fmt(row.get('biophysical_board_score'))} | "
             f"{fmt(row.get('institutional_board_score'))} | {fmt(row.get('services_board_score'))} | "
-            f"{fmt(row.get('air_score'))} | {fmt(row.get('worldcover_green_score'))} | "
-            f"{fmt(row.get('waterfront_score'))} | {fmt(row.get('heritage_score'))} | "
-            f"{fmt(row.get('broadband_score'))} |"
+            f"{fmt(row.get('air_score'))} | {fmt(row.get('thermal_safety_score'))} | "
+            f"{fmt(row.get('worldcover_green_score'))} | {fmt(row.get('waterfront_score'))} | "
+            f"{fmt(row.get('heritage_score'))} | {fmt(row.get('broadband_score'))} |"
         )
     return "\n".join(lines) + "\n"
 

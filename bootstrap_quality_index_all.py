@@ -86,13 +86,12 @@ REFERENCE_WEIGHTS = {
     "broadband": 0.05,
 }
 
-# Phase 2 active cohort pillars (62% of the 100% intrinsic reference vector:
-# air 15 + urban_greenery 14 + waterfront 7 + safety_prior 9 + wash_prior 6 +
-# heritage 6 + broadband 5 = 0.62).
-# Thermal heat days remain a diagnostic column until cold + severe UTCI tails
-# are loaded (prevents sub-Arctic cities winning on zero heat).
+# Phase 2B active cohort pillars (74% of the 100% intrinsic reference vector:
+# air 15 + thermal_safety 12 + urban_greenery 14 + waterfront 7 +
+# safety_prior 9 + wash_prior 6 + heritage 6 + broadband 5 = 0.74).
 PHASE1_BIOPHYSICAL_WEIGHTS = {
     "air": 0.15,
+    "thermal_safety": 0.12,
     "urban_greenery": 0.14,
     "waterfront": 0.07,
 }
@@ -109,7 +108,7 @@ PHASE1_COHORT_WEIGHTS = {
     **PHASE1_INSTITUTIONAL_WEIGHTS,
     **PHASE1_SERVICES_WEIGHTS,
 }
-PHASE1_COHORT_WEIGHT_SUM = round(sum(PHASE1_COHORT_WEIGHTS.values()), 6)  # 0.62
+PHASE1_COHORT_WEIGHT_SUM = round(sum(PHASE1_COHORT_WEIGHTS.values()), 6)  # 0.74
 
 HOMICIDE_ANCHORS: tuple[tuple[float, float], ...] = (
     (1.0, 100.0),
@@ -492,7 +491,10 @@ def score_rows(rows: list[dict[str, Any]]) -> list[dict[str, Any]]:
         row["water_distance_km"] = water_dist_km
         row["waterfront_score"] = waterfront_score
         row["thermal_heat_score"] = thermal_heat_score
-        row["thermal_safety_score"] = None  # Named hole: awaits cold + severe UTCI
+        full_thermal = row.get("utci_thermal_safety_score")
+        row["thermal_safety_score"] = (
+            float(full_thermal) if full_thermal is not None else None
+        )
         row["worldcover_green_score"] = wc_green
         row["green_method"] = green_method
         row["urban_form_score"] = None  # Named hole: awaits GHS-POP + validation
@@ -530,6 +532,7 @@ def score_rows(rows: list[dict[str, Any]]) -> list[dict[str, Any]]:
         # Exact board aggregates (NO silent renormalization!)
         pillar_vals = {
             "air": air_score,
+            "thermal_safety": row["thermal_safety_score"],
             "urban_greenery": wc_green,
             "waterfront": waterfront_score,
             "safety_prior": safety_prior,
@@ -612,9 +615,7 @@ def score_rows(rows: list[dict[str, Any]]) -> list[dict[str, Any]]:
         row["uncertainty_flags"] = ",".join(flags)
 
         missing = [k for k, v in pillar_vals.items() if v is None]
-        missing.extend(
-            ["thermal_cold_severe", "urban_form", "care_access", "hazards", "transit"]
-        )
+        missing.extend(["urban_form", "care_access", "hazards", "transit"])
         row["missing_dimensions"] = ",".join(missing)
 
         # Experimental zero-vs-unobserved observation statuses
@@ -770,10 +771,26 @@ INSERT_COLUMNS = [
 ]
 
 
+def _load_thermal_utci(cur: psycopg.Cursor) -> dict[str, float]:
+    cols = _table_columns(cur, "destination_thermal_utci")
+    if "thermal_safety_score" not in cols:
+        return {}
+    cur.execute(
+        "SELECT destination_id, thermal_safety_score "
+        "FROM public.destination_thermal_utci"
+    )
+    return {
+        r["destination_id"]: float(r["thermal_safety_score"])
+        for r in cur.fetchall()
+        if r["thermal_safety_score"] is not None
+    }
+
+
 def load(database_url: str) -> dict[str, Any]:
     with psycopg.connect(database_url, row_factory=dict_row) as conn:
         with conn.cursor() as cur:
             themes = _load_ghsl_themes(cur)
+            utci_map = _load_thermal_utci(cur)
             cur.execute(BASE_QUERY)
             raw_rows = [dict(r) for r in cur.fetchall()]
 
@@ -781,6 +798,8 @@ def load(database_url: str) -> dict[str, Any]:
             uc_id = r.get("urban_centre_id")
             if uc_id is not None and int(uc_id) in themes:
                 r.update(themes[int(uc_id)])
+            if r["destination_id"] in utci_map:
+                r["utci_thermal_safety_score"] = utci_map[r["destination_id"]]
 
         scored = score_rows(raw_rows)
 

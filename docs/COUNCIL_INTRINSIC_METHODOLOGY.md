@@ -10,12 +10,12 @@ Measure the **intrinsic quality of an urban centre regardless of its cost**. Aff
 
 Every active indicator uses **fixed 0–100 physical or epidemiological anchors** (no cohort percentiles in the score, no median imputation, and no silent renormalization across missing pillars). A point rank is published **only inside a declared cohort whose members share the exact same observed pillar set**.
 
-### Full 100% Reference Vector vs Phase 2 Active Cohort (62%)
+### Full 100% Reference Vector vs Phase 2B Active Cohort (74%)
 
-| # | Pillar | Board | Ref Weight | Phase 2 Status | Anchor / Rule |
+| # | Pillar | Board | Ref Weight | Phase 2B Status | Anchor / Rule |
 | --- | --- | --- | ---: | --- | --- |
 | 1 | Air quality | Biophysical | 15% | **Active** | SatPM PM2.5 log scale (`100` ≤5 µg/m³, `0` ≥75 µg/m³) |
-| 2 | Thermal safety | Biophysical | 12% | **Heat term only** | GHSL UTCI >32°C days (`100` at 0d, `0` ≥120d); full UTCI (cold + severe) stays `NULL` until ERA5-HEAT / validated UTCI |
+| 2 | Thermal safety | Biophysical | 12% | **Active (all 13,101 cities)** | 5-year daily UTCI (Bröde 2012 from NASA POWER MERRA-2 S3 Zarr, 2020–2024): `0.45·heat(>32/120) + 0.30·cold(<0/150) + 0.25·severe((>38 + <-13)/30)` |
 | 3 | Urban greenery | Biophysical | 14% | **Active (all 7,018 GHSL polygons)** | ESA WorldCover 2021 10 m on GHSL polygon `(tree+shrub)/land / 0.40 × canopy_mult`; GHSL NDVI stored as diagnostic only |
 | 4 | Waterfront & hinterland | Biophysical | 7% | **Active (shore)** | 1–15 km decay to coast, lake ≥10 km², or Strahler ≥5 river (retiring the saturated 50 km decay) |
 | 5 | Urban form | Biophysical | 7% | **Named hole** | Awaits GHS-POP 100 m + pre-registered validation |

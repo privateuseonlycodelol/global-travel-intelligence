@@ -21,6 +21,7 @@ def sample_row(**overrides):
         "large_lake_distance_km": 50.0,
         "major_river_distance_km": 20.0,
         "ghsl_heat_stress_days": 15.0,
+        "utci_thermal_safety_score": 88.0,
         "wc_tree_fraction": 0.25,
         "wc_shrub_fraction": 0.05,
         "wc_water_fraction": 0.05,
@@ -150,7 +151,7 @@ class CouncilArchitectureTests(unittest.TestCase):
         self.assertIsNone(row["institutional_board_score"])
         self.assertIsNone(row["quality_score"])
         self.assertEqual(row["tier"], "C")
-        self.assertAlmostEqual(row["construct_coverage"], 0.56, places=4)
+        self.assertAlmostEqual(row["construct_coverage"], 0.68, places=4)
 
     def test_broadband_10_to_49_tests_capped_at_tier_b(self):
         row = bq.score_rows([sample_row(broadband_total_tests=25, broadband_tile_count=3)])[0]
@@ -171,11 +172,11 @@ class CouncilArchitectureTests(unittest.TestCase):
 
     def test_true_construct_coverage_reflects_named_holes(self):
         row = bq.score_rows([sample_row()])[0]
-        self.assertAlmostEqual(row["construct_coverage"], 0.62, places=4)
+        self.assertAlmostEqual(row["construct_coverage"], 0.74, places=4)
         self.assertAlmostEqual(row["data_completeness"], 1.0, places=4)
+        self.assertIsNotNone(row["thermal_safety_score"])
         self.assertIsNotNone(row["heritage_score"])
         self.assertIsNotNone(row["worldcover_green_score"])
-        self.assertIsNone(row["thermal_safety_score"])
         self.assertIsNone(row["urban_form_score"])
         self.assertIsNone(row["care_access_score"])
         self.assertIsNone(row["hazard_score"])
